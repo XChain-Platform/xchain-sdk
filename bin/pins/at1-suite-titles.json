@@ -53,21 +53,6 @@
       "XChainSDK WebSocket methods waitForContractBalance creates ActionWaiter and gates on the contract balance",
       "XChainSDK WebSocket methods waitForContractState creates ActionWaiter and gates on contract state"
     ],
-    "0138b0971cdb0d1d": [
-      "WebSocketClient reconnect catch-up: a stale replica emits no stale_replay for a replay closed fresh",
-      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay for a replay closed stale, and still advances the cursor to the rows delivered",
-      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay once for a stale replay continued past a truncated round",
-      "WebSocketClient reconnect catch-up: continuation and refusal continues a truncated replay from where the server stopped",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits no not_replayed event when the list is absent or empty",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits not_replayed with the lifecycle types a completed replay could not carry",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits resync_required for a refused catch-up and still replays the next subscription",
-      "WebSocketClient reconnect catch-up: continuation and refusal reports an unanswered catch-up as a gap once its timeout passes",
-      "WebSocketClient reconnect catch-up: sequencing replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused",
-      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription through the catch-up queue, so it hears NEW_BLOCK is not replayed",
-      "WebSocketClient reconnect catch-up: which frames move the cursor a CATCH_UP_COMPLETE outside a replay still advances the cursor",
-      "WebSocketClient reconnect catch-up: which frames move the cursor a replay notes NEW_ACTION and CATCH_UP_COMPLETE but not entity ids",
-      "WebSocketClient reconnect catch-up: which frames move the cursor an idle client ignores entity ids and still advances on NEW_ACTION"
-    ],
     "020365551f310273": [
       "FormatSelector.select(): a pinned version never silently drops a field (#3918) STAKE v1 and v2 (identical field lists) still both select for a fitting payload",
       "FormatSelector.select(): a pinned version never silently drops a field (#3918) STAKE v1 has no slot for TARGET_CONTRACT_INDEX/TICK, so pinning it throws",
@@ -103,6 +88,12 @@
       "ExplorerClient fileRawUrl() builds the absolute raw FILE URL for the configured explorer",
       "ExplorerClient fileRawUrl() resolves a sibling-chain coin at the same network tier",
       "ExplorerClient fileRawUrl() respects an http(s) baseUrl and strips trailing slashes"
+    ],
+    "0366f235c81fe49f": [
+      "API malformed body answers JSON and logs no stack answers an oversize body 413 as JSON",
+      "API malformed body answers JSON and logs no stack answers every malformed body 400 with a JSON-RPC -32700 envelope",
+      "API malformed body answers JSON and logs no stack still lets a valid request reach the router",
+      "API malformed body answers JSON and logs no stack writes no stack trace to stderr for 20 malformed requests"
     ],
     "036b3389dcc3412c": [
       "observability/logger default sink parity exposes exactly the console methods the SDK routes through it",
@@ -393,6 +384,24 @@
     "0a90643634e1c034": [
       "EncoderClient HTTPS base URL builds client with https agent when url starts with https"
     ],
+    "0af9181df0bb943a": [
+      "pre-flight lifecycle coalescing a caller-supplied signal aborts only that view; shared work survives",
+      "pre-flight lifecycle coalescing across caller options Coalescer.key differs when only mode, feeMode or encoding differs",
+      "pre-flight lifecycle coalescing across caller options Coalescer.run keeps callers that differ in mode, feeMode or encoding apart",
+      "pre-flight lifecycle coalescing across caller options a local caller and a report caller get separate reports; only the report caller reaches Tier 1",
+      "pre-flight lifecycle coalescing across caller options encoding OP_RETURN and P2SH callers do not share a report",
+      "pre-flight lifecycle coalescing across caller options feeMode native and xchain callers each get their own verdict",
+      "pre-flight lifecycle coalescing across caller options identical options still coalesce onto one producer run",
+      "pre-flight lifecycle coalescing bypassCache always runs a fresh producer",
+      "pre-flight lifecycle coalescing different chainId does not collide",
+      "pre-flight lifecycle coalescing different localDeltas do NOT collide (reservation netting)",
+      "pre-flight lifecycle coalescing identical (chainId, actionString, source) share one producer",
+      "pre-flight lifecycle coalescing identical localDeltas still share one producer",
+      "pre-flight lifecycle staleness a fresh report is not stale",
+      "pre-flight lifecycle staleness a report older than the window is stale",
+      "pre-flight lifecycle staleness degraded detects verdict worsening only",
+      "pre-flight lifecycle staleness stateHeight behind the known tip is stale"
+    ],
     "0b7e25d1390e869c": [
       "XChainSDK \u2013 WebSocket convenience methods unsubscribe return value onBlock returns function that removes handler"
     ],
@@ -561,6 +570,16 @@
       "pre-flight Tier-2 per-action matrix SEND localDeltas (pending) reduce the effective balance",
       "pre-flight Tier-2 per-action matrix SEND multi-leg SEND sums per tick",
       "pre-flight Tier-2 per-action matrix SEND sufficient balance does not error on balance"
+    ],
+    "11b7b67f5cf804a6": [
+      "API body parse errors (NODE_ENV unset) invalid JSON answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV unset) null body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV unset) oversize body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV unset) string body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV=production) invalid JSON answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV=production) null body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV=production) oversize body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV=production) string body answers a JSON-RPC error with no stack or path"
     ],
     "121815bf45a0311e": [
       "vendored lint_core: LINT_GLOBAL_ALIAS rules accepts globalThis self-reference to Math with the epoch off (pre-activation verdict)",
@@ -1408,6 +1427,13 @@
       "SPV merkle byte layer: consensus twin @regression src/merkle/primitives.js is byte-identical to the xchain-indexer copy",
       "SPV merkle byte layer: consensus twin @regression src/merkle/primitives.js is byte-identical to the xchain-sync copy"
     ],
+    "26a2fe788a424f2f": [
+      "reconcileTransaction caps in encoder options caps in submit options only still refuse (control)",
+      "reconcileTransaction caps in encoder options encoderOpts.maxFeeSats refuses an over-cap fee before signing",
+      "reconcileTransaction caps in encoder options encoderOpts.maxPhaseFundingSats refuses over-cap phase funding",
+      "reconcileTransaction caps in encoder options no caps anywhere: the same fixtures pass the cap checks",
+      "reconcileTransaction caps in encoder options submit options win when both slots are set"
+    ],
     "26dbe28a48e2c854": [
       "protocol size-cap parity (SDK drift guard) chunkHelper carries the canonical action/chunk caps",
       "protocol size-cap parity (SDK drift guard) co-signer OVERSIZED gate rides the chunkHelper action cap",
@@ -1608,6 +1634,12 @@
       "Actions - top-level version reaches version-dependent validation lets a params-level VERSION win over a conflicting top-level version",
       "Actions - top-level version reaches version-dependent validation rejects an incomplete VOTE v0 spelled top-level, as it does spelled in params",
       "Actions - top-level version reaches version-dependent validation serializes a complete payload identically under either spelling"
+    ],
+    "2f5768fdb8d62480": [
+      "pre-flight timeout is one overall budget a Tier 2 read timeout is not reported as a Tier 1 timeout",
+      "pre-flight timeout is one overall budget a read due after the budget is spent is unverified at once and never sent",
+      "pre-flight timeout is one overall budget a stalled explorer returns within the budget, not once per sequential read",
+      "pre-flight timeout is one overall budget with the default budget (fake clock) the default 4000ms budget bounds the whole run, not each read"
     ],
     "2f68255d54f48477": [
       "Actions \u2013 partial unstake/claim optional AMOUNT COLLECT with amount appends the trailing field",
@@ -1957,6 +1989,33 @@
       "ISSUE coin-qualified tick prefix pre-flight passes a colon whose prefix is not a coin root",
       "ISSUE coin-qualified tick prefix pre-flight passes an existing coin-qualified tick",
       "ISSUE coin-qualified tick prefix pre-flight passes the same prefixes while the gate is unarmed on mainnet"
+    ],
+    "3aaa1f0f0b24f6ff": [
+      "API JSON-RPC prototype member dispatch a real method still dispatches",
+      "API JSON-RPC prototype member dispatch authenticated __defineGetter__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated __defineSetter__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated __lookupGetter__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated __lookupSetter__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated __proto__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated constructor answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated hasOwnProperty answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated isPrototypeOf answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated propertyIsEnumerable answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated toLocaleString answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated toString answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated valueOf answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch unauthenticated __defineGetter__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated __defineSetter__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated __lookupGetter__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated __lookupSetter__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated __proto__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated constructor still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated hasOwnProperty still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated isPrototypeOf still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated propertyIsEnumerable still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated toLocaleString still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated toString still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated valueOf still answers 401 / -32001"
     ],
     "3ae5f32ea7d65053": [
       "ISSUE coin-qualified tick verdict declares an unavailable token lookup",
@@ -3081,6 +3140,36 @@
       "AgentSession (policy-bounded wallet) refuses construction without allowedActions (fail-closed)",
       "AgentSession (policy-bounded wallet) validates window hours and confirm handler at construction"
     ],
+    "5c8a3afda4fd453c": [
+      "full-address fields use the network-aware checksum check SDK validateAction (repro) accepts a ^id address reference DESTINATION",
+      "full-address fields use the network-aware checksum check SDK validateAction (repro) accepts a checksum-valid regtest DESTINATION",
+      "full-address fields use the network-aware checksum check SDK validateAction (repro) refuses a case-flipped base58 DESTINATION on bitcoin-regtest",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest DESTINATION accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest DESTINATION refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest DESTINATION refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest GET_ADDRESS accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest GET_ADDRESS refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest GET_ADDRESS refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER_SUPPLY accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER_SUPPLY refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER_SUPPLY refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network regtest DESTINATION accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network regtest DESTINATION refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network regtest DESTINATION refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network regtest GET_ADDRESS accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network regtest GET_ADDRESS refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network regtest GET_ADDRESS refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER_SUPPLY accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER_SUPPLY refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER_SUPPLY refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with no network keeps the length heuristic fallback"
+    ],
     "5e5931771714f2f9": [
       "Actions \u2013 edge cases ADDRESS with feePreference and requireMemo serializes correctly",
       "Actions \u2013 edge cases BROADCAST with message and value uses v0 format",
@@ -3356,18 +3445,6 @@
       "MESSAGE (PLAINTEXT_MESSAGE) length boundary accepts PLAINTEXT_MESSAGE of exactly 1,048,576 characters (1 MiB limit)",
       "MESSAGE (PLAINTEXT_MESSAGE) length boundary rejects PLAINTEXT_MESSAGE of exactly 1,048,577 characters (one above limit)"
     ],
-    "6496075e070ad57c": [
-      "pre-flight lifecycle coalescing a caller-supplied signal aborts only that view; shared work survives",
-      "pre-flight lifecycle coalescing bypassCache always runs a fresh producer",
-      "pre-flight lifecycle coalescing different chainId does not collide",
-      "pre-flight lifecycle coalescing different localDeltas do NOT collide (reservation netting)",
-      "pre-flight lifecycle coalescing identical (chainId, actionString, source) share one producer",
-      "pre-flight lifecycle coalescing identical localDeltas still share one producer",
-      "pre-flight lifecycle staleness a fresh report is not stale",
-      "pre-flight lifecycle staleness a report older than the window is stale",
-      "pre-flight lifecycle staleness degraded detects verdict worsening only",
-      "pre-flight lifecycle staleness stateHeight behind the known tip is stale"
-    ],
     "64c81298274bf5fa": [
       "Validator \u2013 VM action rules BATCH accepts exactly one DEPLOY",
       "Validator \u2013 VM action rules BATCH allows EXECUTE",
@@ -3498,6 +3575,9 @@
       "co-signer: the envelope on a 2-of-3 account the composed commit tree keeps leafHash the TAPLEAF hash once the tree has more than one leaf",
       "co-signer: the envelope on a 2-of-3 account the composed commit tree puts the envelope leaf and both account recovery leaves in one tree",
       "co-signer: the envelope on a 2-of-3 account the composed commit tree refuses a recovery pair that is not two distinct leaves"
+    ],
+    "688401629629e20c": [
+      "pre-flight shared producer and caller abort aborting the first joiner leaves the second joiner with the full Tier-1 report"
     ],
     "6884dd369d2b3316": [
       "MuSig2AgentSession denies an out-of-local-policy action BEFORE encoding (fast pre-flight)",
@@ -3819,6 +3899,12 @@
       "MuSig2 partial sig verification verifyPartial accepts a valid partial signature",
       "MuSig2 partial sig verification verifyPartial rejects a tampered partial signature",
       "MuSig2 sortKeys returns keys in byte-lexicographic order"
+    ],
+    "7473b82052054d25": [
+      "tier1 withAbort listener cleanup aborting after cleanup causes no stray rejection, and abort before settle still rejects",
+      "tier1 withAbort listener cleanup detaches when aborted mid-flight",
+      "tier1 withAbort listener cleanup returns to zero listeners after resolved, rejected and timed-out calls",
+      "tier1 withAbort listener cleanup works without a timeout and still detaches"
     ],
     "74b233f48de6a823": [
       "mainnet prelaunch refusal allows a payment-only submit and non-mainnet networks before launch",
@@ -4356,6 +4442,27 @@
       "FIAT_AMOUNT format boundary accepts FIAT_AMOUNT '999999.99' (large valid amount)",
       "FIAT_AMOUNT format boundary rejects FIAT_AMOUNT '1.000' (three decimal places)"
     ],
+    "8649344eb17496b8": [
+      "WebSocketClient reconnect catch-up: a drop in the middle of a replay delivers every row once on the actions channel, resuming after the row already dispatched",
+      "WebSocketClient reconnect catch-up: a drop in the middle of a replay delivers every row once on the address channel, resuming after the row already dispatched",
+      "WebSocketClient reconnect catch-up: a drop in the middle of a replay drops a replayed row the subscription already dispatched when the server sends it again",
+      "WebSocketClient reconnect catch-up: a stale replica emits no stale_replay for a replay closed fresh",
+      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay for a replay closed stale, and still advances the cursor to the rows delivered",
+      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay once for a stale replay continued past a truncated round",
+      "WebSocketClient reconnect catch-up: continuation and refusal continues a truncated replay from where the server stopped",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits no not_replayed event when the list is absent or empty",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits not_replayed with the lifecycle types a completed replay could not carry",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits resync_required for a refused catch-up and still replays the next subscription",
+      "WebSocketClient reconnect catch-up: continuation and refusal reports an unanswered catch-up as a gap once its timeout passes",
+      "WebSocketClient reconnect catch-up: rows a replay mark must not hide delivers a replacement row again after a REORG voids a row the replay dispatched",
+      "WebSocketClient reconnect catch-up: rows a replay mark must not hide raises no replay mark from a row arriving after a catch-up timed out",
+      "WebSocketClient reconnect catch-up: rows a replay mark must not hide still delivers rows never dispatched before the drop",
+      "WebSocketClient reconnect catch-up: sequencing replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused",
+      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription through the catch-up queue, so it hears NEW_BLOCK is not replayed",
+      "WebSocketClient reconnect catch-up: which frames move the cursor a CATCH_UP_COMPLETE outside a replay still advances the cursor",
+      "WebSocketClient reconnect catch-up: which frames move the cursor a replay notes NEW_ACTION and CATCH_UP_COMPLETE but not entity ids",
+      "WebSocketClient reconnect catch-up: which frames move the cursor an idle client ignores entity ids and still advances on NEW_ACTION"
+    ],
     "86e209190552c399": [
       "ExplorerClient readyHook awaits readyHook before each GET request"
     ],
@@ -4587,6 +4694,16 @@
       "ExplorerClient token methods getIssues returns result",
       "ExplorerClient token methods getTokens returns result"
     ],
+    "8d397439f9118b42": [
+      "API request-rate limit under a many-address flood caps anonymous buckets and refuses a new address at the cap with 429",
+      "API request-rate limit under a many-address flood gives cap slots back once anonymous buckets expire",
+      "API request-rate limit under a many-address flood never refuses a credential bucket because of the anonymous cap",
+      "API request-rate limit under a many-address flood prunes from the front and stops at the first live bucket",
+      "API request-rate limit under a many-address flood still serves an address that already holds a bucket when the cap is reached",
+      "API request-rate window a truncatable junk window falls back to the default instead of shrinking to milliseconds",
+      "API request-rate window the shipped limiter still bites when the window env value was junk",
+      "API request-rate window warns at load when the window setting was unusable, and stays quiet on a good one"
+    ],
     "8d6c9af21ad60dd2": [
       "LifecycleManager submitAction(): waitForIndexer=true defaults waitForIndexer to true and calls ActionWaiter",
       "LifecycleManager submitAction(): waitForIndexer=true fires confirmed progress step after indexer confirms",
@@ -4810,6 +4927,13 @@
       "LifecycleManager submitAction(): contract actions marks a gate timeout as broadcast so the caller does not rebuild and double-spend",
       "LifecycleManager submitAction(): contract actions reads the contract index off the upper-case wire form too",
       "LifecycleManager submitAction(): contract actions refuses a gate with no contract to read"
+    ],
+    "92bc11ccc6389098": [
+      "pre-flight balance read against a stale explorer mirror control: a fresh empty listing is still an authoritative zero",
+      "pre-flight balance read against a stale explorer mirror control: a stale marker with a matching row still returns the row quantity",
+      "pre-flight balance read against a stale explorer mirror does not fail the verdict when Tier 1 is rate limited",
+      "pre-flight balance read against a stale explorer mirror does not throw in enforce mode",
+      "pre-flight balance read against a stale explorer mirror treats a missing row on a stale listing as unverified, not zero"
     ],
     "936e694dd2ad90a4": [
       "SDK create_tx passthrough forwards encoding AUTO, compress and the options bag",
@@ -5224,31 +5348,6 @@
     ],
     "9f8bf7a383946aa2": [
       "WalletUtils deriveAddress() - extended should throw INVALID_ADDRESS_TYPE for unknown type"
-    ],
-    "a119099cfeb183c6": [
-      "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
-      "API request-rate limit adds no runtime dependency for the limiter",
-      "API request-rate limit allows requests up to the limit and rejects the next one with 429",
-      "API request-rate limit an explicit 0 disables the limiter and nothing else does",
-      "API request-rate limit an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address",
-      "API request-rate limit bounds the unauthenticated path too (keyed on the source address)",
-      "API request-rate limit counts per credential, so one hot key cannot starve another",
-      "API request-rate limit falls back to safe defaults on a junk env value",
-      "API request-rate limit keeps ONE implementation of the limiter: api.js holds no inline copy",
-      "API request-rate limit never holds a raw credential as a map key",
-      "API request-rate limit prunes expired buckets so the map cannot grow without bound",
-      "API request-rate limit src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount",
-      "API request-rate limit the shipped limiter still bites when the env value was junk",
-      "API request-rate limit the window rolls over and the caller is allowed again",
-      "API request-rate limit under a many-address flood caps anonymous buckets and refuses a new address at the cap with 429",
-      "API request-rate limit under a many-address flood gives cap slots back once anonymous buckets expire",
-      "API request-rate limit under a many-address flood never refuses a credential bucket because of the anonymous cap",
-      "API request-rate limit under a many-address flood prunes from the front and stops at the first live bucket",
-      "API request-rate limit under a many-address flood still serves an address that already holds a bucket when the cap is reached",
-      "API request-rate limit with no isCredential predicate every caller is bucketed by source address",
-      "API request-rate window a truncatable junk window falls back to the default instead of shrinking to milliseconds",
-      "API request-rate window the shipped limiter still bites when the window env value was junk",
-      "API request-rate window warns at load when the window setting was unusable, and stays quiet on a good one"
     ],
     "a13f37baf43851b0": [
       "CoSignerClient (agent side) msg-to-PSBT binding sign() throws COSIGNER_MSG_MISMATCH before signing when the returned msg is not the PSBT sighash",
@@ -6273,6 +6372,14 @@
       "serialize() refuses a flat field map on a repeated format every repeated format refuses a flat map",
       "serialize() refuses a flat field map on a repeated format parallel arrays in flat fields are refused, not comma-joined into one slot"
     ],
+    "c18de397210c12b4": [
+      "Regression: an error after the commit broadcast carries what was broadcast CHUNK_REVEAL_BROADCAST_FAILED carries broadcast, txid and spentInputs",
+      "Regression: an error after the commit broadcast carries what was broadcast ENVELOPE_REVEAL_BROADCAST_FAILED carries broadcast, txid and spentInputs",
+      "Regression: an error after the commit broadcast carries what was broadcast a session drops the commit's inputs from its cache when the chunk reveal fails",
+      "Regression: an error after the commit broadcast carries what was broadcast a session drops the envelope commit's inputs and keeps its change when the reveal fails",
+      "Regression: any failure after a broadcast is tagged, and none before it a failure before any broadcast is not tagged as broadcast and leaves the cache alone",
+      "Regression: any failure after a broadcast is tagged, and none before it an indexer refusal carries the spent inputs to the cache, not the in-flight flag"
+    ],
     "c1a216842cf0b824": [
       "SDK/indexer fee payment mode parity covers the same registered coins",
       "SDK/indexer fee payment mode parity requires native fees exactly where the indexer registry declares them"
@@ -6384,6 +6491,11 @@
       "HubConnector getCapabilityThresholds() returns null when result lacks a thresholds array",
       "HubConnector getCapabilityThresholds() returns the thresholds array when the hub responds",
       "HubConnector getCapabilityThresholds() tries next endpoint on failure (multi-endpoint)"
+    ],
+    "c63821d0c7f3142a": [
+      "WebSocketClient reconnect retry emits connection_lost exactly once after maxRetries failed attempts",
+      "WebSocketClient reconnect retry keeps retrying after one failed attempt and reconnects once the server is back",
+      "WebSocketClient reconnect retry schedules no further attempt after an intentional disconnect"
     ],
     "c6b023f9a3fab63a": [
       "LifecycleManager submitAction(): the reveal exists before the commit is broadcast broadcasts nothing when the reveal would be refused as a full burn",
@@ -6800,6 +6912,10 @@
       "BATCH pre-flight (Tier 1 sub-command verdicts) the trap: a valid BATCH does NOT mean its commands succeed an invalid sub-command under valid:true is an ERROR, so the verdict fails",
       "BATCH pre-flight (Tier 1 sub-command verdicts) the trap: a valid BATCH does NOT mean its commands succeed the DRYRUN_VALID headline says the batch was accepted but not every command"
     ],
+    "d9e609dba4301d2a": [
+      "WalletSession submit() after a broadcast whose indexer wait timed out drops the broadcast inputs, keeps its change, and the next submit spends only that",
+      "WalletSession submit() after a broadcast whose indexer wait timed out through the real lifecycle, the next build is handed none of the broadcast inputs"
+    ],
     "da3a6cdfc5f1fe1f": [
       "bin/sync-templates (static contract) is syntactically valid JavaScript (compiles without executing)",
       "bin/sync-templates (static contract) performs no network I/O (template sync is offline)",
@@ -6992,6 +7108,25 @@
       "ANCHOR bundle ordering after enforcement refuses sections that are not CHAIN-ascending",
       "ANCHOR bundle ordering before enforcement accepts section signature pairs that are not PUBKEY-ascending",
       "ANCHOR bundle ordering before enforcement accepts sections that are not CHAIN-ascending"
+    ],
+    "e0931a79421d79af": [
+      "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
+      "API request-rate limit adds no runtime dependency for the limiter",
+      "API request-rate limit allows requests up to the limit and rejects the next one with 429",
+      "API request-rate limit an explicit 0 disables the limiter and nothing else does",
+      "API request-rate limit an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address",
+      "API request-rate limit answers 429 to requests the body parser and the batch cap refuse once the budget is spent",
+      "API request-rate limit bounds the unauthenticated path too (keyed on the source address)",
+      "API request-rate limit counts per credential, so one hot key cannot starve another",
+      "API request-rate limit falls back to safe defaults on a junk env value",
+      "API request-rate limit keeps ONE implementation of the limiter: api.js holds no inline copy",
+      "API request-rate limit mounts the limiter ahead of the body parser and the batch cap, which refuse requests themselves",
+      "API request-rate limit never holds a raw credential as a map key",
+      "API request-rate limit prunes expired buckets so the map cannot grow without bound",
+      "API request-rate limit src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount",
+      "API request-rate limit the shipped limiter still bites when the env value was junk",
+      "API request-rate limit the window rolls over and the caller is allowed again",
+      "API request-rate limit with no isCredential predicate every caller is bucketed by source address"
     ],
     "e0bbb7220258d523": [
       "FormatSelector.getFormatFields() repeating-field formats include duplicates in the array",
@@ -7619,6 +7754,10 @@
       "co-signer: the envelope on a 2-of-3 account both halves derive the tree, neither is told it makes a 2-of-2-shaped client and a 2-of-3 daemon disagree rather than half-agree",
       "co-signer: the envelope on a 2-of-3 account both halves derive the tree, neither is told it rejects a client whose configured tweaks disagree with the derived tree"
     ],
+    "f08fbea1bf5f78d6": [
+      "WebSocketClient disconnect cancels a pending reconnect does not open a socket or resubscribe when disconnect() runs while the attempt awaits the readiness hook",
+      "WebSocketClient disconnect cancels a pending reconnect does not reconnect or resubscribe when disconnect() runs during the backoff delay"
+    ],
     "f0f6f09db9f32df0": [
       "WebSocketClient WS_SCHEMA_VERSION is exposed as a static on the client class",
       "WebSocketClient WS_SCHEMA_VERSION matches the explorer sibling schema version when checked out (cross-repo drift guard)",
@@ -7771,6 +7910,12 @@
       "BET formats exposes the list edit format through normal format discovery",
       "BET formats registers all five formats with the field order BET.md declares"
     ],
+    "f6cf1827fd13f8f0": [
+      "API non-object batch elements answers a non-5xx -32600 for non-object elements, with and without a token",
+      "API non-object batch elements does not let a null element bypass the 401 for an authenticated method",
+      "API non-object batch elements leaves a valid batch of pings unchanged",
+      "API non-object batch elements survives every malformed batch with no unhandled rejection"
+    ],
     "f7e5931142d6202d": [
       "cosigner/recovery buildRecoverySpend a >2^53 output overspend is caught, not rounded into a zero fee",
       "cosigner/recovery buildRecoverySpend a fractional or negative satoshi value is refused outright",
@@ -7858,6 +8003,22 @@
       "co-signer: the envelope on a 2-of-3 account the property the composition exists for lets agent+recovery sweep a commit output the daemon can no longer co-sign",
       "co-signer: the envelope on a 2-of-3 account the property the composition exists for would strand that same output if the leaves were left out (what the old refusal meant)"
     ],
+    "fc75c57245fb14df": [
+      "API JSON-RPC error codes are integers create_action:array params answers -32602 before the handler reads them",
+      "API JSON-RPC error codes are integers create_action:missing answers -32602 with the SDK message and its string code in data",
+      "API JSON-RPC error codes are integers create_action:no-action answers -32602 with the SDK message and its string code in data",
+      "API JSON-RPC error codes are integers create_action:null params answers -32602 before the handler reads them",
+      "API JSON-RPC error codes are integers create_action:number params answers -32602 before the handler reads them",
+      "API JSON-RPC error codes are integers create_action:string params answers -32602 before the handler reads them",
+      "API JSON-RPC error codes are integers every error response, single and batched, has an integer code",
+      "API JSON-RPC params check keeps valid calls working a batch answers per-element integer codes beside a success",
+      "API JSON-RPC params check keeps valid calls working a params-free method ignores params, and get_markets still accepts null",
+      "API JSON-RPC upstream and unexpected errors hide internal text a rate-limited upstream answers an integer code with its wait in data",
+      "API JSON-RPC upstream and unexpected errors hide internal text an encoder failure answers the same way",
+      "API JSON-RPC upstream and unexpected errors hide internal text an unexpected exception answers -32603 Internal error with no internal text",
+      "API JSON-RPC upstream and unexpected errors hide internal text get_market with params null answers -32602, never the TypeError text",
+      "API JSON-RPC upstream and unexpected errors hide internal text get_status with an unreachable explorer answers an integer code and no host, port or socket text"
+    ],
     "fcab45f9ea01ffb3": [
       "WalletSession estimateFees() calls sdk.estimateFees with merged pubkey/change",
       "WalletSession estimateFees() merges caller-provided encoderOpts"
@@ -7880,8 +8041,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 591,
-      "titleCount": 6257,
+      "fileCount": 607,
+      "titleCount": 6388,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -7944,8 +8105,14 @@
         "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "4aab71cfb0d09588",
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
         "test/unit/api/api_batch_cap.test.js": "6abb57b79a51e287",
+        "test/unit/api/api_body_parse_errors.test.js": "11b7b67f5cf804a6",
+        "test/unit/api/api_error_codes.test.js": "fc75c57245fb14df",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
-        "test/unit/api/api_rate_limit.test.js": "a119099cfeb183c6",
+        "test/unit/api/api_null_batch_element.test.js": "f6cf1827fd13f8f0",
+        "test/unit/api/api_parse_error_json.test.js": "0366f235c81fe49f",
+        "test/unit/api/api_prototype_dispatch.test.js": "3aaa1f0f0b24f6ff",
+        "test/unit/api/api_rate_limit.test.js": "e0931a79421d79af",
+        "test/unit/api/api_rate_limit_window.test.js": "8d397439f9118b42",
         "test/unit/api/cors_origin.test.js": "47a8c7aec5cc3398",
         "test/unit/api/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/carrier/bind_action_carrier.test.js": "4f58c716b835a2da",
@@ -7962,6 +8129,7 @@
         "test/unit/carrier/lifecycle_manager.test/08_submit_action_contract_actions.test.js": "92ad9ac971489ae6",
         "test/unit/carrier/lifecycle_manager.test/09_submit_action_reveal_before_commit_broadcast.test.js": "c6b023f9a3fab63a",
         "test/unit/carrier/lifecycle_manager.test/fee_quote_authorized_output.test.js": "b053b50995136354",
+        "test/unit/carrier/lifecycle_manager_encoder_opts_fee_caps.test.js": "26a2fe788a424f2f",
         "test/unit/carrier/mainnet_prelaunch_refusal.test.js": "74b233f48de6a823",
         "test/unit/carrier/reconcile_encoded.test.js": "f03ae31623c0d806",
         "test/unit/carrier/reconcile_encoded.test/01_reconcile_encoded_funding_leg_pins.test.js": "99d3e354f4a12b66",
@@ -8046,7 +8214,7 @@
         "test/unit/clients/websocket/websocket.test/03_emit_and_connection_lost.test.js": "c6c38104ad45ec9a",
         "test/unit/clients/websocket/websocket.test/04_latest_action_index_tracking.test.js": "a66187140aa93ab9",
         "test/unit/clients/websocket/websocket_bundler_interop.test.js": "34f473d0e384ae26",
-        "test/unit/clients/websocket/websocket_catch_up.test.js": "0138b0971cdb0d1d",
+        "test/unit/clients/websocket/websocket_catch_up.test.js": "8649344eb17496b8",
         "test/unit/clients/websocket/websocket_convenience.test.js": "deec5a095c8b2024",
         "test/unit/clients/websocket/websocket_convenience.test/01_on_block.test.js": "2daae22e85db73d7",
         "test/unit/clients/websocket/websocket_convenience.test/02_on_action.test.js": "1624ce0c406b2282",
@@ -8064,8 +8232,10 @@
         "test/unit/clients/websocket/websocket_convenience.test/14_unsubscribe_return_value.test.js": "0b7e25d1390e869c",
         "test/unit/clients/websocket/websocket_convenience.test/15_statuses_filter_is_not_advertised_regression.test.js": "54d6dc19b052776a",
         "test/unit/clients/websocket/websocket_detached_subscribe.test.js": "5ab9d4769345672e",
+        "test/unit/clients/websocket/websocket_disconnect_cancels_reconnect.test.js": "f08fbea1bf5f78d6",
         "test/unit/clients/websocket/websocket_feed_correctness.test.js": "0458710d35d1cff4",
         "test/unit/clients/websocket/websocket_full_url.test.js": "a8181a088edcff2f",
+        "test/unit/clients/websocket/websocket_reconnect_retry.test.js": "c63821d0c7f3142a",
         "test/unit/coins/address_parity.test.js": "392b6e06020fd4b3",
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/coins_no_filesystem.test.js": "606950257bf479c5",
@@ -8260,16 +8430,18 @@
         "test/unit/preflight/engine/engine.test/02_report_shape_4_2.test.js": "8290eb0cf8465d4f",
         "test/unit/preflight/engine/engine.test/03_tier_precedence_4_2.test.js": "7f4c85dadc6049c6",
         "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js": "4e313fdc96be7c4f",
+        "test/unit/preflight/engine/engine.test/05_shared_producer_ignores_first_callers_signal.test.js": "688401629629e20c",
         "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
         "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
-        "test/unit/preflight/lifecycle.test.js": "6496075e070ad57c",
+        "test/unit/preflight/lifecycle.test.js": "0af9181df0bb943a",
         "test/unit/preflight/list/list_note_refusals.test.js": "287b43aeb58106c1",
         "test/unit/preflight/list/list_set_meta_note.test.js": "1866e9c807f637eb",
         "test/unit/preflight/list/list_share_notes.test.js": "e8ec9e9a4fce2709",
         "test/unit/preflight/numeric.test.js": "07433a2c14a8b8be",
         "test/unit/preflight/representability/amount_representability.test.js": "c9446a3add4b6b4f",
         "test/unit/preflight/representability/expiration_representability.test.js": "9733098639c235c8",
+        "test/unit/preflight/stale_balance_unverified.test.js": "92bc11ccc6389098",
         "test/unit/preflight/tier1/batch_tier1.test.js": "ba5b7ebd9b68484b",
         "test/unit/preflight/tier1/batch_tier1.test/01_a_refused_sub_action_is_a_clear_answer.test.js": "dbd9896b91a6fb71",
         "test/unit/preflight/tier1/batch_tier1.test/02_normalizing_the_arbiter_sub_command_list.test.js": "39fe2ed29221c6ad",
@@ -8281,6 +8453,8 @@
         "test/unit/preflight/tier1/batch_tier1.test/08_an_invalid_batch_header.test.js": "bf50e8fa4f7240a2",
         "test/unit/preflight/tier1/tier1.test.js": "b4e0c153ab38b699",
         "test/unit/preflight/tier1/tier1_findings.test.js": "9d3c1858a0fa93eb",
+        "test/unit/preflight/tier1/with_abort_listener_cleanup.test.js": "7473b82052054d25",
+        "test/unit/preflight/timeout_budget.test.js": "2f5768fdb8d62480",
         "test/unit/protocol/action_manifest_conformance.test.js": "bbe06c991f6d2e58",
         "test/unit/protocol/anchor_order_reason_helpers.test.js": "adbd90fd0833e8dd",
         "test/unit/protocol/batch/batch_builder_cost_weight.test.js": "60c202249e718c1e",
@@ -8371,6 +8545,7 @@
         "test/unit/protocol/validator/validator.test/04_validator_vote_escrow_decimal_places.test.js": "7c6b04c01fd6ffb2",
         "test/unit/protocol/validator/validator.test/05_validator_unknown_action.test.js": "6e36ec22e329a960",
         "test/unit/protocol/validator/validator.test/06_validator_file_gate_min_amount_pc_29.test.js": "a84228d650a20881",
+        "test/unit/protocol/validator_destination_checksum.test.js": "5c8a3afda4fd453c",
         "test/unit/protocol/vote.test.js": "13081fe0727f25f4",
         "test/unit/protocol/wire/issue_tick_ref.test.js": "97719469e6fa9e29",
         "test/unit/protocol/wire/tick_ref_fields.test.js": "89913b10df49648b",
@@ -8469,6 +8644,7 @@
         "test/unit/wallet/wallet_session.test/04_action_convenience_methods.test.js": "255990478c67aa1f",
         "test/unit/wallet/wallet_session.test/05_explorer_convenience_methods.test.js": "7b9d130534cd030b",
         "test/unit/wallet/wallet_session.test/06_estimate_fees.test.js": "fcab45f9ea01ffb3",
+        "test/unit/wallet/wallet_session.test/07_submit_after_broadcast_timeout.test.js": "d9e609dba4301d2a",
         "test/unit/wallet/x402.test.js": "c1f23d83c7fe1108",
         "test/unit/wallet/x402.test/01_x402_gateway.test.js": "a390a388a8cd0d37",
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
@@ -8478,8 +8654,8 @@
       }
     },
     "test:all": {
-      "fileCount": 630,
-      "titleCount": 6586,
+      "fileCount": 647,
+      "titleCount": 6723,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8519,6 +8695,7 @@
         "test/regression/amount_precision.test.js": "e562bc7f8db5236d",
         "test/regression/cosigner_decoder_parity.test.js": "4f80fc0ee1434d73",
         "test/regression/golden_sibling_load_attribution.test.js": "1739ad83e81f04c3",
+        "test/regression/post_broadcast_error_shape.test.js": "c18de397210c12b4",
         "test/security/input_attack.test.js": "57c02fa02715eab7",
         "test/smoke/smoke.test.js": "b9b36666cde9f484",
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
@@ -8582,8 +8759,14 @@
         "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "4aab71cfb0d09588",
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
         "test/unit/api/api_batch_cap.test.js": "6abb57b79a51e287",
+        "test/unit/api/api_body_parse_errors.test.js": "11b7b67f5cf804a6",
+        "test/unit/api/api_error_codes.test.js": "fc75c57245fb14df",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
-        "test/unit/api/api_rate_limit.test.js": "a119099cfeb183c6",
+        "test/unit/api/api_null_batch_element.test.js": "f6cf1827fd13f8f0",
+        "test/unit/api/api_parse_error_json.test.js": "0366f235c81fe49f",
+        "test/unit/api/api_prototype_dispatch.test.js": "3aaa1f0f0b24f6ff",
+        "test/unit/api/api_rate_limit.test.js": "e0931a79421d79af",
+        "test/unit/api/api_rate_limit_window.test.js": "8d397439f9118b42",
         "test/unit/api/cors_origin.test.js": "47a8c7aec5cc3398",
         "test/unit/api/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/carrier/bind_action_carrier.test.js": "4f58c716b835a2da",
@@ -8600,6 +8783,7 @@
         "test/unit/carrier/lifecycle_manager.test/08_submit_action_contract_actions.test.js": "92ad9ac971489ae6",
         "test/unit/carrier/lifecycle_manager.test/09_submit_action_reveal_before_commit_broadcast.test.js": "c6b023f9a3fab63a",
         "test/unit/carrier/lifecycle_manager.test/fee_quote_authorized_output.test.js": "b053b50995136354",
+        "test/unit/carrier/lifecycle_manager_encoder_opts_fee_caps.test.js": "26a2fe788a424f2f",
         "test/unit/carrier/mainnet_prelaunch_refusal.test.js": "74b233f48de6a823",
         "test/unit/carrier/reconcile_encoded.test.js": "f03ae31623c0d806",
         "test/unit/carrier/reconcile_encoded.test/01_reconcile_encoded_funding_leg_pins.test.js": "99d3e354f4a12b66",
@@ -8684,7 +8868,7 @@
         "test/unit/clients/websocket/websocket.test/03_emit_and_connection_lost.test.js": "c6c38104ad45ec9a",
         "test/unit/clients/websocket/websocket.test/04_latest_action_index_tracking.test.js": "a66187140aa93ab9",
         "test/unit/clients/websocket/websocket_bundler_interop.test.js": "34f473d0e384ae26",
-        "test/unit/clients/websocket/websocket_catch_up.test.js": "0138b0971cdb0d1d",
+        "test/unit/clients/websocket/websocket_catch_up.test.js": "8649344eb17496b8",
         "test/unit/clients/websocket/websocket_convenience.test.js": "deec5a095c8b2024",
         "test/unit/clients/websocket/websocket_convenience.test/01_on_block.test.js": "2daae22e85db73d7",
         "test/unit/clients/websocket/websocket_convenience.test/02_on_action.test.js": "1624ce0c406b2282",
@@ -8702,8 +8886,10 @@
         "test/unit/clients/websocket/websocket_convenience.test/14_unsubscribe_return_value.test.js": "0b7e25d1390e869c",
         "test/unit/clients/websocket/websocket_convenience.test/15_statuses_filter_is_not_advertised_regression.test.js": "54d6dc19b052776a",
         "test/unit/clients/websocket/websocket_detached_subscribe.test.js": "5ab9d4769345672e",
+        "test/unit/clients/websocket/websocket_disconnect_cancels_reconnect.test.js": "f08fbea1bf5f78d6",
         "test/unit/clients/websocket/websocket_feed_correctness.test.js": "0458710d35d1cff4",
         "test/unit/clients/websocket/websocket_full_url.test.js": "a8181a088edcff2f",
+        "test/unit/clients/websocket/websocket_reconnect_retry.test.js": "c63821d0c7f3142a",
         "test/unit/coins/address_parity.test.js": "392b6e06020fd4b3",
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/coins_no_filesystem.test.js": "606950257bf479c5",
@@ -8897,16 +9083,18 @@
         "test/unit/preflight/engine/engine.test/02_report_shape_4_2.test.js": "8290eb0cf8465d4f",
         "test/unit/preflight/engine/engine.test/03_tier_precedence_4_2.test.js": "7f4c85dadc6049c6",
         "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js": "4e313fdc96be7c4f",
+        "test/unit/preflight/engine/engine.test/05_shared_producer_ignores_first_callers_signal.test.js": "688401629629e20c",
         "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
         "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
-        "test/unit/preflight/lifecycle.test.js": "6496075e070ad57c",
+        "test/unit/preflight/lifecycle.test.js": "0af9181df0bb943a",
         "test/unit/preflight/list/list_note_refusals.test.js": "287b43aeb58106c1",
         "test/unit/preflight/list/list_set_meta_note.test.js": "1866e9c807f637eb",
         "test/unit/preflight/list/list_share_notes.test.js": "e8ec9e9a4fce2709",
         "test/unit/preflight/numeric.test.js": "07433a2c14a8b8be",
         "test/unit/preflight/representability/amount_representability.test.js": "c9446a3add4b6b4f",
         "test/unit/preflight/representability/expiration_representability.test.js": "9733098639c235c8",
+        "test/unit/preflight/stale_balance_unverified.test.js": "92bc11ccc6389098",
         "test/unit/preflight/tier1/batch_tier1.test.js": "ba5b7ebd9b68484b",
         "test/unit/preflight/tier1/batch_tier1.test/01_a_refused_sub_action_is_a_clear_answer.test.js": "dbd9896b91a6fb71",
         "test/unit/preflight/tier1/batch_tier1.test/02_normalizing_the_arbiter_sub_command_list.test.js": "39fe2ed29221c6ad",
@@ -8918,6 +9106,8 @@
         "test/unit/preflight/tier1/batch_tier1.test/08_an_invalid_batch_header.test.js": "bf50e8fa4f7240a2",
         "test/unit/preflight/tier1/tier1.test.js": "b4e0c153ab38b699",
         "test/unit/preflight/tier1/tier1_findings.test.js": "9d3c1858a0fa93eb",
+        "test/unit/preflight/tier1/with_abort_listener_cleanup.test.js": "7473b82052054d25",
+        "test/unit/preflight/timeout_budget.test.js": "2f5768fdb8d62480",
         "test/unit/protocol/action_manifest_conformance.test.js": "bbe06c991f6d2e58",
         "test/unit/protocol/anchor_order_reason_helpers.test.js": "adbd90fd0833e8dd",
         "test/unit/protocol/batch/batch_builder_cost_weight.test.js": "60c202249e718c1e",
@@ -9008,6 +9198,7 @@
         "test/unit/protocol/validator/validator.test/04_validator_vote_escrow_decimal_places.test.js": "7c6b04c01fd6ffb2",
         "test/unit/protocol/validator/validator.test/05_validator_unknown_action.test.js": "6e36ec22e329a960",
         "test/unit/protocol/validator/validator.test/06_validator_file_gate_min_amount_pc_29.test.js": "a84228d650a20881",
+        "test/unit/protocol/validator_destination_checksum.test.js": "5c8a3afda4fd453c",
         "test/unit/protocol/vote.test.js": "13081fe0727f25f4",
         "test/unit/protocol/wire/issue_tick_ref.test.js": "97719469e6fa9e29",
         "test/unit/protocol/wire/tick_ref_fields.test.js": "89913b10df49648b",
@@ -9106,6 +9297,7 @@
         "test/unit/wallet/wallet_session.test/04_action_convenience_methods.test.js": "255990478c67aa1f",
         "test/unit/wallet/wallet_session.test/05_explorer_convenience_methods.test.js": "7b9d130534cd030b",
         "test/unit/wallet/wallet_session.test/06_estimate_fees.test.js": "fcab45f9ea01ffb3",
+        "test/unit/wallet/wallet_session.test/07_submit_after_broadcast_timeout.test.js": "d9e609dba4301d2a",
         "test/unit/wallet/x402.test.js": "c1f23d83c7fe1108",
         "test/unit/wallet/x402.test/01_x402_gateway.test.js": "a390a388a8cd0d37",
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
@@ -9178,12 +9370,13 @@
       }
     },
     "test:regression": {
-      "fileCount": 3,
-      "titleCount": 28,
+      "fileCount": 4,
+      "titleCount": 34,
       "files": {
         "test/regression/amount_precision.test.js": "e562bc7f8db5236d",
         "test/regression/cosigner_decoder_parity.test.js": "4f80fc0ee1434d73",
-        "test/regression/golden_sibling_load_attribution.test.js": "1739ad83e81f04c3"
+        "test/regression/golden_sibling_load_attribution.test.js": "1739ad83e81f04c3",
+        "test/regression/post_broadcast_error_shape.test.js": "c18de397210c12b4"
       }
     },
     "test:security": {

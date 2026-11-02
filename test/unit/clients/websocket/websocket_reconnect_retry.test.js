@@ -63,9 +63,9 @@ function makeClient(port, retry, hooks) {
     });
 }
 
-describe('WebSocketClient reconnect retry', function () {
-    let server, client, deadPort;
+let server, client, deadPort;
 
+function useReconnectServer() {
     beforeEach(async () => {
         sinon.stub(Math, 'random').returns(0);
         server = await createServer();
@@ -79,6 +79,10 @@ describe('WebSocketClient reconnect retry', function () {
         for (const c of server.wss.clients) c.terminate();
         await new Promise(r => server.wss.close(r));
     });
+}
+
+describe('WebSocketClient reconnect retry', function () {
+    useReconnectServer();
 
     it('keeps retrying after one failed attempt and reconnects once the server is back', async () => {
         const attempts = [];
@@ -104,6 +108,10 @@ describe('WebSocketClient reconnect retry', function () {
         expect(attempts.length).to.be.greaterThan(1);
         await waitFor(() => server.subs.length >= 2, { message: 'subscription not replayed' });
     });
+});
+
+describe('WebSocketClient reconnect retry', function () {
+    useReconnectServer();
 
     it('emits connection_lost exactly once after maxRetries failed attempts', async () => {
         const attempts = [];

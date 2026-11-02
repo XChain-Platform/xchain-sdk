@@ -10,6 +10,7 @@
 const { expect } = require('chai');
 const { Coalescer, isStale, degraded } = require('../../../src/preflight/lifecycle.js');
 const { STALENESS_MS } = require('../../../src/preflight/constants.js');
+const { mockSdk } = require('./helpers/mock.js');
 
 describe('pre-flight lifecycle', function () {
 
@@ -123,13 +124,23 @@ describe('pre-flight lifecycle', function () {
     });
 });
 
+const A = 'SEND|0|JDOG|1|1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
+const SRC = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
+const base = { chainId: 'btc', actionString: 'S', source: 's' };
+
+function countingSdk() {
+    const calls = [];
+    const sdk = mockSdk({ preflight: 'report', explorerSpec: { getPreflight: async (args) => {
+        calls.push(args);
+        await new Promise(r => setTimeout(r, 10));
+        return { supported: true, valid: true, status: 'valid', blockIndex: 7,
+            quote: { feeMode: args.feeMode || 'default' } };
+    } } });
+    return { sdk, calls };
+}
+
 describe('pre-flight lifecycle', function () {
     describe('coalescing across caller options', function () {
-        const { mockSdk } = require('./helpers/mock.js');
-        const A = 'SEND|0|JDOG|1|1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
-        const SRC = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
-        const base = { chainId: 'btc', actionString: 'S', source: 's' };
-
         it('Coalescer.key differs when only mode, feeMode or encoding differs', function () {
             const c = new Coalescer();
             const k = (v) => c.key('btc', 'S', 's', [], v);
@@ -155,18 +166,11 @@ describe('pre-flight lifecycle', function () {
                 expect(a).to.not.equal(b);
             }
         });
+    });
+});
 
-        function countingSdk() {
-            const calls = [];
-            const sdk = mockSdk({ preflight: 'report', explorerSpec: { getPreflight: async (args) => {
-                calls.push(args);
-                await new Promise(r => setTimeout(r, 10));
-                return { supported: true, valid: true, status: 'valid', blockIndex: 7,
-                    quote: { feeMode: args.feeMode || 'default' } };
-            } } });
-            return { sdk, calls };
-        }
-
+describe('pre-flight lifecycle', function () {
+    describe('coalescing across caller options', function () {
         it('a local caller and a report caller get separate reports; only the report caller reaches Tier 1', async function () {
             for (const order of [['local', 'report'], ['report', 'local']]) {
                 const { sdk, calls } = countingSdk();
