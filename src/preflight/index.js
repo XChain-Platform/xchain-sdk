@@ -182,7 +182,12 @@ async function runPreflight(sdk, actionData, opts = {}) {
     const chain = opts.chain || opts.chainId || (sdk.config && sdk.config.network) || null;
     const timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
 
-    const producer = () => produceReport({ sdk, parsed, opts, mode, timeoutMs, started });
+    // The producer is shared by every coalesced joiner, so it must not run
+    // under the signal of whichever caller happened to create it: that
+    // caller's abort would downgrade every other joiner's report. Each caller's
+    // own signal is applied by the coalescer to that caller's view only.
+    const sharedOpts = Object.assign({}, opts, { signal: undefined });
+    const producer = () => produceReport({ sdk, parsed, opts: sharedOpts, mode, timeoutMs, started });
 
     const report = await sdk._preflightCoalescer.run({
         chainId: chain, actionString: parsed.actionString, source: opts.source,
