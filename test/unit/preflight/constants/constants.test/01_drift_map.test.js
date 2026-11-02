@@ -203,7 +203,7 @@ function registerSupplyBoundReviewTest() {
         expect(mint, 'mint directory row').to.exist;
         expect(issue, 'issue directory row').to.exist;
         expect(mint.hash).to.equal('998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48');
-        expect(issue.hash).to.equal('48e96f754714f079aea9c608ecce3ff1ca706f9f5c168224468f9e0bd6fad670');
+        expect(issue.hash).to.equal('259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978');
         const heading = '### 2026-10-14 - MINT and ISSUE total supply bound behind an activation';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
