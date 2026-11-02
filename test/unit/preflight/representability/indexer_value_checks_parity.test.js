@@ -63,6 +63,21 @@ describe('pre-flight numeric storage parity with xchain-indexer value_checks.js'
         assert.deepStrictEqual(disagreements(indexer), []);
     });
 
+    it('matches keepsPrefixedSpelling across radix, sign, case, whitespace and range spellings', function () {
+        const corpus = ['0x10', '0X10', '0b101', '0B101', '0o17', '0O17', ' 0x10 ', '0x0', '-0x10', '+0x10',
+            '0x', '0b2', '0o8', '0xg', '0xffffffff', '0x100000000', '0xffffffffffffffff', '0x10000000000000000',
+            '0b' + '1'.repeat(64), '0b1' + '0'.repeat(64), '16', '1e12', '+100', '00100', '', null, undefined];
+        const out = [];
+        for (const max of ['18446744073709551615', '4294967295']) {
+            for (const value of corpus) {
+                const expected = indexer.keepsPrefixedSpelling(value, max);
+                const actual = numeric.keepsPrefixedSpelling(value, max);
+                if (actual !== expected) out.push(`${String(value)} @ ${max}: SDK ${actual}, indexer ${expected}`);
+            }
+        }
+        assert.deepStrictEqual(out, []);
+    });
+
     it('pins the storesAsNull width and radix-prefix refusals mirrored by pre-flight', function () {
         const authority = Object.assign({}, indexer);
         assert.strictEqual(authority.storesAsNull('0'.repeat(250), null), false);

@@ -78,6 +78,21 @@ function exceedsUnsignedColumn(value, max) {
     }
 }
 
+// The JavaScript radix literals isNumeric and isInteger accept: PREFIXED_SPELLING in
+// xchain-indexer value_checks.js, unsigned, any letter case.
+const PREFIXED_SPELLING = /^0(?:x[0-9a-f]+|b[01]+|o[0-7]+)$/i;
+
+// Whether the indexer's storage normalization leaves an integer wire value as a
+// hexadecimal, binary or octal literal, which a strict MariaDB session refuses in an
+// integer column. Mirrors keepsPrefixedSpelling in value_checks.js: a literal past `max`
+// is normalized to NULL, which stores, so it answers false; decimal spellings such as
+// '1e12', '+100' and '00100' always answer false.
+function keepsPrefixedSpelling(value, max) {
+    if (value === null || value === undefined || value === '') return false;
+    if (!PREFIXED_SPELLING.test(String(value).trim())) return false;
+    return !exceedsUnsignedColumn(value, max);
+}
+
 function add(a, b) { return mathjs.format(mathjs.add(bn(a), bn(b)), { notation: 'fixed' }); }
 
 function sub(a, b) { return mathjs.format(mathjs.subtract(bn(a), bn(b)), { notation: 'fixed' }); }
@@ -149,5 +164,5 @@ function isValidAmountFormatWhere(decimals, amount, armed) {
 
 module.exports = {
     gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat, isRepresentableAmount, isValidAmountFormatWhere,
-    exceedsUnsignedColumn,
+    exceedsUnsignedColumn, keepsPrefixedSpelling,
 };
