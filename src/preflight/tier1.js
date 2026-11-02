@@ -256,19 +256,26 @@ function paramsToWire(parsed) {
 function withAbort(promise, signal, timeoutMs) {
     return new Promise((resolve, reject) => {
         let settled = false;
+        let onAbort = null;
+        // Every settle path clears the timer and detaches the abort listener,
+        // so a long-lived caller signal does not accumulate listeners.
+        const cleanup = () => {
+            if (timer) clearTimeout(timer);
+            if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+        };
         const timer = timeoutMs ? setTimeout(() => {
-            if (!settled) { settled = true; reject(new Error('tier1 timeout after ' + timeoutMs + 'ms')); }
+            if (!settled) { settled = true; cleanup(); reject(new Error('tier1 timeout after ' + timeoutMs + 'ms')); }
         }, timeoutMs) : null;
-        const onAbort = () => {
-            if (!settled) { settled = true; if (timer) clearTimeout(timer); reject(new Error('aborted')); }
+        onAbort = () => {
+            if (!settled) { settled = true; cleanup(); reject(new Error('aborted')); }
         };
         if (signal) {
             if (signal.aborted) return onAbort();
             signal.addEventListener('abort', onAbort, { once: true });
         }
         promise.then(
-            v => { if (!settled) { settled = true; if (timer) clearTimeout(timer); resolve(v); } },
-            e => { if (!settled) { settled = true; if (timer) clearTimeout(timer); reject(e); } },
+            v => { if (!settled) { settled = true; cleanup(); resolve(v); } },
+            e => { if (!settled) { settled = true; cleanup(); reject(e); } },
         );
     });
 }
