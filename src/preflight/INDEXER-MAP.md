@@ -82,7 +82,13 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `985327003`
+**Pins taken at indexer commit:** `cad84089a`
+
+(Re-anchored 2026-11-02 a third time, against indexer `cad84089a`, the head of the indexer
+v0.27.7 hotfix that carries the prefixed mint window refusal reviewed in the first entry of the
+review log below. Only the `issue` directory pin moves. The other fifteen rows are unchanged and
+match this tree, and `985327003` is an ancestor of this anchor. The hotfix merges into indexer
+master as these exact commits, so the anchor stays reachable from master.)
 
 (Re-anchored 2026-11-02 a second time, against indexer `985327003`, the head of the indexer
 v0.27.6 hotfix that carries the prefixed integer refusals reviewed in the first entry of the
@@ -493,7 +499,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 985327003..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff cad84089a..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -569,7 +575,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/send.js` (SEND) | `src/actions/send/` | `bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
-| `checks/issue.js` | `src/actions/issue/` | `48e96f754714f079aea9c608ecce3ff1ca706f9f5c168224468f9e0bd6fad670` |
+| `checks/issue.js` | `src/actions/issue/` | `259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `8130c1a24aa0e3af97b773fdfdfb6ab6362b28cc5a5a9a55093db47e2736ffef` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e` |
@@ -607,6 +613,32 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-02 - ISSUE refuses a hexadecimal, binary or octal mint window
+
+The `issue` pin moves from `48e96f75` to `259d0055`, hashed from the committed indexer tree at
+the anchor above by `node bin/preflight_handler_dirs.js <indexer> src/actions/issue/`. That tree is
+`0d08f2d77` plus two commits that touch no mapped row and "Refuse a hexadecimal, binary or octal
+mint window on a valid ISSUE" (`265c85c86`). No gate: `db/tokens/token_writer.js` binds
+MINT_START_BLOCK and MINT_STOP_BLOCK as carried whenever `isNumeric` accepts them, into BIGINT
+UNSIGNED columns, so a valid ISSUE carrying `0x7fffffff`, `0b1111111111`, `0o7777` or `0x0` halted its
+block wherever `isValidAmountFormat` let the spelling through, and no indexed history holds one.
+
+- **ISSUE, `issue/edit_rules.js` and `issue/index.js`:** `validateStoredMintWindow` runs after `validateStoredCallbackBlock`, as the last rule, and refuses `invalid: MINT_START_BLOCK (format)` or `invalid: MINT_STOP_BLOCK (format)` when no earlier rule failed and the field keeps its prefixed spelling (`util.keepsPrefixedSpelling` against the u64 bound in `INTEGER_FIELDS`). There is no above-zero condition, unlike CALLBACK_BLOCK, because the tokens row binds any numeric value. Only formats 0 and 2 carry the fields on the wire; `ctx.data` holds the stored decimal value otherwise. Where the amount-representability rule is armed (regtest from genesis, BTC, LTC and DOGE testnet from time `1791061097`) `issue/token_state.js` already refused these spellings with the same text, so the new rule decides only on mainnet and on testnet below that time.
+
+**Client follow-up.** `universal/prefixed_integers.js` adds MINT_START_BLOCK and MINT_STOP_BLOCK to
+ISSUE formats 0 and 2 at the u64 bound, with no above-zero condition. Where the representability
+rule is armed, `checks/issue/supply_rules.js` `checkMaxSupplyFormat` already refused these spellings
+as AMOUNT_FORMAT_INVALID; on mainnet nothing did. The verdict is the same on every plane, so the
+check reads the wire alone and fires on both, beside the amount-format finding where that one
+also fires; it also covers a BATCH sub-command and an ISSUE whose token lookup failed, where the
+amount-format rule is declared unverified. Decimal spellings and a literal past the u64 bound stay
+clear. Tests: `test/unit/preflight/checks/prefixed_integer_fields.test.js`, both fields on both formats
+in every radix and case, a literal reading zero, the past-range literal, a mainnet ISSUE and BATCH
+sub-command, and the armed regtest verdict beside the amount-format finding.
+
+**Direction: TIGHTENING, ungated.** The refused values halted the chain before. The anchor moves
+to the committed indexer tree, and the other fifteen rows are unchanged.
 
 ### 2026-11-02 - ISSUE, DISPENSER, ORDER, SWAP and BET refuse hexadecimal, binary and octal integer fields
 

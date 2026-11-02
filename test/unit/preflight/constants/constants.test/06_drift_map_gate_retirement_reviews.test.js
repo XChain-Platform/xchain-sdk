@@ -153,12 +153,12 @@ function notNullAmountWidthReview() {
 }
 
 // The TICK_NORMALIZE gate re-pinned issue ahead of indexer 32b4fa8f0, and the 2026-11-02 prefixed
-// integer review pins it now; one ISSUE pre-flight warning
+// mint window review pins it now; one ISSUE pre-flight warning
 // moves, and the ticker key widening stays outside every mapped row.
 function tickNormalizeReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/issue/').hash)
-        .to.equal('48e96f754714f079aea9c608ecce3ff1ca706f9f5c168224468f9e0bd6fad670');
+        .to.equal('259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978');
     const heading = '### 2026-10-23 - ISSUE caret TICK ids must be canonical behind TICK_NORMALIZE';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
@@ -211,13 +211,13 @@ function columnWidthReview() {
     expect(entry).to.include('**Direction: TIGHTENING, ungated.**');
 }
 
-// The hexadecimal, binary and octal integer refusals re-pin issue, dispenser, order, swap and
-// bet and move the anchor to the lane tree.
+// The hexadecimal, binary and octal integer refusals re-pinned issue, dispenser, order, swap and
+// bet; the prefixed mint window review below pins issue now, and holds the anchor.
 function prefixedIntegerReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['issue', '`37ac3260` to `48e96f75`', '48e96f754714f079aea9c608ecce3ff1ca706f9f5c168224468f9e0bd6fad670'],
+        ['issue', '`37ac3260` to `48e96f75`', null],
         ['dispenser', '`3c0163d6` to `8130c1a2`', '8130c1a24aa0e3af97b773fdfdfb6ab6362b28cc5a5a9a55093db47e2736ffef'],
         ['order', '`294bc04f` to `86b0a7c3`', '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e'],
         ['swap', '`1f77aa82` to `2ee469e1`', '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8'],
@@ -228,17 +228,32 @@ function prefixedIntegerReview() {
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     for (const [name, move, hash] of moves) {
-        expect(rows.find((r) => r.handler === 'src/actions/' + name + '/').hash, name).to.equal(hash);
+        if (hash) expect(rows.find((r) => r.handler === 'src/actions/' + name + '/').hash, name).to.equal(hash);
         expect(entry).to.match(new RegExp('`' + name + '` pin (moves )?from ' + move));
     }
-    expect(text).to.include('**Pins taken at indexer commit:** `985327003`');
     expect(entry).to.include('util.keepsPrefixedSpelling');
     expect(entry).to.include('universal/prefixed_integers.js');
     expect(entry).to.include('indexer_value_checks_parity.test.js');
     expect(entry).to.include('**Direction: TIGHTENING, ungated.**');
 }
 
+// The prefixed mint window refusal re-pins issue and moves the anchor to the committed indexer tree.
+function mintWindowReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/issue/').hash)
+        .to.equal('259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978');
+    const heading = '### 2026-11-02 - ISSUE refuses a hexadecimal, binary or octal mint window';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    expect(entry).to.include('The `issue` pin moves from `48e96f75` to `259d0055`');
+    expect(text).to.include('**Pins taken at indexer commit:** `cad84089a`');
+    expect(entry).to.include('validateStoredMintWindow');
+    expect(entry).to.include('universal/prefixed_integers.js');
+    expect(entry).to.include('**Direction: TIGHTENING, ungated.**');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
+    it('pins and records the ISSUE prefixed mint window review', mintWindowReview);
     it('pins and records the ISSUE, DISPENSER, ORDER, SWAP and BET prefixed integer review', prefixedIntegerReview);
     it('pins and records the ISSUE, PRICE v1 and BET column-width review', columnWidthReview);
     it('pins and records the DISPENSER and DISPENSE amount positivity gate retirement review', dispenserPositivityReview);
