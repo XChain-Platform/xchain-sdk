@@ -205,7 +205,7 @@ function columnWidthReview() {
         expect(rows.find((r) => r.handler === 'src/actions/' + name + '/').hash, name).to.equal(hash);
         expect(entry).to.match(new RegExp('`' + name + '` pin (moves )?from ' + move));
     }
-    expect(text).to.include('**Pins taken at indexer commit:** `8185158fa`');
+    expect(text).to.include('**Pins taken at indexer commit:** `c3f900d2d`');
     expect(entry).to.include('issue/stored_widths.js');
     expect(entry).to.include('universal/column_widths.js');
     expect(entry).to.include('**Direction: TIGHTENING, ungated.**');
