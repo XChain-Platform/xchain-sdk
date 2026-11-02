@@ -95,6 +95,22 @@ function configureBaseMiddleware(app) {
     // Use Helmet to increase security
     app.use(helmet());
 
+    // Per-credential (falling back to per-IP) request-rate limit, ahead of the body
+    // parser, the batch cap, the auth gate and the router: a request those refuse
+    // (malformed JSON, an over-cap batch) must still spend the caller's budget, or an
+    // anonymous source sends them at any rate with no 429. The limiter reads only the
+    // Authorization header and req.ip, so it needs nothing from the body. The API key
+    // stops ANONYMOUS use; it does nothing about sustained traffic from a valid, shared
+    // or leaked credential, and the batch cap bounds one request's fan-out rather than
+    // the request rate. Only the configured key earns its own bucket: an unvalidated
+    // token is counted against the source address, so a rotating junk token cannot mint
+    // a fresh bucket each time.
+    app.use(rateLimitMiddleware({
+        limit: SDK_API_RATE_LIMIT,
+        windowMs: SDK_API_RATE_WINDOW_MS,
+        isCredential: (token) => !!SDK_API_KEY && safeTokenEqual(token, SDK_API_KEY)
+    }));
+
     // Allow JSON requests
     app.use(bodyParser.json());
 
@@ -280,14 +296,6 @@ function createApp(sdk) {
     const app = express();
     configureBaseMiddleware(app);
 
-    // Apply a per-credential (falling back to per-IP) request-rate limit ahead of the auth gate so an anonymous ping flood is bounded. The API key stops ANONYMOUS use;
-    // it does nothing about sustained traffic from a valid, shared or leaked credential, and the batch cap above bounds one request's fan-out rather than the request rate. The two are complementary and neither substitutes for the other.
-    // Only the configured key earns its own bucket: an unvalidated token is counted against the source address, so a per-request rotating junk token cannot mint a fresh bucket each time.
-    app.use(rateLimitMiddleware({
-        limit: SDK_API_RATE_LIMIT,
-        windowMs: SDK_API_RATE_WINDOW_MS,
-        isCredential: (token) => !!SDK_API_KEY && safeTokenEqual(token, SDK_API_KEY)
-    }));
     // Enforce the API key for all methods except ping and fail closed when unset: every non-ping method is rejected, never left open.
     // Keep batch-smuggling and non-string-method rules in the shared guard so tests exercise this exact middleware.
     app.use(authGateMiddleware({ apiKey: SDK_API_KEY }));

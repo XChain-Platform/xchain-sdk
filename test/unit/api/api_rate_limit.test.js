@@ -241,6 +241,40 @@ describe('API request-rate limit', function () {
         assert.ok(at.rateLimit < at[DISPATCH_NAME], 'the limiter must run before the router');
     });
 
+    it('mounts the limiter ahead of the body parser and the batch cap, which refuse requests themselves', () => {
+        const at = mountIndexes(assert, ['rateLimit', 'jsonParser', 'batchCap']);
+        assert.ok(at.rateLimit < at.jsonParser, 'a malformed-JSON refusal must already have spent the caller\'s budget');
+        assert.ok(at.rateLimit < at.batchCap, 'an over-cap batch refusal must already have spent the caller\'s budget');
+    });
+
+    it('answers 429 to requests the body parser and the batch cap refuse once the budget is spent', async () => {
+        const script = [
+            "const http = require('http');",
+            'const { createApp } = require(' + JSON.stringify(path.join(__dirname, '../../../src/api/index.js')) + ');',
+            'const app = createApp({});',
+            "const s = app.listen(0, '127.0.0.1', async () => {",
+            '  const send = (b) => new Promise((r) => {',
+            "    const q = http.request({ host: '127.0.0.1', port: s.address().port, method: 'POST',",
+            "      headers: { 'content-type': 'application/json' } }, (x) => { x.resume(); x.on('end', () => r(x.statusCode)); });",
+            '    q.end(b); });',
+            '  const bad = [], batch = [];',
+            "  for (let i = 0; i < 10; i++) bad.push(await send('{\"method\":'));",
+            '  const big = JSON.stringify(Array.from({ length: 21 }, (_, i) => ({ jsonrpc: "2.0", id: i, method: "ping" })));',
+            '  for (let i = 0; i < 3; i++) batch.push(await send(big));',
+            '  process.stdout.write(JSON.stringify({ bad, batch }));',
+            '  s.close(); process.exit(0); });'
+        ].join('\n');
+        const env = { PATH: process.env.PATH, HOME: process.env.HOME, NETWORK: 'bitcoin-regtest',
+            SDK_API_KEY: 'prelimiter-test-key', SDK_API_RATE_LIMIT: '5', SDK_API_RATE_WINDOW_MS: '60000' };
+        const out = await new Promise((resolve, reject) => {
+            execFile(process.execPath, ['-e', script], { env, cwd: os.tmpdir(), timeout: 8000 },
+                (err, stdout, stderr) => err ? reject(new Error(err.message + '\n' + stderr)) : resolve(stdout));
+        });
+        const r = JSON.parse(out);
+        assert.deepStrictEqual(r.bad, [400, 400, 400, 400, 400, 429, 429, 429, 429, 429]);
+        assert.deepStrictEqual(r.batch, [429, 429, 429], 'an over-cap batch past the limit must be throttled, not refused with a 400');
+    });
+
     it('keeps ONE implementation of the limiter: api.js holds no inline copy', () => {
         const src = fs.readFileSync(path.join(__dirname, '../../../src/api/index.js'), 'utf8');
         assert.ok(!/rateBuckets/.test(src),
