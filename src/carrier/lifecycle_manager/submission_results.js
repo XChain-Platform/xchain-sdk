@@ -128,6 +128,19 @@ function finishPhase2(manager, spendResult, spendSigned, broadcastHexes, spentIn
     return { finalTxid: spendSigned.txid, signed: spendSigned, spentInputs };
 }
 
+// Change outputs paid to changeAddress by the broadcast transactions, minus any
+// outpoint in `consumed` (spent by a later phase, or reserved by a signed reveal).
+function survivingChange(manager, broadcastHexes, changeAddress, consumed) {
+    let consumedSet = new Set(consumed.map(i => i.txid + ':' + i.vout));
+    let changeOutputs = [];
+    for (let hex of broadcastHexes) {
+        for (let out of manager.extractChangeOutputs(hex, changeAddress)) {
+            if (!consumedSet.has(out.txid + ':' + out.vout)) changeOutputs.push(out);
+        }
+    }
+    return changeOutputs;
+}
+
 // Shape the public result synchronously after every transaction is broadcast.
 function shapeResult(manager, state) {
     let { finalTxid, signed, spentInputs } = state;
@@ -138,14 +151,8 @@ function shapeResult(manager, state) {
 
     // Return only change that survives all later phases, so a caller can safely
     // chain a new unconfirmed action from it.
-    let spentSet = new Set(spentInputs.map(i => i.txid + ':' + i.vout));
     let changeAddress = state.encoderOpts.change || state.encoderOpts.pubkey;
-    let changeOutputs = [];
-    for (let hex of state.broadcastHexes) {
-        for (let out of manager.extractChangeOutputs(hex, changeAddress)) {
-            if (!spentSet.has(out.txid + ':' + out.vout)) changeOutputs.push(out);
-        }
-    }
+    let changeOutputs = survivingChange(manager, state.broadcastHexes, changeAddress, spentInputs);
 
     return {
         txid:          finalTxid,
@@ -175,15 +182,37 @@ function buildWaitOptions(setup) {
     };
 }
 
-// Mark only confirmation timeouts as successful broadcasts that remain unindexed.
-function markConfirmationTimeout(error, finalTxid) {
-    if (error && error.code === 'CONFIRMATION_TIMEOUT'){
+// Codes meaning "sent but not yet settled": the transaction is on the wire and the
+// caller should wait, retry the reveal, or check the mempool, never rebuild.
+const IN_FLIGHT_CODES = new Set([
+    'CONFIRMATION_TIMEOUT',
+    'CHUNK_REVEAL_BROADCAST_FAILED',
+    'ENVELOPE_REVEAL_BROADCAST_FAILED',
+]);
+
+// Tag any error thrown once a transaction is on the wire (a rejected reveal, an
+// indexer wait that expires or refuses, a contract gate) with the inputs the
+// broadcast spent and the change it paid back, so the wallet session's UTXO cache
+// stops offering inputs the mempool already holds. An in-flight code also gets
+// broadcast:true and the last broadcast txid; a settled refusal such as
+// ACTION_INVALID does not, since broadcast:true reads as "awaiting confirmation".
+// `sent` = { txid, broadcastHexes, spentInputs, pendingInputs, changeAddress };
+// pendingInputs are the inputs of a signed reveal that has not gone out, kept
+// out of the change list so retrying that reveal never races a later submit.
+function markBroadcastError(manager, error, sent) {
+    if (!error || typeof error !== 'object') return error;
+    let spentInputs = sent.spentInputs.slice();
+    error.spentInputs   = spentInputs;
+    error.changeOutputs = survivingChange(manager, sent.broadcastHexes, sent.changeAddress,
+        spentInputs.concat(sent.pendingInputs || []));
+    if (IN_FLIGHT_CODES.has(error.code)) {
         error.broadcast = true;
-        error.txid      = finalTxid;
+        error.txid      = sent.txid;
         if (error.details && typeof error.details === 'object'){
             error.details.broadcast = true;
         }
     }
+    return error;
 }
 
 module.exports = {
@@ -193,7 +222,7 @@ module.exports = {
     buildWaitOptions,
     finishEnvelope,
     finishPhase2,
-    markConfirmationTimeout,
+    markBroadcastError,
     prepareChunkReveal,
     prepareEnvelope,
     preparePhase2,

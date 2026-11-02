@@ -35,11 +35,51 @@ const {
     buildWaitOptions,
     finishEnvelope,
     finishPhase2,
-    markConfirmationTimeout,
+    markBroadcastError,
     prepareEnvelope,
     prepareChunkReveal,
     shapeResult,
 } = require('./lifecycle_manager/submission_results.js');
+
+// Everything after the commit broadcast: the reveal, the result, the indexer
+// wait and the contract gate. `sent` is kept current after each broadcast.
+async function finishSubmission(manager, setup, actionData, opts, state) {
+    const { encoder, progress, encoded, encoderOpts, createResult, carriedAction, revealSigned, phase2, sent } = state;
+    let { signed } = state;
+    let spentInputs = sent.spentInputs;
+    let finalTxidEnvelope = null;
+    if (revealSigned) {
+        progress('envelope_revealing', { commitTxid: signed.txid });
+        sent.pendingInputs = manager.extractSpentInputs(encoded.revealPsbt);
+        try { await encoder.broadcastTx(revealSigned.txHex); }
+        catch (error) { throw buildEnvelopeBroadcastError(error, signed, encoded, revealSigned); }
+        ({ spentInputs, finalTxidEnvelope } = finishEnvelope(
+            manager, encoded, revealSigned, spentInputs, sent.broadcastHexes));
+        Object.assign(sent, { txid: finalTxidEnvelope, spentInputs, pendingInputs: [] });
+    }
+    let finalTxid = signed.txid;
+    if (phase2) {
+        sent.pendingInputs = manager.extractSpentInputs(phase2.spendResult.psbt);
+        try { await encoder.broadcastTx(phase2.spendSigned.txHex); }
+        catch (error) { throw buildChunkRevealBroadcastError(error, signed, phase2.spendSigned); }
+        ({ finalTxid, signed, spentInputs } = finishPhase2(
+            manager, phase2.spendResult, phase2.spendSigned, sent.broadcastHexes, spentInputs));
+        Object.assign(sent, { txid: finalTxid, spentInputs, pendingInputs: [] });
+    }
+    const result = shapeResult(manager, {
+        finalTxid, finalTxidEnvelope, revealSigned, signed, spentInputs, broadcastHexes: sent.broadcastHexes,
+        encoderOpts, createResult, encoded, carriedActionString: carriedAction.carriedActionString,
+    });
+    finalTxid = result.txid;
+    if (setup.waitForIndexer) {
+        progress('waiting', { txid: finalTxid });
+        const waiter = new ActionWaiter(manager.sdk);
+        result.indexed = await waiter.waitForTxid(finalTxid, buildWaitOptions(setup));
+        progress('confirmed', { txid: finalTxid, action: result.indexed });
+    }
+    if (opts.awaitContract) await manager.waitForContract(result, actionData, opts, progress, finalTxid);
+    return result;
+}
 
 class LifecycleManager {
 
@@ -106,39 +146,18 @@ class LifecycleManager {
             reconcileState, createResult, wif, progress });
         progress('broadcasting', { txid: signed.txid });
         await encoder.broadcastTx(signed.txHex);
-        const broadcastHexes = [signed.txHex];
-        let spentInputs = this.extractSpentInputs(encoded.psbt);
-        let finalTxidEnvelope = null;
-        if (revealSigned) {
-            progress('envelope_revealing', { commitTxid: signed.txid });
-            try { await encoder.broadcastTx(revealSigned.txHex); }
-            catch (error) { throw buildEnvelopeBroadcastError(error, signed, encoded, revealSigned); }
-            ({ spentInputs, finalTxidEnvelope } = finishEnvelope(
-                this, encoded, revealSigned, spentInputs, broadcastHexes));
-        }
-        let finalTxid = signed.txid;
-        if (phase2) {
-            try { await encoder.broadcastTx(phase2.spendSigned.txHex); }
-            catch (error) { throw buildChunkRevealBroadcastError(error, signed, phase2.spendSigned); }
-            ({ finalTxid, signed, spentInputs } = finishPhase2(
-                this, phase2.spendResult, phase2.spendSigned, broadcastHexes, spentInputs));
-        }
-        const result = shapeResult(this, {
-            finalTxid, finalTxidEnvelope, revealSigned, signed, spentInputs, broadcastHexes,
-            encoderOpts, createResult, encoded, carriedActionString: carriedAction.carriedActionString,
-        });
-        finalTxid = result.txid;
-        if (setup.waitForIndexer) {
-            progress('waiting', { txid: finalTxid });
-            const waiter = new ActionWaiter(this.sdk);
-            let indexed;
-            try { indexed = await waiter.waitForTxid(finalTxid, buildWaitOptions(setup)); }
-            catch (error) { markConfirmationTimeout(error, finalTxid); throw error; }
-            result.indexed = indexed;
-            progress('confirmed', { txid: finalTxid, action: indexed });
-        }
-        if (opts.awaitContract) await this.waitForContract(result, actionData, opts, progress, finalTxid);
-        return result;
+        // The commit is on the wire from here, so every later throw is tagged with
+        // what was broadcast (markBroadcastError) instead of reading as a clean failure.
+        const sent = {
+            txid:           signed.txid,
+            broadcastHexes: [signed.txHex],
+            spentInputs:    this.extractSpentInputs(encoded.psbt),
+            pendingInputs:  [],
+            changeAddress:  encoderOpts.change || encoderOpts.pubkey,
+        };
+        try { return await finishSubmission(this, setup, actionData, opts, {
+            encoder, progress, signed, encoded, encoderOpts, createResult, carriedAction, revealSigned, phase2, sent });
+        } catch (error) { throw markBroadcastError(this, error, sent); }
     }
 
     // The contract an action targets, from its own params. Accepts the camelCase

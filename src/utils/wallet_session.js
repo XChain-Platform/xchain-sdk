@@ -121,27 +121,39 @@ async function submitAndTrack(session, actionData, mergedEncoder, submitOpts) {
     };
 
     let mgr = new LifecycleManager(session.sdk);
-    let result = await mgr.submitAction(actionData, mergedEncoder, mergedOpts);
-
-    // Update UTXO cache: mark spent inputs, then register the change this
-    // action paid back to us. Registering the change is what makes the NEXT
-    // submit spend THIS one's output, chaining parent -> child. Without it
-    // the cache is drained after every submit, the re-pull below falls back
-    // to whatever the tracker has CONFIRMED, and two consecutive sends from
-    // one session pick independent inputs and land as siblings.
-    //
-    // Order matters: markSpent first, so a phase that spent an earlier
-    // phase's output is never re-offered as available.
-    if (result.spentInputs) {
-        session._utxoCache.markSpent(result.spentInputs);
+    let result;
+    try {
+        result = await mgr.submitAction(actionData, mergedEncoder, mergedOpts);
+    } catch (error) {
+        // A throw after a broadcast (a rejected reveal, an indexer wait that
+        // expired or refused) still spent real inputs: the error carries them
+        // as spentInputs, and the cache must drop them or the next submit picks
+        // an input the mempool already holds.
+        if (error && Array.isArray(error.spentInputs)) trackBroadcast(session, error);
+        throw error;
     }
-    if (Array.isArray(result.changeOutputs)) {
-        for (let utxo of result.changeOutputs) {
+    trackBroadcast(session, result);
+    return result;
+}
+
+// Update UTXO cache: mark spent inputs, then register the change this
+// action paid back to us. Registering the change is what makes the NEXT
+// submit spend THIS one's output, chaining parent -> child. Without it
+// the cache is drained after every submit, the re-pull below falls back
+// to whatever the tracker has CONFIRMED, and two consecutive sends from
+// one session pick independent inputs and land as siblings.
+//
+// Order matters: markSpent first, so a phase that spent an earlier
+// phase's output is never re-offered as available.
+function trackBroadcast(session, sent) {
+    if (sent.spentInputs) {
+        session._utxoCache.markSpent(sent.spentInputs);
+    }
+    if (Array.isArray(sent.changeOutputs)) {
+        for (let utxo of sent.changeOutputs) {
             session._utxoCache.addSpeculative(utxo);
         }
     }
-
-    return result;
 }
 
 
