@@ -192,7 +192,9 @@ jobs:
       - name: Check out the re-taken SDK suite-title pin
         uses: actions/checkout@v4
         with:
-          ref: ed715d88a82023db589a9ceebdab8e97389e5992
+          # Re-taken 2026-11-03 at the develop head after the rate-limit window and
+          # flood tests moved verbatim into api_rate_limit_window.test.js.
+          ref: 6608fad8d756fbe6084bbf0c1334fff96c83c7f9
           path: suite-title-pins/sdk/xchain-sdk
 
       - name: Use Node.js 22
