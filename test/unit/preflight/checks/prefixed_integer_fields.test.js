@@ -20,7 +20,8 @@ const DEFAULTS = {
     GIVE_TICK: 'JDOG', GIVE_AMOUNT: '1', GET_COIN: 'RBTC', GET_AMOUNT: '1', LABEL: 'Rain', OUTCOMES: 'yes,no',
     TICK: 'JDOG', DEADLINE: '4102444800', REFUND_WINDOW: '86400', MAX_SUPPLY: '1000', MAX_MINT: '10',
     DECIMALS: '0', DISPENSER_ACTION_INDEX: '5', ORDER_ACTION_INDEX: '5', SWAP_ACTION_INDEX: '5',
-    FEED_ACTION_INDEX: '7', OUTCOME: '1', AMOUNT: '1',
+    FEED_ACTION_INDEX: '7', OUTCOME: '1', AMOUNT: '1', COIN1: 'BTC', COIN2: 'DOGE', COIN1_ACTION_INDEX: '0',
+    COIN2_ACTION_INDEX: '5',
 };
 
 function wireFor(action, version, over) {
@@ -59,9 +60,11 @@ function registerPredicate() {
         expect(CASES.map((c) => c.join(' '))).to.deep.equal(['DISPENSER 0 EXPIRATION', 'DISPENSER 2 EXPIRATION',
             'ORDER 0 EXPIRATION', 'ORDER 2 EXPIRATION', 'SWAP 0 EXPIRATION', 'SWAP 2 EXPIRATION', 'BET 0 DEADLINE',
             'BET 0 REFUND_WINDOW', 'BET 2 OUTCOME', 'BET 3 OUTCOME', 'ISSUE 0 CALLBACK_BLOCK', 'ISSUE 0 MINT_START_BLOCK',
-            'ISSUE 0 MINT_STOP_BLOCK', 'ISSUE 2 MINT_START_BLOCK', 'ISSUE 2 MINT_STOP_BLOCK', 'ISSUE 4 CALLBACK_BLOCK']);
+            'ISSUE 0 MINT_STOP_BLOCK', 'ISSUE 2 MINT_START_BLOCK', 'ISSUE 2 MINT_STOP_BLOCK', 'ISSUE 4 CALLBACK_BLOCK', 'LINK 0 COIN1_ACTION_INDEX',
+            'LINK 0 COIN2_ACTION_INDEX']);
         expect(FIELD_MAX).to.deep.equal({ EXPIRATION: U64_MAX, DEADLINE: U64_MAX, REFUND_WINDOW: U64_MAX,
-            CALLBACK_BLOCK: U64_MAX, MINT_START_BLOCK: U64_MAX, MINT_STOP_BLOCK: U64_MAX, OUTCOME: '4294967295' });
+            CALLBACK_BLOCK: U64_MAX, MINT_START_BLOCK: U64_MAX, MINT_STOP_BLOCK: U64_MAX, OUTCOME: '4294967295',
+            COIN1_ACTION_INDEX: U64_MAX, COIN2_ACTION_INDEX: U64_MAX });
     });
 
     it('keepsPrefixedSpelling answers true only for an unsigned radix literal inside the column', function () {
@@ -152,9 +155,36 @@ function registerMintWindow() {
     });
 }
 
+function registerLink() {
+    it('refuses a LINK action index literal on both regtest coins, as the indexer does', async function () {
+        for (const [network, coin] of [['bitcoin-regtest', 'RBTC'], ['dogecoin-regtest', 'RDOGE']])
+            for (const field of ['COIN1_ACTION_INDEX', 'COIN2_ACTION_INDEX'])
+                for (const value of ['0x10', '0b101', '0o17']) {
+                    const r = await reportFor(wireFor('LINK', '0', { [field]: value }), network, coin);
+                    const found = prefixedFindings(r, field);
+                    expect(found, `${network} ${field} ${value}`).to.have.length(1);
+                    expect(found[0].data).to.include({ value, haltClass: true, verdict: `invalid: ${field} (format)` });
+                    expect(found[0].overridable).to.equal(false);
+                }
+    });
+
+    it('leaves a decimal or past-range LINK action index alone', async function () {
+        for (const field of ['COIN1_ACTION_INDEX', 'COIN2_ACTION_INDEX']) {
+            await expectClear(wireFor('LINK', '0', { [field]: '16' }), field);
+            await expectClear(wireFor('LINK', '0', { [field]: '0x10000000000000000' }), field);
+        }
+    });
+
+    it('judges a LINK inside a BATCH the same way', async function () {
+        const link = wireFor('LINK', '0', { COIN1_ACTION_INDEX: '0x10' }).replace(/\|+$/, '');
+        await expectRefused(`BATCH|0|${link}`, 'LINK', 'COIN1_ACTION_INDEX', '0x10');
+    });
+}
+
 describe('pre-flight universal: hexadecimal, binary and octal integer wire fields', function () {
     registerPredicate();
     registerMirroredRefusals();
     registerBoundaries();
     registerMintWindow();
+    registerLink();
 });
