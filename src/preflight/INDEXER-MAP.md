@@ -678,8 +678,8 @@ literal past the range, which normalization stores as NULL.
 
 The same commits refuse a prefixed LINK COIN1_ACTION_INDEX or COIN2_ACTION_INDEX and XCALL
 TARGET_CONTRACT_INDEX (`link.js`, `xcall/request.js`), and fit or null refused rows' integer
-columns in `db/`; those handlers sit outside every mapped row, and pre-flight has no LINK or XCALL
-check to align.
+columns in `db/`. Pre-flight mirrors both field refusals through `PREFIXED_INTEGER_FIELDS` (LINK 0
+and XCALL 0); XCALL is VM-emitted, so no user wire reaches its entry.
 
 **Client follow-up.** `numeric.keepsPrefixedSpelling` mirrors the indexer helper, and
 `indexer_value_checks_parity.test.js` runs both over one corpus (radix, case, sign, whitespace and

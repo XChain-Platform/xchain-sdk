@@ -61,10 +61,10 @@ function registerPredicate() {
             'ORDER 0 EXPIRATION', 'ORDER 2 EXPIRATION', 'SWAP 0 EXPIRATION', 'SWAP 2 EXPIRATION', 'BET 0 DEADLINE',
             'BET 0 REFUND_WINDOW', 'BET 2 OUTCOME', 'BET 3 OUTCOME', 'ISSUE 0 CALLBACK_BLOCK', 'ISSUE 0 MINT_START_BLOCK',
             'ISSUE 0 MINT_STOP_BLOCK', 'ISSUE 2 MINT_START_BLOCK', 'ISSUE 2 MINT_STOP_BLOCK', 'ISSUE 4 CALLBACK_BLOCK', 'LINK 0 COIN1_ACTION_INDEX',
-            'LINK 0 COIN2_ACTION_INDEX']);
+            'LINK 0 COIN2_ACTION_INDEX', 'XCALL 0 TARGET_CONTRACT_INDEX']);
         expect(FIELD_MAX).to.deep.equal({ EXPIRATION: U64_MAX, DEADLINE: U64_MAX, REFUND_WINDOW: U64_MAX,
             CALLBACK_BLOCK: U64_MAX, MINT_START_BLOCK: U64_MAX, MINT_STOP_BLOCK: U64_MAX, OUTCOME: '4294967295',
-            COIN1_ACTION_INDEX: U64_MAX, COIN2_ACTION_INDEX: U64_MAX });
+            COIN1_ACTION_INDEX: U64_MAX, COIN2_ACTION_INDEX: U64_MAX, TARGET_CONTRACT_INDEX: U64_MAX });
     });
 
     it('keepsPrefixedSpelling answers true only for an unsigned radix literal inside the column', function () {
@@ -78,7 +78,8 @@ function registerPredicate() {
 }
 
 function registerMirroredRefusals() {
-    for (const [action, version, field] of CASES) {
+    // XCALL is VM-emitted and has no wire format here; its own test file covers it.
+    for (const [action, version, field] of CASES.filter((c) => Formats[c[0]])) {
         it(`refuses ${action} ${version} ${field} written as a hexadecimal, binary or octal literal`, async function () {
             for (const value of PREFIXED)
                 await expectRefused(wireFor(action, version, { [field]: value }), action, field, value);
