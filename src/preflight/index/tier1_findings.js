@@ -168,6 +168,11 @@ function applyValidVerdict(findings, tier1) {
             data: { oracleFeesOwed: tier1.oracleFeesOwed } });
     for (const f of findings) {
         if (f.severity === 'error' && f.source === 'client') {
+            // A halt-class finding is a rule an older indexer may lack, so the
+            // dry-run there (real handler, forced rollback) answers valid:true
+            // for an action that can halt it. A dry-run cannot vouch for these,
+            // so Tier 1 never demotes them, in any mode.
+            if (f.data && f.data.haltClass) continue;
             // §4.7 + per-sub-command precedence. Tier 1 outranks a Tier-2 error
             // only where it actually judged the thing the error is about. For a
             // batch that is PER COMMAND: a finding tagged with a commandIndex is
