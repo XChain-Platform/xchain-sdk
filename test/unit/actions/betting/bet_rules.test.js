@@ -11,6 +11,7 @@
 'use strict';
 
 const { expect } = require('chai');
+const { XChainSDK } = require("../../../../index.js");
 const { SDKValidationError } = require('../../../../src/utils/errors.js');
 const {
     BET_LIMITS,
@@ -126,6 +127,31 @@ describe('bet_rules', function () {
         expect(jsonDepth({ title: 'flat' })).to.equal(2);
         expect(jsonDepth({ outer: { inner: 'nested' } })).to.equal(3);
         expect(jsonDepth([{ inner: ['nested'] }])).to.equal(4);
+    });
+
+
+    describe("compose refuses prefixed DEADLINE and REFUND_WINDOW spellings", function () {
+        const base = { version: 0, label: "Sweep test", outcomes: "YES,NO", tick: "XCHAIN", fee: "1", minAmount: "1" };
+        const sdk = new XChainSDK({ network: "bitcoin-mainnet", compactTickers: false });
+        const run = over => sdk.validateAction("BET", Object.assign({}, base, over)).errors;
+        const flagged = errors => errors.map(e => JSON.stringify(e)).join("\n");
+
+        it("keeps decimal DEADLINE and REFUND_WINDOW valid", function () {
+            expect(run({ deadline: "1790000000", refundWindow: "3600" })).to.deep.equal([]);
+        });
+
+        [
+            ["0x6A000000", "0xE10"],
+            ["0b1101010000000000000000000000000", "0o7020"],
+            ["0X6A000000", "0B111000010000"],
+            ["0O15200000000", "0xe10"]
+        ].forEach(([deadline, window]) => {
+            it("refuses DEADLINE " + deadline + " and REFUND_WINDOW " + window, function () {
+                const fields = flagged(run({ deadline, refundWindow: window }));
+                expect(fields).to.match(/DEADLINE/);
+                expect(fields).to.match(/REFUND_WINDOW/);
+            });
+        });
     });
 
 });

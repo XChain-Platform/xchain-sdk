@@ -57,6 +57,10 @@ function validateBetLabels(validator, fields, limits, errors) {
             { field: 'TICK' }));
 }
 
+// Number() reads 0x, 0b and 0o spellings as integers, but DEADLINE and REFUND_WINDOW go on
+// the wire as written and the indexer refuses a prefixed spelling as a format error.
+const PREFIXED_INTEGER = /^\s*0[xXbBoO]/;
+
 // Validates numeric market terms in their wire-field order.
 function validateBetTerms(validator, fields, limits, errors) {
     // FEE is a PERCENT of the pot (1.00 = 1%), at most 2 decimals.
@@ -76,14 +80,14 @@ function validateBetTerms(validator, fields, limits, errors) {
     // question the indexer owns; only the shape is checked here.
     if (!validator.isEmpty(fields.DEADLINE)) {
         const dl = Number(fields.DEADLINE);
-        if (!Number.isInteger(dl) || dl <= 0)
+        if (PREFIXED_INTEGER.test(String(fields.DEADLINE)) || !Number.isInteger(dl) || dl <= 0)
             errors.push(validator.buildError('INVALID_FIELD_VALUE',
                 'DEADLINE must be a positive integer Unix timestamp',
                 { field: 'DEADLINE', value: fields.DEADLINE }));
     }
     if (!validator.isEmpty(fields.REFUND_WINDOW)) {
         const rw = Number(fields.REFUND_WINDOW);
-        if (!Number.isInteger(rw) || rw < limits.MIN_BET_REFUND_WINDOW || rw > limits.MAX_BET_REFUND_WINDOW)
+        if (PREFIXED_INTEGER.test(String(fields.REFUND_WINDOW)) || !Number.isInteger(rw) || rw < limits.MIN_BET_REFUND_WINDOW || rw > limits.MAX_BET_REFUND_WINDOW)
             errors.push(validator.buildError('INVALID_FIELD_VALUE',
                 'REFUND_WINDOW must be an integer between ' + limits.MIN_BET_REFUND_WINDOW +
                 ' and ' + limits.MAX_BET_REFUND_WINDOW + ' seconds',
