@@ -45,9 +45,10 @@ const { checkHaltFields } = require('../preflight/universal/halt_fields.js');
 const { REPORT_SCHEMA_VERSION } = require('../preflight/constants.js');
 const { SDKPreflightError } = require('../utils/errors.js');
 
-// Per-call values that leave the gate off: false and 'off' skip pre-flight, and
-// 'warn', 'report' and 'local' are the modes in which pre-flight never throws.
-// 'block', 'enforce', true or any other value enforces, as resolveMode does.
+// Per-call values that leave the gate off: false, 'report' and 'local' match
+// resolveMode's non-throwing modes. 'off' and 'warn' also skip this gate, though
+// resolveMode reads them as enforce, so the gate can only pass more than the
+// full pre-flight would, never less. Any other value enforces.
 const NON_ENFORCING = new Set(['off', 'warn', 'report', 'local']);
 
 function enforcesHaltGate(sdk, preflightOpt) {
