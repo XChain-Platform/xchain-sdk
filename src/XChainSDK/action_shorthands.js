@@ -100,6 +100,9 @@ module.exports = {
             // (EncoderClient.CREATE_TX_OPTION_FIELDS), never a hand-copied subset:
             // the hand-copied version had silently fallen behind createTx and was
             // dropping feeQuote, compress, options and sourceAddress.
+            // Same serialized-boundary gate submitAction crosses: a halt-class field
+            // in any spelling is refused before the encoder is contacted.
+            LifecycleManager.assertNoHaltClassFields(this, result.actionString);
             let txResult = await encoder.createTx(EncoderClient.pickCreateTxOptions(data.encoder, {
                 data:   result.actionString,
                 pubkey: data.encoder.pubkey

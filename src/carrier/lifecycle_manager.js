@@ -40,6 +40,67 @@ const {
     prepareChunkReveal,
     shapeResult,
 } = require('./lifecycle_manager/submission_results.js');
+const { parse } = require('../decoder/parse.js');
+const { checkHaltFields } = require('../preflight/universal/halt_fields.js');
+const { REPORT_SCHEMA_VERSION } = require('../preflight/constants.js');
+const { SDKPreflightError } = require('../utils/errors.js');
+
+// Per-call values that leave the gate off: false and 'off' skip pre-flight, and
+// 'warn', 'report' and 'local' are the modes in which pre-flight never throws.
+// 'block', 'enforce', true or any other value enforces, as resolveMode does.
+const NON_ENFORCING = new Set(['off', 'warn', 'report', 'local']);
+
+function enforcesHaltGate(sdk, preflightOpt) {
+    if (preflightOpt === false || NON_ENFORCING.has(preflightOpt)) return false;
+    if (preflightOpt !== undefined) return true;
+    const sdkDefault = sdk && sdk._preflightMode;
+    return sdkDefault === undefined || sdkDefault === 'enforce';
+}
+
+// Halt-class findings for one parsed action, and for each command when it is a BATCH.
+function haltFindings(parsed) {
+    const findings = [];
+    const targets = Array.isArray(parsed.commands) ? parsed.commands : [parsed];
+    targets.forEach((cmd, i) => {
+        if (!cmd || !cmd.ok) return;
+        const ctx = {
+            params: cmd.params || {},
+            markRun() {},
+            addFinding(code, severity, message, data) {
+                if (severity !== 'error' || !data || !data.haltClass) return;
+                const finding = { code, severity, message, overridable: false, data };
+                if (parsed.commands) finding.commandIndex = i;
+                findings.push(finding);
+            },
+        };
+        checkHaltFields(ctx, cmd);
+    });
+    return findings;
+}
+
+// The serialized-boundary gate every submit and BatchBuilder.build crosses before
+// the encoder is contacted. It reads the composed wire string itself, not the
+// params it came from, so a field the compose validator lets through in any
+// spelling (a hexadecimal DEADLINE, an over-wide column, a missing STAKE key) is
+// refused here on its wire form. These are the pre-flight findings the indexer
+// refuses and an older indexer can halt on, so in enforce mode (the default) they
+// throw SDKPreflightError with a pre-flight report, exactly as sdk.preflight would,
+// and nothing reaches the encoder. Zero network: no Tier 1 dry run is made here.
+function assertNoHaltClassFields(sdk, actionString, preflightOpt) {
+    if (!enforcesHaltGate(sdk, preflightOpt)) return;
+    if (typeof actionString !== 'string' || actionString === '') return;
+    const parsed = parse(actionString);
+    if (!parsed || !parsed.ok) return;
+    const findings = haltFindings(parsed);
+    if (!findings.length) return;
+    const report = {
+        schemaVersion: REPORT_SCHEMA_VERSION, verdict: 'fail', restricted: false,
+        checksRun: [findings[0].code], findings, unverified: [], quote: null,
+        stateHeight: null, elapsedMs: 0,
+    };
+    throw new SDKPreflightError('Pre-flight rejected this action before encoding: '
+        + findings.map(f => (f.data && f.data.verdict) || f.code).join(', '), report);
+}
 
 // Everything after the commit broadcast: the reveal, the result, the indexer
 // wait and the contract gate. `sent` is kept current after each broadcast.
@@ -132,6 +193,7 @@ class LifecycleManager {
             resolvedParams = await this.sdk.addressResolver.resolveActionParams(actionData.action, resolvedParams);
         const transaction = buildTransactionRequest(this, actionData, encoderOpts, resolvedParams, progress);
         const { createResult, txParams } = transaction;
+        assertNoHaltClassFields(this.sdk, createResult.actionString, opts.preflight);
         const encoded = await encoder.createTx(txParams);
         const carriedAction = readCarriedAction(encoded, createResult, encoderOpts);
         const reconcileState = reconcileTransaction(this, encoded, createResult, encoderOpts, opts);
@@ -174,5 +236,8 @@ class LifecycleManager {
 }
 
 installMethods(LifecycleManager.prototype, require('./lifecycle_manager/settlement_reads.js'));
+
+// Shared with BatchBuilder.build, which composes and can hand the encoder a PSBT request.
+LifecycleManager.assertNoHaltClassFields = assertNoHaltClassFields;
 
 module.exports = LifecycleManager;

@@ -19,6 +19,7 @@
  ********************************************************************/
 
 const { SDKValidationError } = require('../utils/errors.js');
+const LifecycleManager = require('./lifecycle_manager.js');
 const {
     BATCH_ACTION_LIMITS_ACTIVE,
     BATCH_COMMAND_LIMIT,
@@ -345,6 +346,13 @@ class BatchBuilder {
 
         const at = await targetWeightAt(this.sdk, encoderOpts, commandParts);
         assertComputedWeight(batchWeight(commandParts, at), commandParts.length);
+
+        // Each composed command crosses the same halt-class gate a submit does, so a
+        // prefixed or over-wide literal is refused here rather than joined into a
+        // BATCH (and, with a pubkey, sent to the encoder for a PSBT). The SDK's
+        // pre-flight option decides: enforce (the default) refuses, false skips.
+        for (let part of commandParts)
+            LifecycleManager.assertNoHaltClassFields(this.sdk, part);
 
         // Join with semicolons
         let command = commandParts.join(';');
