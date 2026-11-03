@@ -129,9 +129,11 @@ describe('bet_rules', function () {
         expect(jsonDepth([{ inner: ['nested'] }])).to.equal(4);
     });
 
+});
 
+describe('bet_rules', function () {
     describe("compose refuses prefixed DEADLINE and REFUND_WINDOW spellings", function () {
-        const base = { version: 0, label: "Sweep test", outcomes: "YES,NO", tick: "XCHAIN", fee: "1", minAmount: "1" };
+        const base = { version: 0, label: "Prefix test", outcomes: "YES,NO", tick: "XCHAIN", fee: "1", minAmount: "1" };
         const sdk = new XChainSDK({ network: "bitcoin-mainnet", compactTickers: false });
         const run = over => sdk.validateAction("BET", Object.assign({}, base, over)).errors;
         const flagged = errors => errors.map(e => JSON.stringify(e)).join("\n");
@@ -153,5 +155,4 @@ describe('bet_rules', function () {
             });
         });
     });
-
 });
