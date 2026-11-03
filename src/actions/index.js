@@ -313,8 +313,16 @@ class Actions {
     validateAction(action, params) {
         let actionName = String(action).toUpperCase();
         let fields     = this.util.normalizeFields(params || {});
-        fields         = this.normalizeLegs(fields);
-        fields         = this.util.setNumberFormats(fields);
+        // The numeric cast refuses caller input (a JS number the JSON parser may
+        // already have rounded) by throwing SDKValidationError; a dry run reports
+        // that as a validation result, the same shape the validator's errors take.
+        try {
+            fields     = this.normalizeLegs(fields);
+            fields     = this.util.setNumberFormats(fields);
+        } catch (e) {
+            if (!(e instanceof SDKValidationError)) throw e;
+            return { valid: false, errors: [this.validator.buildError(e.code, e.message, e.details)] };
+        }
         fields         = fillMarketCoinFields(fields, actionName, this.network);
         let errors     = this.validator.validate(actionName, fields);
         if (errors.length === 0)

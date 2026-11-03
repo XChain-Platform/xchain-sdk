@@ -21,6 +21,9 @@ const { expect } = require('chai');
 const config     = require('../../../../src/config.js');
 const Utility    = require('../../../../src/utils/utility.js');
 const { XChainSDK } = require('../../../../index.js');
+// The refusal is a caller input fault, so it is an SDKValidationError (the API
+// answers it -32602 with its guidance), never a plain RangeError.
+const { SDKValidationError } = require('../../../../src/utils/errors.js');
 
 const cfg  = config.getConfig();
 const util = new Utility(cfg);
@@ -65,7 +68,7 @@ describe('wire number canonicalization contract', function () {
         const rounded = JSON.parse('{"AMOUNT":9007199254740993}').AMOUNT;
         expect(rounded).to.equal(9007199254740992);
         expect(() => util.setNumberFormats({ AMOUNT: rounded }))
-            .to.throw(RangeError, /already rounded/);
+            .to.throw(SDKValidationError, /already rounded/);
         // The decimal-string spelling of the same amount is exact and still passes.
         expect(util.setNumberFormats({ AMOUNT: '9007199254740993' }).AMOUNT)
             .to.equal('9007199254740993');
@@ -87,8 +90,8 @@ describe('wire number canonicalization contract', function () {
             JSON.parse('{"A":100000000000000001}').A, JSON.parse('{"A":1000000000000000000001}').A];
         for (const value of aliased)
             expect(() => util.setNumberFormats({ AMOUNT: value }), String(value))
-                .to.throw(RangeError, /already rounded/);
-        expect(() => util.setNumberFormats({ MAX_SUPPLY: 1e21 })).to.throw(RangeError, /MAX_SUPPLY/);
+                .to.throw(SDKValidationError, /already rounded/);
+        expect(() => util.setNumberFormats({ MAX_SUPPLY: 1e21 })).to.throw(SDKValidationError, /MAX_SUPPLY/);
         // The decimal-string spellings stay exact.
         expect(util.setNumberFormats({ AMOUNT: '100000000000000001' }).AMOUNT).to.equal('100000000000000001');
         expect(util.setNumberFormats({ AMOUNT: '1000000000000000000001' }).AMOUNT).to.equal('1000000000000000000001');

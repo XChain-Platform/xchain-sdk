@@ -19,6 +19,7 @@
  ********************************************************************/
 
 const mathjs = require('mathjs');
+const { SDKValidationError } = require('../errors.js');
 
 module.exports = {
     isNumeric(value){
@@ -203,14 +204,18 @@ module.exports = {
                 // needing MORE than that was rounded too. Strings and BigInt are
                 // untouched. A fraction rounded onto a short value (1.000000000000000001
                 // parses to 1) cannot be detected here; send such amounts as strings.
+                // The refusal is a caller input fault, so it is an SDKValidationError:
+                // the API maps that to -32602 with this guidance, and validateAction
+                // reports it as {valid:false} instead of throwing.
                 if(typeof value === 'number'
                     && ((Number.isInteger(value) && !Number.isSafeInteger(value))
                         || this.significantDigits(value) > 15))
-                    throw new RangeError(
+                    throw new SDKValidationError('UNSAFE_JS_NUMBER',
                         name + ' was supplied as a JS number beyond what a double holds ' +
                         'exactly (above Number.MAX_SAFE_INTEGER or more than 15 significant ' +
                         'digits), so its value may have been already rounded before the SDK ' +
-                        'saw it; send an amount of this size as a decimal string');
+                        'saw it; send an amount of this size as a decimal string',
+                        { field: name });
                 data[name] = mathjs.format(mathjs.bignumber(String(value).trim()), { notation: 'fixed' });
             }
         }
