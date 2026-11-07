@@ -258,4 +258,4 @@ function verifyCarrierScripts({ psbt, carrierScripts, encoding, actionString, ra
     return verifyPayload(chunks, actionString, rawData, rawDataCompressed);
 }
 
-module.exports = { verifyCarrierScripts, rawDataMatches, REASONS, CHUNK_ENCODINGS };
+module.exports = { verifyCarrierScripts, rawDataMatches, committedScriptFor, REASONS, CHUNK_ENCODINGS };

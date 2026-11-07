@@ -20,7 +20,7 @@
 
 const { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput } = require('../carrier/reconcile_encoded.js');
 const { exactU64 } = require('../carrier/reconcile_encoded/script_matching.js');
-const { assertCarrierBinding } = require('../carrier/bind_action_carrier.js');
+const { assertCarrierBinding, assertPhaseFundingBound } = require('../carrier/bind_action_carrier.js');
 const EncoderClient = require('../clients/encoder.js');
 const { SDKConfigError, SDKExplorerError } = require('../utils/errors.js');
 const coins = require('../coins');
@@ -141,7 +141,7 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     // chunked P2SH/P2WSH action is indexed from its reveal, so its funding PSBT pays no quote.
     const quoteOutput = feeQuoteAuthorizedOutput(encoderOpts.feeQuote);
     const twoPhase = feeResult.encoding === 'P2SH' || feeResult.encoding === 'P2WSH';
-    reconcileEncoded(feeResult.psbt, {
+    const reconciled = reconcileEncoded(feeResult.psbt, {
         network:             reconcileNetwork,
         customOutputs:       (quoteOutput && !twoPhase) ? customOutputs.concat([quoteOutput]) : customOutputs,
         changeAddresses:     encoderOpts.change,
@@ -161,6 +161,13 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     // than the one this method was asked to price. A signable PSBT handed back
     // unbound is the identical exposure to signing it here.
     assertFeeEstimateCarrier(feeResult, result, encoderOpts, reconcileNetwork);
+    assertPhaseFundingBound({
+        phaseFunding: reconciled.phaseFunding,
+        carrierScripts: feeResult.carrierScripts,
+        encoding: feeResult.encoding,
+        network: reconcileNetwork,
+        label: 'fee estimate',
+    });
 
     feeResult.actionString = result.actionString;
     feeResult.action       = result.action;
@@ -213,9 +220,9 @@ module.exports = {
     //   encoding, psbt, signable, unsignableReason?, actionString }
     // When `signable` is true, the ONE PSBT this returns can be signed directly to skip a
     // second encode call: it has already cleared the same fail-closed reconcileEncoded
-    // intent gate submitAction applies before IT signs, so the encoder cannot swap outputs
-    // or drop change on this path. Throws SDKActionError rather than returning a PSBT it
-    // cannot account for. A TAPROOT envelope answer comes back priced but with `psbt: null`
+    // intent gate submitAction applies before IT signs. Chunk funding legs are also bound
+    // one-to-one to verified caller-gated carrier scripts. Throws SDKActionError rather than
+    // returning a PSBT it cannot account for. A TAPROOT envelope answer comes back priced but with `psbt: null`
     // and `signable: false`: its commit is only safe to sign together with the reveal and
     // the recovery record, so envelope actions are signed through submitAction.
     //

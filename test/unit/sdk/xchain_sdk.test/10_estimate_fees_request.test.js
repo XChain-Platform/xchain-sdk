@@ -47,7 +47,7 @@ function plainPsbt(extraOutputs = []) {
 }
 
 // A P2WSH chunk transaction mirroring the encoder's redeem-script shape.
-function chunkLane(actionString, rawBuf) {
+function chunkLane(actionString, rawBuf, extraOutputs = []) {
     const data = bitcoin.script.compile([Buffer.from(actionString, 'utf8'), rawBuf]);
     const redeems = [];
     for (let i = 0; i < data.length; i += 40) {
@@ -59,7 +59,9 @@ function chunkLane(actionString, rawBuf) {
     psbt.addInput({ hash: crypto.randomBytes(32), index: 0, witnessUtxo: { script: OWN, value: 100000 } });
     for (const r of redeems)
         psbt.addOutput({ script: bitcoin.payments.p2wsh({ redeem: { output: r }, network: NET }).output, value: 1000 });
-    psbt.addOutput({ script: OWN, value: 80000 });
+    for (const out of extraOutputs) psbt.addOutput(out);
+    const diverted = extraOutputs.reduce((sum, out) => sum + out.value, 0);
+    psbt.addOutput({ script: OWN, value: 80000 - diverted });
     return { psbt: psbt.toHex(), encoding: 'P2WSH', carrierScripts: redeems.map((r) => r.toString('hex')) };
 }
 
@@ -140,6 +142,24 @@ describe('XChainSDK', function () {
             catch (e) { err = e; }
             expect(err, 'a substituted payload must fail closed').to.be.ok;
             expect(err.code).to.equal('CARRIER_ACTION_MISMATCH');
+        });
+
+        it('refuses an extra shaped funding leg that has no verified carrier', async function () {
+            const sdk = makeSDK();
+            const file = { action: 'FILE', params: { name: 'report.bin', type: 1 } };
+            const actionString = sdk.actions.createAction(file).actionString;
+            const bytes = Buffer.from('report row,'.repeat(40), 'utf8');
+            const foreign = bitcoin.payments.p2wsh({ redeem: { output: bitcoin.script.compile([
+                Buffer.from('foreign'), bitcoin.opcodes.OP_DROP, bitcoin.opcodes.OP_TRUE
+            ]) }, network: NET }).output;
+            sinon.stub(sdk.encoder, 'estimateFee').resolves(chunkLane(actionString, bytes,
+                [{ script: foreign, value: 5000 }]));
+            let err;
+            try {
+                await sdk.estimateFees(file, { pubkey: CHUNK_CALLER, rawData: bytes.toString('binary'),
+                    maxPhaseFundingSats: 100000 });
+            } catch (e) { err = e; }
+            expect(err).to.have.property('code', 'UNBOUND_PHASE_FUNDING_LEG');
         });
 
         it('authorizes the feeQuote output the caller submitted', async function () {

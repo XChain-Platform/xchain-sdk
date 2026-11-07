@@ -212,11 +212,25 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
             const rel   = path.join('consensus', 'gate_registry', f);
             const local = fs.readFileSync(path.join(LOCAL_DIR, rel), 'utf8');
             const canon = fs.readFileSync(path.join(CANON_DIR, rel), 'utf8');
-            assert.strictEqual(local, canon,
-                'this repo\'s consensus/gate_registry/' + f + ' has drifted from the canonical source; ' +
-                'edit xchain-documentation/protocol/reference-impl/consensus/gate_registry/' + f +
-                ' and re-vendor every consumer copy, never the vendored copy alone.');
+            assert.strictEqual(local, canon, gateRegistryDriftMessage(f));
         });
+    });
+});
+
+// Name the runtime source for each registry part.
+function gateRegistryDriftMessage(f){
+    const source = f === 'core.js'
+        ? 'xchain-hub/src/consensus/gate_registry/core.js'
+        : 'xchain-indexer/src/protocol_changes/' + f;
+    return 'this repo\'s consensus/gate_registry/' + f + ' has drifted from the canonical source; ' +
+        'edit ' + source + ' and re-run reconcile-twins.sh to re-vendor every copy, never this copy alone.';
+}
+
+describe('gate_registry drift guidance', function(){
+    it('names hub for core and indexer for shared rows', function(){
+        assert.match(gateRegistryDriftMessage('core.js'), /xchain-hub\/src\/consensus\/gate_registry\/core\.js/);
+        assert.match(gateRegistryDriftMessage('shared_rows_1.js'), /xchain-indexer\/src\/protocol_changes\/shared_rows_1\.js/);
+        assert.doesNotMatch(gateRegistryDriftMessage('core.js'), /xchain-documentation/);
     });
 });
 

@@ -13,8 +13,7 @@ const nock = require('nock');
 const sinon = require('sinon');
 const ExplorerClient = require('../../../src/clients/explorer.js');
 
-describe('ExplorerClient', function () {
-
+function registerFileRawUrlTests() {
     const BASE = 'http://explorer.test:8080';
     let client;
 
@@ -46,8 +45,17 @@ describe('ExplorerClient', function () {
             let c = new ExplorerClient({ network: 'bitcoin-regtest', explorerUrl: 'https://explorer.xchain.io/', retry: false });
             expect(c.fileRawUrl('7', 'doge')).to.equal('https://explorer.xchain.io/RDOGE/api/file/7/raw');
         });
-    });
 
+        it('rejects malformed action indexes and unknown sibling coins', function () {
+            for (const value of ['1/../2', '1?x=1', '1#f', '..', '', 'abc', -1, 1.5, null, undefined])
+                expect(() => client.fileRawUrl(value), String(value)).to.throw().with.property('code', 'INVALID_ACTION_INDEX');
+            for (const coin of ['DOGE/../BTC', 'BTC?x', 'FOO'])
+                expect(() => client.fileRawUrl(1, coin), coin).to.throw().with.property('code', 'UNKNOWN_COIN');
+        });
+    });
+}
+
+function registerCoinPrefixTests() {
     describe('coin prefix', function () {
         const cases = {
             'bitcoin-mainnet': 'BTC', 'bitcoin-testnet': 'TBTC', 'bitcoin-regtest': 'RBTC',
@@ -70,5 +78,9 @@ describe('ExplorerClient', function () {
             expect(c.coin).to.equal('BTC');
         });
     });
+}
 
+describe('ExplorerClient', function () {
+    registerFileRawUrlTests();
+    registerCoinPrefixTests();
 });

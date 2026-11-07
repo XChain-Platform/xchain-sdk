@@ -37,7 +37,7 @@ const bitcoin = require('bitcoinjs-lib');
 const { SDKActionError } = require('../utils/errors.js');
 const { decodeActionStringFromPsbt, extractEnvelopeActionString } = require('../cosigner/psbt_action_decode.js');
 const { deriveEnvelopeCommit, envelopeLeafFromPsbtInput } = require('../cosigner/envelope.js');
-const { verifyCarrierScripts, rawDataMatches } = require('./verify_carrier_scripts.js');
+const { verifyCarrierScripts, rawDataMatches, committedScriptFor } = require('./verify_carrier_scripts.js');
 const CompressionUtils = require('../protocol/compression.js');
 const { COMPRESSION_CODE_DEFLATE_RAW } = require('../protocol/constants.js');
 const { isBytes, bytesEqual } = require('../utils/bytes');
@@ -239,6 +239,26 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ra
         { submitted: actionString, encoding: enc, reason: verified ? verified.reason : 'NO_RESULT' });
 }
 
+// Bind every shape-authorized funding leg after the carrier scripts pass their spend-gate check.
+function assertPhaseFundingBound({ phaseFunding, carrierScripts, encoding, network,
+                                   label = 'transaction' } = {}) {
+    const enc = String(encoding || '').toUpperCase();
+    if (!CHUNK_ENCODINGS.includes(enc) || !Array.isArray(phaseFunding) || !phaseFunding.length) return;
+    const available = (Array.isArray(carrierScripts) ? carrierScripts : []).map((hex) => {
+        try { return committedScriptFor(enc, Buffer.from(String(hex), 'hex'), network); }
+        catch (e) { return null; }
+    }).filter(Boolean);
+    for (const leg of phaseFunding) {
+        const script = leg && leg.script ? Buffer.from(leg.script) : Buffer.alloc(0);
+        const match = available.findIndex((candidate) => bytesEqual(candidate, script));
+        if (match < 0)
+            throw new SDKActionError('UNBOUND_PHASE_FUNDING_LEG',
+                `${label}: a phase-funding output is not bound to a verified caller-gated carrier`,
+                { script: script.toString('hex'), value: leg && leg.value != null ? String(leg.value) : null });
+        available.splice(match, 1);
+    }
+}
+
 /*
  * Bind a Taproot envelope REVEAL to `actionString`.
  *
@@ -321,6 +341,7 @@ function assertEnvelopeCommitBinding({ commitPsbt, revealPsbt, callerXOnly, netw
 
 module.exports = {
     assertCarrierBinding,
+    assertPhaseFundingBound,
     assertEnvelopeCarrierBinding,
     assertEnvelopeCommitBinding,
     carriedActionMatches,

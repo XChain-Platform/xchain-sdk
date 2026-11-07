@@ -29,10 +29,7 @@ function cleanNock() {
     nock.cleanAll();
 }
 
-describe('ExplorerClient', function () {
-    beforeEach(resetClient);
-    afterEach(cleanNock);
-
+function registerGatedFileRequestTests() {
     describe('getGatedFileRaw', function () {
         it('returns Buffer from arraybuffer response', async function () {
             const fakeBytes = Buffer.from([0x01, 0x02, 0x03]);
@@ -78,4 +75,37 @@ describe('ExplorerClient', function () {
             expect(onError.calledOnce).to.be.true;
         });
     });
+}
+
+function registerGatedFileValidationTests() {
+    describe('getGatedFileRaw', function () {
+        it('rejects malformed path inputs before hooks or HTTP', async function () {
+            const onRequest = sinon.spy();
+            const onError = sinon.spy();
+            const hooked = new ExplorerClient({
+                network: 'bitcoin-mainnet', explorerUrl: 'explorer.test', explorerPort: 8080,
+                retry: false, hooks: { onRequest, onError }
+            });
+            for (const value of ['1/../2', '1?x=1', '1#f', '..', '', 'abc', -1, 1.5, null, undefined]) {
+                let error;
+                try { await hooked.getGatedFileRaw(value); } catch (e) { error = e; }
+                expect(error, String(value)).to.have.property('code', 'INVALID_ACTION_INDEX');
+            }
+            for (const coin of ['DOGE/../BTC', 'BTC?x', 'FOO']) {
+                let error;
+                try { await hooked.getGatedFileRaw(1, coin); } catch (e) { error = e; }
+                expect(error, coin).to.have.property('code', 'UNKNOWN_COIN');
+            }
+            expect(onRequest.called).to.equal(false);
+            expect(onError.called).to.equal(false);
+            expect(nock.pendingMocks()).to.deep.equal([]);
+        });
+    });
+}
+
+describe('ExplorerClient', function () {
+    beforeEach(resetClient);
+    afterEach(cleanNock);
+    registerGatedFileRequestTests();
+    registerGatedFileValidationTests();
 });

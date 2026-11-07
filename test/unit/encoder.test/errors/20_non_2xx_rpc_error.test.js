@@ -37,11 +37,7 @@ function rpcBody(code, message, data) {
 
 const createTx = (client) => client.createTx({ data: 'TEST', pubkey: 'pub' });
 
-describe('EncoderClient non-2xx JSON-RPC errors', function () {
-    afterEach(function () {
-        nock.cleanAll();
-    });
-
+function registerResponseErrorTests() {
     it('keeps the encoder JSON-RPC error from a 401 body', async function () {
         let e = await rejectionOf(401, rpcBody(-32001, 'Unauthorized'), createTx);
         expect(e.name).to.equal('SDKEncoderError');
@@ -73,4 +69,42 @@ describe('EncoderClient non-2xx JSON-RPC errors', function () {
         expect(e.message).to.equal('Encoder returned HTTP 502 for method create_tx');
         expect(e.details).to.not.have.property('rpcError');
     });
+}
+
+function registerRetryTests() {
+    it('does not retry create_tx after an ambiguous proxy failure', async function () {
+        const client = new EncoderClient({ encoderUrl: 'encoder.test', encoderPort: 3000,
+            retry: { maxRetries: 3, baseDelay: 1, maxDelay: 2 } });
+        const scope = nock(BASE).post('/').reply(503, 'unavailable');
+        let error;
+        try { await createTx(client); } catch (e) { error = e; }
+        expect(error).to.have.property('code', 'ENCODER_HTTP_503');
+        expect(scope.isDone()).to.equal(true);
+    });
+
+    it('retries create_tx after a pre-dispatch rate-limit refusal', async function () {
+        const client = new EncoderClient({ encoderUrl: 'encoder.test', encoderPort: 3000,
+            retry: { maxRetries: 2, baseDelay: 1, maxDelay: 2 } });
+        const scope = nock(BASE).post('/').reply(429, 'busy', { 'Retry-After': '0' })
+            .post('/').reply(200, { jsonrpc: '2.0', id: 2, result: { psbt: 'ab' } });
+        expect(await createTx(client)).to.deep.equal({ psbt: 'ab' });
+        expect(scope.isDone()).to.equal(true);
+    });
+
+    it('keeps default retries for idempotent RPCs', async function () {
+        const client = new EncoderClient({ encoderUrl: 'encoder.test', encoderPort: 3000,
+            retry: { maxRetries: 1, baseDelay: 1, maxDelay: 2 } });
+        const scope = nock(BASE).post('/').reply(503, 'unavailable')
+            .post('/').reply(200, { jsonrpc: '2.0', id: 2, result: { ok: true } });
+        expect(await client.ping()).to.deep.equal({ ok: true });
+        expect(scope.isDone()).to.equal(true);
+    });
+}
+
+describe('EncoderClient non-2xx JSON-RPC errors', function () {
+    afterEach(function () {
+        nock.cleanAll();
+    });
+    registerResponseErrorTests();
+    registerRetryTests();
 });

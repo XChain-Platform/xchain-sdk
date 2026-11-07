@@ -22,6 +22,17 @@ const ContractClient = require('../../contract/client.js');
 
 const { seg } = require('./path_segment.js');
 const { coinTier, hasHttpScheme } = require('../../utils/endpoints.js');
+const { SDKExplorerError } = require('../../utils/errors.js');
+const coins = require('../../coins');
+
+function actionIndexSegment(actionIndex) {
+    const validNumber = Number.isSafeInteger(actionIndex) && actionIndex >= 0;
+    const validString = typeof actionIndex === 'string' && /^[0-9]+$/.test(actionIndex);
+    if (!validNumber && !validString)
+        throw new SDKExplorerError('INVALID_ACTION_INDEX',
+            'actionIndex must be a non-negative integer', { actionIndex });
+    return seg(actionIndex);
+}
 
 module.exports = {
     async getFiles(query, type, opts = {}) {
@@ -41,7 +52,11 @@ module.exports = {
     // cross-chain action refs carry the base ticker; the tier is implied).
     siblingCoin(baseCoin) {
         if (!baseCoin) return this.coin;
-        return coinTier(this.coin) + String(baseCoin).toUpperCase();
+        const upper = String(baseCoin).toUpperCase();
+        if (!coins.ALLOWED_COINS.includes(upper))
+            throw new SDKExplorerError('UNKNOWN_COIN',
+                'coin must be one of ' + coins.ALLOWED_COINS.join(', '), { coin: baseCoin });
+        return coinTier(this.coin) + upper;
     },
 
     // Absolute URL of a FILE action's raw bytes on this explorer: the
@@ -53,7 +68,8 @@ module.exports = {
         let base = hasHttpScheme(this.baseUrl)
             ? this.baseUrl
             : 'http://' + this.baseUrl + ':' + this.port;
-        return base.replace(/\/+$/, '') + '/' + this.siblingCoin(coin) + '/api/file/' + String(actionIndex) + '/raw';
+        return base.replace(/\/+$/, '') + '/' + seg(this.siblingCoin(coin)) +
+            '/api/file/' + actionIndexSegment(actionIndex) + '/raw';
     },
 
     // Fetch the raw ciphertext bytes for a token-gated FILE action by
@@ -62,8 +78,8 @@ module.exports = {
     // the symmetric key from the corresponding MESSAGE handoff.
     // See xchain-documentation/protocol/token-gated-content.md.
     async getGatedFileRaw(actionIndex, coin = null) {
+        let url = '/' + seg(this.siblingCoin(coin)) + '/api/file/' + actionIndexSegment(actionIndex) + '/raw';
         if (this._readyHook) await this._readyHook();
-        let url = '/' + this.siblingCoin(coin) + '/api/file/' + actionIndex + '/raw';
         let self = this;
         try {
             if (self.hooks.onRequest)

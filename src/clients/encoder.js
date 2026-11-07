@@ -149,7 +149,9 @@ class EncoderClient {
         let self = this;
         let retryConfig = this.retry === false || options.retry === false
             ? { maxRetries: 0 }
-            : this.retry;
+            : (typeof options.retryOn === 'function'
+                ? Object.assign({}, this.retry, { isRetryable: options.retryOn })
+                : this.retry);
         let onRetry = encoderRetryHook(this, method);
 
         try {

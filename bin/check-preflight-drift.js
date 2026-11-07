@@ -145,17 +145,21 @@ function checkAnchorConsistency(mapPath) {
 }
 
 /* Reachable means "can be the left side of a range against HEAD", which is the only
- * property the review instruction actually needs. An orphaned commit can still be present
- * in the object store, so an existence check would answer yes and hand back a range that
- * resolves to nothing useful.
+ * property the review instruction actually needs. Classify a missing anchor in a shallow
+ * checkout separately from an orphaned commit so the recovery advice stays actionable.
  */
-function anchorIsReachable(indexerRoot, anchor) {
+function anchorReachability(indexerRoot, anchor, runGit = execFileSync) {
     try {
-        execFileSync('git', ['-C', indexerRoot, 'merge-base', '--is-ancestor', anchor, 'HEAD'],
+        runGit('git', ['-C', indexerRoot, 'merge-base', '--is-ancestor', anchor, 'HEAD'],
             { stdio: 'ignore' });
-        return true;
+        return 'reachable';
     } catch (e) {
-        return false;
+        try {
+            const shallow = runGit('git', ['-C', indexerRoot, 'rev-parse', '--is-shallow-repository'],
+                { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+            if (shallow === 'true') return 'shallow';
+        } catch (ignored) {}
+        return 'unreachable';
     }
 }
 
@@ -671,13 +675,20 @@ function evaluate() {
         // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
         // were nothing else. CI checks out HEAD and never sees it.
         const anchor = parseAnchor(mapPath);
+        const reachability = anchor ? anchorReachability(root, anchor) : null;
         if (!anchor) {
             warn('\nThe map records no anchor commit, so there is no baseline to diff FROM.\n'
                 + 'Add a "Pins taken at indexer commit" line to src/preflight/INDEXER-MAP.md.');
-        } else if (anchorIsReachable(root, anchor)) {
+        } else if (reachability === 'reachable') {
             warn(`\nThe pins were taken at indexer commit ${anchor}, which is still reachable.\n`
                 + 'Review each drifted handler with:\n'
                 + `  git -C ${root} diff ${anchor}..HEAD -- <handler path above>`);
+        } else if (reachability === 'shallow') {
+            warn(`\nNOTE: the anchor commit ${anchor} cannot be checked because ${root} is a shallow clone.\n`
+                + 'This does not mean the indexer history was rewritten. Re-run against a full clone,\n'
+                + 'then review each drifted handler with:\n'
+                + `  git -C ${root} diff ${anchor}..HEAD -- <handler path above>\n`
+                + 'Do not use an object-store blob scan here because a shallow clone may not hold the pinned blobs.');
         } else {
             // The case that cost a reviewer a long detour. Say it plainly rather than
             // letting them build a range on a commit that cannot anchor one.
@@ -799,7 +810,7 @@ function main(argv, evaluateFn) {
 if (require.main === module) main();
 module.exports = {
     resolveIndexerRoot, indexerRootCandidates, parseMap, parseAnchor, parseStringSet, parseStringList, parseRegexLiteral,
-    deriveFeeChargingActions, checkAnchorConsistency, checkFeeQuoteSeam,
+    deriveFeeChargingActions, checkAnchorConsistency, anchorReachability, checkFeeQuoteSeam,
     checkConfigConstants, checkRegexMirrors, checkListMirrors, checkGasSchedules, evaluate, main,
     checkActivationMirrors, parseAddGateTable,
 };

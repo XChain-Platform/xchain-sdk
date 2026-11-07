@@ -23,6 +23,7 @@ require('../../utils/apply_bufferutils_patch');
 const bitcoin = require('bitcoinjs-lib');
 const { toU64, inputValue } = require('../../carrier/reconcile_encoded/script_matching.js');
 const { pickRevealOptions } = require('./create_tx_options.js');
+const { isPreDispatchRetryable } = require('../../utils/retry.js');
 
 // Report a satoshi total as a Number only when it is exact, so no caller reads a rounded value.
 const safeNumber = (v) => (v !== null && v <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(v) : null);
@@ -201,7 +202,8 @@ module.exports = {
             rpcParams.utxos = fetchedUtxos;
         }
 
-        return this.rpc('create_tx', rpcParams);
+        // Retry create_tx only before dispatch because a completed build reserves its inputs.
+        return this.rpc('create_tx', rpcParams, { retryOn: isPreDispatchRetryable });
     },
 
     async releaseInputs(reservationId) {
@@ -260,7 +262,8 @@ module.exports = {
         Object.assign(rpcParams, pickRevealOptions(params));
         if (params.encoding !== undefined)         rpcParams.encoding = String(params.encoding).toUpperCase();
 
-        return this.rpc('create_tx', rpcParams);
+        // Retry create_tx only before dispatch because a completed build reserves its inputs.
+        return this.rpc('create_tx', rpcParams, { retryOn: isPreDispatchRetryable });
     },
 
     // Broadcast a signed raw transaction hex to the coin node

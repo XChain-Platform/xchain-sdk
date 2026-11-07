@@ -178,8 +178,8 @@ function reconcileOutput(out, i, inputs, outputs, deny) {
     // (d) An encoder-derived funding leg for this phase. Shape gets it this far
     //     only: the script is the encoder's to derive and a chunked payload emits
     //     as many of them as it needs, so neither address nor count can pin it.
-    //     Value is pinned separately, by whichever of the two mechanisms this
-    //     phase has, and a leg that clears neither is a park.
+    //     Bind chunk legs to verified carrier scripts after this pass; companion
+    //     spends and optional ceilings additionally pin their value.
     if (matchesPhaseShape(script, outputs.phaseShapes)) {
         // Where a companion PSBT already exists (the envelope pair comes back
         // from one createTx call), the leg must be exactly what that companion

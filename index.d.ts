@@ -1388,9 +1388,9 @@ export interface EncryptPackResult {
  * present only while the coin's indexed tip is behind (never `false`); WELCOME
  * also repeats it as `data.stale`.
  */
-export interface WsFrameEnvelope {
+export interface WsFrameEnvelope<T = any> {
     type: string;
-    data: any;
+    data: T;
     chain?: string;
     network?: string;
     timestamp?: number;
@@ -1400,10 +1400,37 @@ export interface WsFrameEnvelope {
     stale?: true;
 }
 
+export interface WsNewBlockData {
+    block_index: string;
+    block_hash: string | null;
+    block_time: string | null;
+    tx_count: string;
+    action_count: string;
+}
+
+export interface WsNetworkStatsData {
+    block_height: string;
+    total_actions: string;
+}
+
+export interface WsNewActionData {
+    action_index: string;
+    action: string | null;
+    tx_hash: string | null;
+    block_index: string | null;
+    source: string | null;
+    status: string | null;
+    destinations: string[];
+}
+
+export type WsNewBlockFrame = WsFrameEnvelope<WsNewBlockData> & { type: 'NEW_BLOCK' };
+export type WsNetworkStatsFrame = WsFrameEnvelope<WsNetworkStatsData> & { type: 'NETWORK_STATS' };
+export type WsNewActionFrame = WsFrameEnvelope<WsNewActionData> & { type: 'NEW_ACTION' };
+
 /** The `data` of the events the WebSocket client emits after a reconnect catch-up. */
 export interface WsCatchUpEvents {
     /** The replay was refused or went unanswered: backfill these channels over REST. */
-    resync_required: { code: string | null; message: string | null; channels: string[]; since_action_index: string };
+    resync_required: { code: string | null; message: string | null; channels: string[]; since_action_index: string; fork_block_index?: string; first_invalid_action_index?: string };
     /** Lifecycle types no replay carries: backfill them over REST. */
     not_replayed: { types: string[]; channels: string[]; since_action_index: string };
     /** The replay came from a replica whose tip is behind; it ends at latest_action_index. */
@@ -1420,7 +1447,7 @@ declare class WebSocketClient {
         explorerPort?: number;
         websocketProtocol?: string;
         network?: string;
-        hooks?: { onWsConnect?: (info: { url: string }) => void; onWsDisconnect?: (info: { code: number }) => void; onWsReconnect?: (info: { attempt: number; delay: number }) => void; onWsMessage?: (msg: any) => void; onWsSchemaMismatch?: (info: { serverSchemaVersion: number; clientSchemaVersion: number }) => void };
+        hooks?: { onWsConnect?: (info: { url: string }) => void; onWsDisconnect?: (info: { code: number }) => void; onWsReconnect?: (info: { attempt: number; delay: number }) => void; onWsMessage?: (msg: WsFrameEnvelope) => void; onWsSchemaMismatch?: (info: { serverSchemaVersion: number; clientSchemaVersion: number }) => void };
         retry?: RetryConfig | false;
         /** Ping interval in milliseconds (default: 25000) */
         pingInterval?: number;
@@ -1476,6 +1503,9 @@ declare class WebSocketClient {
      * server's frame types, the client emits `resync_required`, `not_replayed`
      * and `stale_replay` after a reconnect catch-up (WsCatchUpEvents).
      */
+    on(eventType: 'NEW_BLOCK', callback: (msg: WsNewBlockFrame) => void): void;
+    on(eventType: 'NETWORK_STATS', callback: (msg: WsNetworkStatsFrame) => void): void;
+    on(eventType: 'NEW_ACTION', callback: (msg: WsNewActionFrame) => void): void;
     on(eventType: string, callback: (msg: any) => void): void;
 
     /** Remove a previously registered handler */
@@ -2313,10 +2343,10 @@ export declare class XChainSDK {
     disconnectWs(): void;
 
     /** Subscribe to new blocks. Returns an unsubscribe function. */
-    onBlock(callback: (msg: any) => void): () => void;
+    onBlock(callback: (msg: WsNewBlockFrame) => void): () => void;
 
     /** Subscribe to new actions with optional type/status/tick filters. */
-    onAction(callback: (msg: any) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
+    onAction(callback: (msg: WsNewActionFrame) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
     /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, DISPENSER_EDIT, DISPENSER_CANCEL, BET, BET_EXPIRED, BET_CLOSED, BET_EDIT, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
     onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
@@ -2366,7 +2396,7 @@ export declare class XChainSDK {
     onOrderMatch(address: string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to network-statistics updates. */
-    onNetworkStats(callback: (msg: any) => void): () => void;
+    onNetworkStats(callback: (msg: WsNetworkStatsFrame) => void): () => void;
 
 
     /*

@@ -50,6 +50,12 @@ function isRetryable(err) {
     return RETRYABLE_STATUS_CODES.includes(err.response.status);
 }
 
+// Retry a non-idempotent RPC only when the request could not have reached its handler.
+function isPreDispatchRetryable(err) {
+    if (err && err.response) return err.response.status === 429;
+    return !!err && err.code === 'ECONNREFUSED';
+}
+
 // Parse a Retry-After header value into milliseconds
 // Supports: integer seconds ("120") or HTTP-date ("Wed, 21 Oct 2015 07:28:00 GMT")
 function parseRetryAfter(value) {
@@ -141,6 +147,7 @@ async function withRetry(fn, config = {}, onRetry = null) {
     };
 
     let lastError;
+    const retryable = typeof config.isRetryable === 'function' ? config.isRetryable : isRetryable;
     let rateLimitRetries = 0;
     for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
         try {
@@ -155,7 +162,7 @@ async function withRetry(fn, config = {}, onRetry = null) {
                 throw err;
             }
 
-            if (attempt >= opts.maxRetries || !isRetryable(err)) {
+            if (attempt >= opts.maxRetries || !retryable(err)) {
                 throw err;
             }
 
@@ -171,7 +178,7 @@ async function withRetry(fn, config = {}, onRetry = null) {
 
 
 module.exports = {
-    withRetry, isRetryable, getDelay,
+    withRetry, isRetryable, isPreDispatchRetryable, getDelay,
     parseRetryAfter, getRetryAfterDelay,
     parseRateLimitReset, getRateLimitDelay, getRetryAfterSeconds,
     DEFAULTS, RETRYABLE_STATUS_CODES
