@@ -399,24 +399,6 @@
     "0a90643634e1c034": [
       "EncoderClient HTTPS base URL builds client with https agent when url starts with https"
     ],
-    "0af9181df0bb943a": [
-      "pre-flight lifecycle coalescing a caller-supplied signal aborts only that view; shared work survives",
-      "pre-flight lifecycle coalescing across caller options Coalescer.key differs when only mode, feeMode or encoding differs",
-      "pre-flight lifecycle coalescing across caller options Coalescer.run keeps callers that differ in mode, feeMode or encoding apart",
-      "pre-flight lifecycle coalescing across caller options a local caller and a report caller get separate reports; only the report caller reaches Tier 1",
-      "pre-flight lifecycle coalescing across caller options encoding OP_RETURN and P2SH callers do not share a report",
-      "pre-flight lifecycle coalescing across caller options feeMode native and xchain callers each get their own verdict",
-      "pre-flight lifecycle coalescing across caller options identical options still coalesce onto one producer run",
-      "pre-flight lifecycle coalescing bypassCache always runs a fresh producer",
-      "pre-flight lifecycle coalescing different chainId does not collide",
-      "pre-flight lifecycle coalescing different localDeltas do NOT collide (reservation netting)",
-      "pre-flight lifecycle coalescing identical (chainId, actionString, source) share one producer",
-      "pre-flight lifecycle coalescing identical localDeltas still share one producer",
-      "pre-flight lifecycle staleness a fresh report is not stale",
-      "pre-flight lifecycle staleness a report older than the window is stale",
-      "pre-flight lifecycle staleness degraded detects verdict worsening only",
-      "pre-flight lifecycle staleness stateHeight behind the known tip is stale"
-    ],
     "0b7e25d1390e869c": [
       "XChainSDK \u2013 WebSocket convenience methods unsubscribe return value onBlock returns function that removes handler"
     ],
@@ -1215,6 +1197,11 @@
       "AddressResolver LIST items leaves items untouched when the threshold is above tip plus one",
       "AddressResolver LIST items reuses successful item lookups from the permanent address cache"
     ],
+    "1e2de6fb2e101851": [
+      "reconcileFee unreadable input values denies an uncomputable fee with or without a valid cap",
+      "reconcileFee unreadable input values preserves computable fee accounting",
+      "reconcileFee unreadable input values validates a malformed cap before denying an uncomputable fee"
+    ],
     "1e7588fa483ef64a": [
       "BET compose composes a create with every field populated, in slot order",
       "BET compose composes cancel, place, and resolve to their own versions",
@@ -1735,6 +1722,11 @@
       "checkpoint supersession @regression @tier1 maps absent and null supersession fields to null",
       "checkpoint supersession @regression @tier1 normalizes string fields from explorer JSON without mutating the row",
       "checkpoint supersession @regression @tier1 refuses a superseded row when opts is missing without mutating it"
+    ],
+    "314c0cba4575ca96": [
+      "estimateFees envelope reveal reconciliation accepts both legs when each fee is at the cap",
+      "estimateFees envelope reveal reconciliation applies maxFeeSats to the reveal as well as the commit",
+      "estimateFees envelope reveal reconciliation refuses an unauthorized reveal output"
     ],
     "3151828024be21f7": [
       "custody handler map rows accepts pins matching the bytes of both flat handlers",
@@ -3836,6 +3828,28 @@
       "pre-flight BATCH issuance-fee budget native fee mode raises nothing and says why",
       "pre-flight BATCH issuance-fee budget one non-ISSUE command disables the whole-batch collapse, exactly as it does on-chain"
     ],
+    "70cacf5314cdd116": [
+      "pre-flight lifecycle coalescing a caller-supplied signal aborts only that view; shared work survives",
+      "pre-flight lifecycle coalescing across caller options Coalescer.key differs when only mode, feeMode or encoding differs",
+      "pre-flight lifecycle coalescing across caller options Coalescer.run keeps callers that differ in mode, feeMode or encoding apart",
+      "pre-flight lifecycle coalescing across caller options a local caller and a report caller get separate reports; only the report caller reaches Tier 1",
+      "pre-flight lifecycle coalescing across caller options encoding OP_RETURN and P2SH callers do not share a report",
+      "pre-flight lifecycle coalescing across caller options feeMode native and xchain callers each get their own verdict",
+      "pre-flight lifecycle coalescing across caller options identical options still coalesce onto one producer run",
+      "pre-flight lifecycle coalescing across the run budget Coalescer.key differs when only timeoutMs differs",
+      "pre-flight lifecycle coalescing across the run budget Coalescer.run keeps callers that differ only in timeoutMs apart",
+      "pre-flight lifecycle coalescing across the run budget sdk.preflight callers with different timeoutMs each run their own producer",
+      "pre-flight lifecycle coalescing across the run budget sdk.preflight callers with the same explicit timeoutMs still coalesce",
+      "pre-flight lifecycle coalescing bypassCache always runs a fresh producer",
+      "pre-flight lifecycle coalescing different chainId does not collide",
+      "pre-flight lifecycle coalescing different localDeltas do NOT collide (reservation netting)",
+      "pre-flight lifecycle coalescing identical (chainId, actionString, source) share one producer",
+      "pre-flight lifecycle coalescing identical localDeltas still share one producer",
+      "pre-flight lifecycle staleness a fresh report is not stale",
+      "pre-flight lifecycle staleness a report older than the window is stale",
+      "pre-flight lifecycle staleness degraded detects verdict worsening only",
+      "pre-flight lifecycle staleness stateHeight behind the known tip is stale"
+    ],
     "716ed5524dd1870f": [
       "G5: window-store single-writer lock a released lock can be taken by the next store",
       "G5: window-store single-writer lock does not delete a lock that now belongs to a successor",
@@ -4985,6 +4999,11 @@
       "SDK create_tx passthrough forwards encoding AUTO, compress and the options bag",
       "SDK create_tx passthrough omits all three when the caller says nothing, so the encoder default applies"
     ],
+    "94800f3e81d96c56": [
+      "submitAction option declarations declares runtime submit controls and both local caps",
+      "submitAction option declarations fails its field check when a cap declaration is absent",
+      "submitAction option declarations keeps EncoderOptions aligned with every forwarded createTx field"
+    ],
     "9481a25a83b3f20c": [
       "vendored lint core: ObjectPattern flag composition composes aliases and optional chains only under their own flags",
       "vendored lint core: ObjectPattern flag composition does not treat safe, dynamic, or unrelated properties as banned reads",
@@ -5899,6 +5918,14 @@
       "LifecycleManager submitAction(): feeQuote on a chunked reveal forwards the quote to the P2WSH reveal and accepts its fee output",
       "LifecycleManager submitAction(): feeQuote on a chunked reveal refuses a reveal fee output the caller never quoted",
       "LifecycleManager submitAction(): feeQuote on a chunked reveal sends no feeQuote to the reveal when the caller quoted none"
+    ],
+    "b08573c165a8e31f": [
+      "pre-flight native balance read against a stale explorer mirror a stale zero does not raise BALANCE_INSUFFICIENT; the check lands unverified",
+      "pre-flight native balance read against a stale explorer mirror control: a fresh zero native balance is still an authoritative zero",
+      "pre-flight native balance read against a stale explorer mirror control: a fresh zero still fails the balance check as an error",
+      "pre-flight native balance read against a stale explorer mirror control: a stale marker with a positive native balance still returns it",
+      "pre-flight native balance read against a stale explorer mirror control: no freshness marker leaves a zero native balance authoritative",
+      "pre-flight native balance read against a stale explorer mirror treats a zero native balance on a stale mirror as unverified, not zero"
     ],
     "b19c8819979a472d": [
       "MessagingUtils @crypto @regression getMessages(): encrypted without wif exposes coin/chain/block/txid fields from raw message",
@@ -8092,8 +8119,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 609,
-      "titleCount": 6435,
+      "fileCount": 613,
+      "titleCount": 6454,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8486,7 +8513,7 @@
         "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
         "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
-        "test/unit/preflight/lifecycle.test.js": "0af9181df0bb943a",
+        "test/unit/preflight/lifecycle.test.js": "70cacf5314cdd116",
         "test/unit/preflight/list/list_note_refusals.test.js": "287b43aeb58106c1",
         "test/unit/preflight/list/list_set_meta_note.test.js": "1866e9c807f637eb",
         "test/unit/preflight/list/list_share_notes.test.js": "e8ec9e9a4fce2709",
@@ -8703,12 +8730,16 @@
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
         "test/unit/wallet/x402.test/03_x402_client.test.js": "0f442213605187b8",
         "test/unit/wallet/x402.test/04_x402_client_per_tick_ceiling.test.js": "6557483e59be3df6",
-        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1"
+        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1",
+        "test/unit/carrier/reconcile_encoded.test/09_uncomputable_fee_fails_closed.test.js": "1e2de6fb2e101851",
+        "test/unit/preflight/stale_native_balance_unverified.test.js": "b08573c165a8e31f",
+        "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
+        "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96"
       }
     },
     "test:all": {
-      "fileCount": 649,
-      "titleCount": 6770,
+      "fileCount": 653,
+      "titleCount": 6789,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -9141,7 +9172,7 @@
         "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
         "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
-        "test/unit/preflight/lifecycle.test.js": "0af9181df0bb943a",
+        "test/unit/preflight/lifecycle.test.js": "70cacf5314cdd116",
         "test/unit/preflight/list/list_note_refusals.test.js": "287b43aeb58106c1",
         "test/unit/preflight/list/list_set_meta_note.test.js": "1866e9c807f637eb",
         "test/unit/preflight/list/list_share_notes.test.js": "e8ec9e9a4fce2709",
@@ -9358,7 +9389,11 @@
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
         "test/unit/wallet/x402.test/03_x402_client.test.js": "0f442213605187b8",
         "test/unit/wallet/x402.test/04_x402_client_per_tick_ceiling.test.js": "6557483e59be3df6",
-        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1"
+        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1",
+        "test/unit/carrier/reconcile_encoded.test/09_uncomputable_fee_fails_closed.test.js": "1e2de6fb2e101851",
+        "test/unit/preflight/stale_native_balance_unverified.test.js": "b08573c165a8e31f",
+        "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
+        "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96"
       }
     },
     "test:boundary": {

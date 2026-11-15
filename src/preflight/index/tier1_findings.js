@@ -42,12 +42,14 @@ const { FINDING_CODES } = require('../constants.js');
  *   valid    - `status === 'valid'`. The network really ran this command.
  *   invalid  - any other non-empty status string. The network ran it and
  *              rejected it.
- *   unjudged - `status === null`, with or without a `refused` note. Two live
- *              causes, both measured on BTC regtest 2026-08-13: a VM sub-action
- *              the probe refuses to dispatch (`refused` set), and a settlement
- *              leg that returns without recording a status because the probe
- *              carries no real transaction (`COINPAY|0|<match>` inside a batch
- *              answers `{status:null, refused:null}`).
+ *   unjudged - `status === null`, with or without a `refused` note. Three live
+ *              causes, the first two measured on BTC regtest 2026-08-13: a VM
+ *              sub-action the probe refuses to dispatch (`refused` set), a
+ *              settlement leg that returns without recording a status because the
+ *              probe carries no real transaction (`COINPAY|0|<match>` inside a
+ *              batch answers `{status:null, refused:null}`), and a
+ *              payment-triggered DISPENSE, which the probe now answers with a
+ *              `refused` note because its transaction pays no dispenser address.
  *
  * DECLARED LIMITATION, in the idiom batch_limits.js uses for its MINT-distinctness
  * approximation rather than left to be rediscovered: the SDK cannot turn a

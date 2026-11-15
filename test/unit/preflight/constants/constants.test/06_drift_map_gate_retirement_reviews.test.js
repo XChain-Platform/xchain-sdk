@@ -63,7 +63,7 @@ function sendHandoffRetirementReview() {
 function batchSnapshotReviews() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('c6ca292c4c8a52424f1fe7779c9b8361c41e5fbde17bb4ba6c5fb1c313dd1c13');
+        .to.equal('ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821');
     const reviews = [
         ['### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot', '`7e138a16` to `e7d7825d`'],
         ['### 2026-10-20 - a BATCH\'s own status is restored off the probe path too', '`e7d7825d` to `9f1e45a3`']
@@ -257,20 +257,32 @@ function batchLegFoldReview() {
     const rows = parseMap(REAL_MAP);
     expect(rows.find((r) => r.handler === 'src/actions/send/').hash)
         .to.equal('341e27553187341c1539d52c47b2d3ab56f3f7bb22190403bfa95005e3971fa0');
-    expect(rows.find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('c6ca292c4c8a52424f1fe7779c9b8361c41e5fbde17bb4ba6c5fb1c313dd1c13');
     const heading = '### 2026-11-14 - a BATCH probe answers a multi-leg SEND sub-command with its first refused leg';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     expect(entry).to.include('The `send` pin moves from `1591aa81` to `341e2755`');
     expect(entry).to.include('the `batch` pin moves from `9a5147d0` to `c6ca292c`');
-    expect(text).to.include('**Pins taken at indexer commit:** `f9d86586d`');
     expect(entry).to.include('foldLegVerdicts');
     expect(entry).to.include('NO CLIENT CHECK MOVES');
     expect(entry).to.include('**Direction: NEUTRAL for validity.**');
 }
 
+// The BATCH probe's DISPENSE note re-pins batch and moves the anchor to the origin develop head.
+function batchDispenseNoteReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
+        .to.equal('ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821');
+    const heading = '### 2026-11-15 - a BATCH probe says why it cannot judge a payment-triggered DISPENSE';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    expect(entry).to.include('The `batch` pin moves from `c6ca292c` to `ca3e05eb`');
+    expect(text).to.include('**Pins taken at indexer commit:** `8960c6ed1`');
+    expect(entry).to.include('NO CLIENT CHECK MOVES');
+    expect(entry).to.include('**Direction: NEUTRAL for validity.**');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
+    it('pins and records the BATCH probe DISPENSE unjudged note review', batchDispenseNoteReview);
     it('pins and records the BATCH probe multi-leg SEND fold review', batchLegFoldReview);
     it('pins and records the ISSUE prefixed mint window review', mintWindowReview);
     it('pins and records the ISSUE, DISPENSER, ORDER, SWAP and BET prefixed integer review', prefixedIntegerReview);
