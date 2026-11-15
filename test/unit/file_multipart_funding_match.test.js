@@ -6,13 +6,13 @@ const {
     fundingMatchesQuote
 } = require('../../src/file/multipart_funding_match.js');
 
+const txid = 'ab'.repeat(32);
+
+function output(vout, address, value) {
+    return { vout, address, value, scriptPubKey: `script-${vout}` };
+}
+
 describe('multipart funding output matching', function () {
-    const txid = 'ab'.repeat(32);
-
-    function output(vout, address, value) {
-        return { vout, address, value, scriptPubKey: `script-${vout}` };
-    }
-
     it('pins same-value pieces to different outputs in piece order', function () {
         const expected = [
             { address: 'piece-address', value: 1200 },
@@ -66,7 +66,9 @@ describe('multipart funding output matching', function () {
 
         expect(matchFundingOutputs(expected, outputs, txid)[0].vout).to.equal(5);
     });
+});
 
+describe('multipart funding output mismatch handling', function () {
     it('throws a coded error naming the missing piece index', function () {
         const expected = [
             { address: 'present', value: 1000 },
@@ -88,7 +90,9 @@ describe('multipart funding output matching', function () {
             .with.property('code', 'FUNDING_OUTPUT_MISSING');
         expect(fundingMatchesQuote(expected, outputs)).to.equal(false);
     });
+});
 
+describe('multipart funding quote matching', function () {
     it('accepts an empty expected output list', function () {
         const outputs = [output(0, 'change', 5000)];
 
