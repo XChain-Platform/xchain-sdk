@@ -17,18 +17,22 @@
 // Cross-service conformance guard. The stake-weighted quorum
 // predicate and the equivocation-header builder are CONSENSUS-CRITICAL and
 // vendored byte-identically into five services (xchain-hub, xchain-indexer,
+
 // xchain-explorer, xchain-sdk, xchain-sync); a divergence in their logic forks
 // the chain. Their canonical source of record is xchain-indexer/src/consensus,
 // which reconcile-twins.sh vendors into every other copy, including
+
 // xchain-documentation/protocol/reference-impl/consensus; the canonical vectors
 // live in xchain-documentation/protocol/test-vectors. This guard runs in every
 // repo and asserts BOTH:
+
 //   1. BEHAVIOR  - the local copy matches the canonical vectors.
 //   2. IDENTITY  - the local copy is byte-identical to the xchain-documentation copy.
 // (1) catches a logic change that happens to pass the local unit suite; (2)
+
 // catches ANY edit to one copy that was not propagated to the others. When the
-// sibling xchain-documentation repo is not checked out (standalone deploy), skip
-// rather than fail, matching the existing cross-repo guard convention.
+// sibling xchain-documentation repo is absent or refused by siblingCheckout(),
+// the guards skip unless XCHAIN_REQUIRE_SIBLINGS=1 makes coverage mandatory.
 
 const assert = require('assert');
 const fs     = require('fs');
@@ -42,7 +46,9 @@ const LOCAL_DIR = path.join(__dirname, '../..', '..', 'src');
 // Resolve the canonical xchain-documentation repo: an explicit XCHAIN_DOCS_DIR, then
 // XCHAIN_DOCUMENTATION_DIR (the order tooling/sibling_coverage reports), then the
 // ../xchain-documentation sibling layout that CI and local runs check out.
-// When none resolves (standalone deploy), the guards below skip rather than fail.
+
+// When none resolves, the guards skip unless XCHAIN_REQUIRE_SIBLINGS=1 makes
+// sibling coverage mandatory, in which case they fail.
 const DOCS_DIR  = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR
     || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
 const CANON_DIR = path.join(DOCS_DIR, 'protocol', 'reference-impl');
@@ -73,7 +79,7 @@ if(VEC_CHECKOUT.usable) try {
 // onto a copy of the validators array here (the real set-building query sets it the
 // same way on its returned array).
 function vecValidators(c){
-    if(c && c.truncated){ let v = (c.validators || []).slice(); v.truncated = true; return v; }
+    if(c && c.truncated){ const v = (c.validators || []).slice(); v.truncated = true; return v; }
     return c.validators;
 }
 function meets(c){ return swq.meetsStakeThreshold(vecValidators(c), c.signers); }
