@@ -71,6 +71,8 @@ module.exports = {
     // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.
     async getGatedFileRaw(actionIndex, coin = null) { return this.requireExplorer().getGatedFileRaw(actionIndex, coin); },
 
+    async getFileAssembly(actionIndex, coin = null) { return this.requireExplorer().getFileAssembly(actionIndex, coin); },
+
     // Absolute URL of a FILE action's raw bytes on the configured explorer:
     // the resolution target for TIS data_ref entries and on-chain TIS docs.
     fileRawUrl(actionIndex, coin = null) { return this.requireExplorer().fileRawUrl(actionIndex, coin); },

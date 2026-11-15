@@ -34,6 +34,16 @@ function actionIndexSegment(actionIndex) {
     return seg(actionIndex);
 }
 
+function unwrapActionDetail(body) {
+    if (!body) return null;
+    let detail = body.data !== undefined && body.data !== null ? body.data : body;
+    if (Array.isArray(detail)) detail = detail.length ? detail[0] : null;
+    if (!detail || typeof detail !== 'object') return null;
+    if (detail.action && typeof detail.action === 'object' && !Array.isArray(detail.action)
+        && detail.action.action_index !== undefined) return detail.action;
+    return detail;
+}
+
 module.exports = {
     async getFiles(query, type, opts = {}) {
         return this.get('/files/' + seg(query) + '/' + seg(type), opts);
@@ -88,6 +98,26 @@ module.exports = {
             if (self.hooks.onResponse)
                 self.hooks.onResponse({ service: 'explorer', method: 'GET', url, status: response.status });
             return Buffer.from(response.data);
+        } catch (err) {
+            if (self.hooks.onError)
+                self.hooks.onError({ service: 'explorer', method: 'GET', url, error: err.message });
+            self.handleError(err, url);
+        }
+    },
+
+    async getFileAssembly(actionIndex, coin = null) {
+        let url = '/' + seg(this.siblingCoin(coin)) + '/api/action/' + actionIndexSegment(actionIndex);
+        if (this._readyHook) await this._readyHook();
+        let self = this;
+        try {
+            if (self.hooks.onRequest)
+                self.hooks.onRequest({ service: 'explorer', method: 'GET', url });
+            let response = await self.client.get(url);
+            if (self.hooks.onResponse)
+                self.hooks.onResponse({ service: 'explorer', method: 'GET', url, status: response.status });
+            self.recordFreshness(response);
+            let detail = unwrapActionDetail(response.data);
+            return detail && detail.multipart ? detail.multipart : null;
         } catch (err) {
             if (self.hooks.onError)
                 self.hooks.onError({ service: 'explorer', method: 'GET', url, error: err.message });
