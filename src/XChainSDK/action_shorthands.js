@@ -115,8 +115,10 @@ module.exports = {
     },
 
     // Submit an action through the full lifecycle: create, encode, sign, broadcast, wait.
-    // actionData = { action, params }; encoderOpts = { pubkey, change, utxos, encoding, fee, ... };
-    // opts = { wif, waitForIndexer, timeout, pollInterval, requireValid, strictStatus, onProgress }.
+    // actionData = { action, params }; encoderOpts contains createTx fields and optional fee caps.
+    // opts includes wif, lifecycle controls, signer, maxFeeSats and maxPhaseFundingSats.
+    // A cap in opts wins over encoderOpts; caps are local and never sent to the encoder.
+    // See LifecycleManager.submitAction for the complete option list.
     // With waitForIndexer (default), a chain-REJECTED action REJECTS this call with
     // SDKActionError ACTION_REJECTED carrying the indexer's reason; the resolved
     // result's `indexed.statusKnown` says whether the status was read or assumed

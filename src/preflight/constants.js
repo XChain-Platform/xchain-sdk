@@ -97,8 +97,8 @@ const ENCODING_LIMITS = Object.freeze({
 // Two things the mirror is NOT, both of which have already been written down
 // wrongly once. It is not a per-field copy of the list above: that list is what
 // the WALLET PANEL reads, while the declaration is what THIS FILE'S engine
-// returns, so `_stampedAt` (stamped on every report, read by lifecycle.js's
-// isStale) is declared there and absent here. And it is not a type any producer
+// returns, so `_stampedAt` (stamped on every report; lifecycle.js's isStale
+// reads it, though the engine never calls isStale) is declared there and absent here. And it is not a type any producer
 // of a report must satisfy - see the `restricted` paragraph below, which blesses
 // narrower reports authored outside the SDK. A consumer that accepts those too
 // declares its own wider input type; the declaration here stays the engine's.
@@ -150,7 +150,7 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 
 // Lifecycle constants (spec §4.6).
 const DEFAULT_TIMEOUT_MS   = 4000;  // overall per-preflight budget
-const RECHECK_TIMEOUT_MS   = 2000;  // Approve-time re-check budget
+const RECHECK_TIMEOUT_MS   = 2000;  // Approve-time re-check budget (declared, not applied: a re-check runs under DEFAULT_TIMEOUT_MS)
 const STALENESS_MS         = 30000; // report age that forces a re-check
 const ENDPOINT_MEMO_TTL_MS = 2000;  // per-endpoint response memo
 

@@ -214,3 +214,48 @@ describe('pre-flight lifecycle', function () {
         });
     });
 });
+
+describe('pre-flight lifecycle', function () {
+    describe('coalescing across the run budget', function () {
+        it('Coalescer.key differs when only timeoutMs differs', function () {
+            const c = new Coalescer();
+            const k = (v) => c.key('btc', 'S', 's', [], v);
+            const same = k({ mode: 'report', timeoutMs: 4000 });
+            expect(k({ mode: 'report', timeoutMs: 4000 })).to.equal(same);
+            expect(k({ mode: 'report', timeoutMs: 2000 })).to.not.equal(same);
+            expect(k({ mode: 'report' })).to.not.equal(same);
+        });
+
+        it('Coalescer.run keeps callers that differ only in timeoutMs apart', async function () {
+            const c = new Coalescer();
+            let runs = 0;
+            const producer = () => { runs++; return Promise.resolve({}); };
+            const [a, b] = await Promise.all([
+                c.run(Object.assign({}, base, { timeoutMs: 4000 }), producer),
+                c.run(Object.assign({}, base, { timeoutMs: 2000 }), producer),
+            ]);
+            expect(runs).to.equal(2);
+            expect(a).to.not.equal(b);
+        });
+
+        it('sdk.preflight callers with different timeoutMs each run their own producer', async function () {
+            const { sdk, calls } = countingSdk();
+            const [a, b] = await Promise.all([
+                sdk.preflight(A, { source: SRC, timeoutMs: 3000 }),
+                sdk.preflight(A, { source: SRC, timeoutMs: 1500 }),
+            ]);
+            expect(a).to.not.equal(b);
+            expect(calls).to.have.length(2);
+        });
+
+        it('sdk.preflight callers with the same explicit timeoutMs still coalesce', async function () {
+            const { sdk, calls } = countingSdk();
+            const [a, b] = await Promise.all([
+                sdk.preflight(A, { source: SRC, timeoutMs: 3000 }),
+                sdk.preflight(A, { source: SRC, timeoutMs: 3000 }),
+            ]);
+            expect(a).to.equal(b);
+            expect(calls).to.have.length(1);
+        });
+    });
+});

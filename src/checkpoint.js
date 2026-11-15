@@ -45,10 +45,17 @@ function isCheckpointSupersedeActive(snapshotBlock, network){
 // the indexer's ed25519.js, so validator signatures verify identically here.
 const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
-// Build the canonical signing string for a checkpoint object. MUST stay
-// byte-identical to the hub's StateCheckpointEngine.canonicalCheckpoint and
-// the indexer's ANCHOR verifier:
-//   XCHECKPOINT|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK
+// The canonical signing grammar, in order:
+//   1. XCHECKPOINT|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK
+//   2. At the commitment gate, when all four fields exist:
+//      |STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION
+//   3. At the supersede gate: |SUPERSEDE|SUPERSEDES_FROM|RULES_DIGEST when both fields exist.
+//   4. For fold_archive: |MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS.
+//      Hub producers reject a fold archive carrying supersession fields.
+//   5. At the EQUIV gate, wrap as EQUIV|XCHECKPOINT|ROUND_ID|0||RAW, where ROUND_ID is
+//      CHAIN|NETWORK|BLOCK_INDEX|CHECKPOINT_SEQ plus |MATCH_BATCH_SEQ for fold_archive.
+// It MUST stay byte-identical to the hub's StateCheckpointEngine.canonicalCheckpoint and
+// StateAnchorPublisher.foldArchiveCanonical, the indexer's ANCHOR verifier, and every verifier.
 function canonicalCheckpoint(cp){
     if (!cp) throw new Error('CheckpointVerifier: checkpoint object required');
     let raw = ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
