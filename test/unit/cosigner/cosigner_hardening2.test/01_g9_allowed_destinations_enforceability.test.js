@@ -109,11 +109,8 @@ describe('G9: allowedDestinations enforceability', function () {
             .filter((f) => formatCarriesDestination(f.action, f.version))
             .map((f) => `${f.action} v${f.version}`)
             .sort();
-        // LIST v2-v5 move the decoder-reachable denominator from 68 to 72. LIST
-        // v3 also moves the numerator because its ownership recipient is a
-        // DESTINATION field; bounded-rest v4 and fixed-field v5 carry none.
-        // BET v4 (feed list edits) moves it to 73 and carries no DESTINATION.
-        // FILE v1 and v2 move it to 75 and carry no DESTINATION.
+        // LIST v2-v5, BET v4, and FILE v1-v2 raise the denominator from 68 to 75.
+        // Only LIST v3 also carries DESTINATION.
         expect(decodable.length).to.equal(75);
         expect(carriers).to.deep.equal([
             'LIST v3',

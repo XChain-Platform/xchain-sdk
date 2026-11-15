@@ -30,7 +30,7 @@ function errorCode(promise, code) {
     return assert.rejects(promise, (error) => error && error.code === code);
 }
 
-describe('multipart FILE planning', function () {
+function registerProtocolTests() {
     it('exports the protocol caps and activation map', function () {
         assert.strictEqual(MULTIPART_FILE_MAX_PARTS, 32);
         assert.strictEqual(MULTIPART_FILE_MAX_BYTES, 12000000);
@@ -65,7 +65,9 @@ describe('multipart FILE planning', function () {
         assert.deepStrictEqual(envelope.parts.map((part) => part.bytes.length), [389919, 2]);
         assert.deepStrictEqual(standard.parts.map((part) => part.bytes.length), [8113, 2]);
     });
+}
 
+function registerPlanningTests() {
     it('plans 10,000,000 zero bytes as 26 equal-capacity envelope parts plus the last', async function () {
         const plan = await planMultipartFile(Buffer.alloc(10000000), {
             name: 'zeros.bin',
@@ -107,7 +109,9 @@ describe('multipart FILE planning', function () {
         assert.strictEqual(inflated.inflated, true);
         assert.deepStrictEqual(inflated.bytes, original);
     });
+}
 
+function registerLimitTests() {
     it('allows stored gated bytes exactly at the indexer TOTAL_BYTES cap', async function () {
         const original = Buffer.alloc(MULTIPART_FILE_MAX_BYTES - 28);
         const plan = await planMultipartFile(original, {}, {
@@ -139,4 +143,10 @@ describe('multipart FILE planning', function () {
             planMultipartFile(Buffer.alloc(8114 * 32 + 1), {}, { carrier: 'P2SH' }),
             'TOO_MANY_PARTS');
     });
+}
+
+describe('multipart FILE planning', function () {
+    registerProtocolTests();
+    registerPlanningTests();
+    registerLimitTests();
 });

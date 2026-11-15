@@ -102,7 +102,7 @@ function rangeError(code, message, details = {}) {
     return error;
 }
 
-async function planMultipartFile(bytes, meta = {}, options = {}) {
+function validateOriginalBytes(bytes) {
     const original = toBuffer(bytes);
     if (original.length === 0)
         throw rangeError('EMPTY_FILE', 'multipart files must contain at least one byte');
@@ -110,7 +110,10 @@ async function planMultipartFile(bytes, meta = {}, options = {}) {
         throw rangeError('ORIGINAL_BYTES_TOO_LARGE',
             `original bytes exceed MULTIPART_FILE_MAX_BYTES (${MULTIPART_FILE_MAX_BYTES})`,
             { originalBytes: original.length, maxBytes: MULTIPART_FILE_MAX_BYTES });
+    return original;
+}
 
+async function storeFileBytes(original, meta, gate) {
     const compression = new CompressionUtils();
     const compressed = await compression.compressIfSmaller(original, {
         maxInputBytes: MULTIPART_FILE_MAX_BYTES,
@@ -119,7 +122,6 @@ async function planMultipartFile(bytes, meta = {}, options = {}) {
     let key = null;
     let keyHash = '';
     let encryptionMethod = '';
-    const gate = options.gate || null;
 
     if (gate && gate.key !== undefined && gate.key !== null) {
         const gatedFile = new GatedFileUtils();
@@ -129,13 +131,18 @@ async function planMultipartFile(bytes, meta = {}, options = {}) {
         encryptionMethod = field(gate, 'encryptionMethod', 'ENCRYPTION_METHOD',
             field(meta, 'encryptionMethod', 'ENCRYPTION_METHOD', ENCRYPTION_METHOD_AES_256_GCM));
     }
+    return { compressed, stored, key, keyHash, encryptionMethod };
+}
 
+function validateStoredBytes(stored) {
     if (stored.length > MULTIPART_FILE_MAX_BYTES)
         throw rangeError('STORED_BYTES_TOO_LARGE',
             `stored bytes exceed MULTIPART_FILE_MAX_BYTES (${MULTIPART_FILE_MAX_BYTES})`,
             { storedBytes: stored.length, maxBytes: MULTIPART_FILE_MAX_BYTES });
+}
 
-    const capacity = partCapacity(options.carrier);
+function buildParts(stored, carrier) {
+    const capacity = partCapacity(carrier);
     const buffers = splitStoredBytes(stored, capacity);
     if (buffers.length > MULTIPART_FILE_MAX_PARTS)
         throw rangeError('TOO_MANY_PARTS',
@@ -150,10 +157,14 @@ async function planMultipartFile(bytes, meta = {}, options = {}) {
         digest: sha256(part).toString('hex'),
         params: { version: 2, fileHash, partIndex },
     }));
-    const manifestParams = {
+    return { capacity, fileHash, parts };
+}
+
+function buildManifestParams(meta, gate, stored, compressed, encryptionMethod, keyHash, parts) {
+    return {
         version: 1,
-        fileHash,
-        totalParts: parts.length,
+        fileHash: parts.fileHash,
+        totalParts: parts.parts.length,
         totalBytes: stored.length,
         name: field(meta, 'name', 'NAME'),
         type: field(meta, 'type', 'TYPE'),
@@ -165,6 +176,18 @@ async function planMultipartFile(bytes, meta = {}, options = {}) {
         gateMinAmount: field(meta, 'gateMinAmount', 'GATE_MIN_AMOUNT', field(gate, 'minAmount', 'GATE_MIN_AMOUNT')),
         compression: compressed.compressionField,
     };
+}
+
+async function planMultipartFile(bytes, meta = {}, options = {}) {
+    const original = validateOriginalBytes(bytes);
+    const gate = options.gate || null;
+    const storedFile = await storeFileBytes(original, meta, gate);
+    const { compressed, stored, key, keyHash, encryptionMethod } = storedFile;
+    validateStoredBytes(stored);
+    const partPlan = buildParts(stored, options.carrier);
+    const { capacity, fileHash, parts } = partPlan;
+    const manifestParams = buildManifestParams(
+        meta, gate, stored, compressed, encryptionMethod, keyHash, partPlan);
 
     return {
         parts,
