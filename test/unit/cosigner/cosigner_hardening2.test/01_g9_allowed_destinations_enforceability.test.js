@@ -96,7 +96,7 @@ describe('G9: allowedDestinations enforceability', function () {
         expect(res.reason).to.equal('POLICY_DESTINATION_UNENFORCEABLE');
     });
 
-    it('pins the 8-of-72 figure the G9 rationale quotes, derived from the format table', function () {
+    it('pins the decoder-reachable figure the G9 rationale quotes, derived from the format table', function () {
         // The G9 notes in the evaluator point here instead of quoting a count,
         // because a hand-counted figure drifts
         // the moment a format gains or loses a DESTINATION field. Derive both
@@ -113,7 +113,8 @@ describe('G9: allowedDestinations enforceability', function () {
         // v3 also moves the numerator because its ownership recipient is a
         // DESTINATION field; bounded-rest v4 and fixed-field v5 carry none.
         // BET v4 (feed list edits) moves it to 73 and carries no DESTINATION.
-        expect(decodable.length).to.equal(73);
+        // FILE v1 and v2 move it to 75 and carry no DESTINATION.
+        expect(decodable.length).to.equal(75);
         expect(carriers).to.deep.equal([
             'LIST v3',
             'MESSAGE v0', 'MESSAGE v1', 'MESSAGE v2', 'MESSAGE v3',
