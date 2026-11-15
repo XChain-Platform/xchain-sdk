@@ -71,6 +71,8 @@ function isForbiddenAddress(addr){
         if (ip === '::' || ip === '::1') return true;              // unspecified / loopback
         if (ip.startsWith('::')) return true;                      // v4-compatible / embedded
         if (ip.startsWith('64:ff9b:')) return true;               // NAT64
+        if (ip.startsWith('2002:')) return true;
+        if (/^2001:0{0,4}:/.test(ip)) return true;
         if (/^f[cd]/.test(ip))   return true;                     // fc00::/7 unique-local
         if (/^fe[89ab]/.test(ip)) return true;                    // fe80::/10 link-local
         if (/^ff/.test(ip))      return true;                     // multicast

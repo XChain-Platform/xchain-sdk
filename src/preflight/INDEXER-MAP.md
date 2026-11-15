@@ -82,7 +82,16 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `265c85c86`
+**Pins taken at indexer commit:** `f9d86586d`
+
+(Re-anchored 2026-11-14 against the committed indexer tree `f9d86586d`, the review-round landing
+that folds a multi-leg SEND sub-command's leg verdicts into the BATCH probe answer, reviewed in the
+first entry of the review log below, which had not landed on origin develop when this was written.
+Only the `send` and `batch` directory pins move. The other fourteen rows are unchanged and match
+this tree, and `265c85c86` is an ancestor of this anchor. The commit lands on origin develop as
+this exact commit, by fast-forward or as a parent of the landing merge, so the anchor stays
+reachable; a squashed or rebased landing would orphan it, and the section on an unreachable anchor
+below is then the way back.)
 
 (Re-anchored 2026-11-02 a third time, against the committed indexer tree `265c85c86`, the
 prefixed mint window refusal reviewed in the first entry of the review log below, which had not
@@ -511,7 +520,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 265c85c86..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff f9d86586d..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -584,7 +593,7 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `1591aa81bb189edbbdb088d5a75de8fab817e1669209ff4eff67d8150cb703ac` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `341e27553187341c1539d52c47b2d3ab56f3f7bb22190403bfa95005e3971fa0` |
 | `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
 | `checks/issue.js` | `src/actions/issue/` | `259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978` |
@@ -594,7 +603,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7` |
 | `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
-| `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
+| `checks/batch.js` | `src/actions/batch/` | `c6ca292c4c8a52424f1fe7779c9b8361c41e5fbde17bb4ba6c5fb1c313dd1c13` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
 | `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
@@ -625,6 +634,36 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-14 - a BATCH probe answers a multi-leg SEND sub-command with its first refused leg
+
+The `send` pin moves from `1591aa81` to `341e2755` and the `batch` pin moves from `9a5147d0` to
+`c6ca292c`, hashed from the committed indexer tree at the anchor above by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/send/` and `src/actions/batch/`. That
+tree is origin develop `a26636f04` plus one review-round landing (`f9d86586d`); origin develop
+carried no change to either directory since `265c85c86`, so the whole mapped diff is that
+landing. Per-part digests at the two commits differ only in `send/leg_verdicts.js` (new) and
+`batch/probe.js`: `send/settle.js`, `batch/fees.js`, `batch/limits.js` and `batch/sub_command.js`
+change comments alone and hash identically at both.
+
+- **SEND, `send/leg_verdicts.js` (new):** `foldLegVerdicts(legs, isGuardInert)` copies the `PROBE_LEG_VERDICTS` rows `send/settle.js` records on a `FEE_PROBE` run and answers with the first leg whose status is neither `valid` nor guard-inert, else the first leg that is not `valid`, else `valid`, plus the copied `legs`; an absent or empty list is null. The indexer's standalone dry-run reader (`actions_class/dry_run_support.js`, outside this map) now calls it too, so a standalone multi-leg SEND prefers a real refusal over a guard-inert one where it used to take the first non-valid leg.
+- **BATCH, `batch/probe.js`:** `recordSubVerdict` folds the legs before the per-sub-command key clear drops them, so a SEND sub-command's row in `PROBE_SUB_VERDICTS` carries the first refused leg's status where it carried the last leg's (`send/settle.js` writes `data['STATUS']` per leg), and gains a `legs` list. A folded guard-inert status still becomes `status: null` with a `refused` note. A sub-command that set off a match keeps its match snapshot and is not folded.
+- **SEND `send/settle.js`, BATCH `batch/fees.js`, `batch/limits.js`, `batch/sub_command.js`:** comment-only, re-pointing references at the files `actions/index.js` was split into.
+
+**Client follow-up.** No admission predicate, status string, fee or weight rule, or validation
+order moves, and `FEE_PROBE` never exists on a decoded transaction, so every on-chain verdict and
+row is unchanged and `checks/send.js` and `checks/batch.js` stand. What moves is the network's
+BATCH answer: a multi-leg SEND sub-command whose earlier leg is refused and whose last leg settles
+used to read `valid`, which `applyTier1` takes as the network accepting that command and so
+downgraded a Tier-2 error on it to info; it now reads as the refusal, and the Tier-2 error stays.
+`normalizeSubCommands` reads `status` and `refused` alone and drops `legs`, which nothing in the
+report needs. Tests: `test/unit/preflight/tier1/batch_tier1.test/09_a_multi_leg_send_answers_with_its_first_refused_leg.test.js`,
+a folded refusal with `legs` and a folded guard-inert row through `runTier1` and `applyTier1`.
+
+**Direction: NEUTRAL for validity.** NO CLIENT CHECK MOVES. A client reading the indexer
+pre-flight answer for a BATCH holding a multi-leg SEND now sees a refusal it was previously told
+was valid. The anchor moves to the committed indexer tree, and the other fourteen rows are
+unchanged.
 
 ### 2026-11-02 - ISSUE refuses a hexadecimal, binary or octal mint window
 

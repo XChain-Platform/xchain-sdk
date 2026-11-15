@@ -107,7 +107,7 @@ class CompressionUtils {
      */
     async compressIfSmaller(payload, options = {}) {
         let input = toBuffer(payload, 'payload');
-        let maxRatio = (options.maxRatio === undefined) ? COMPRESSION_MAX_RATIO : options.maxRatio;
+        let maxRatio = resolveMaxRatio(options.maxRatio);
 
         let raw = {
             bytes: input,
@@ -160,7 +160,7 @@ class CompressionUtils {
      *   storedForm=true, and a machine-readable `error` the caller surfaces.
      */
     async inflate(stored, options = {}) {
-        let maxRatio = (options.maxRatio === undefined) ? COMPRESSION_MAX_RATIO : options.maxRatio;
+        let maxRatio = resolveMaxRatio(options.maxRatio);
         let input;
         try {
             input = toBuffer(stored, 'stored');
@@ -282,6 +282,18 @@ function toBuffer(value, label) {
     if (typeof value === 'string') return Buffer.from(value, 'binary');
     throw new SDKCompressionError('INVALID_INPUT',
         `${label} must be a Buffer, Uint8Array, or string.`);
+}
+
+// A ratio limit that is not a number would make every ceiling comparison false
+// and silently switch the guard off, so anything unusable (NaN, a non-numeric
+// string, null, an object) falls back to the canonical default instead.
+function resolveMaxRatio(value) {
+    if (typeof value === 'number' && !Number.isNaN(value)) return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+        let parsed = Number(value);
+        if (!Number.isNaN(parsed)) return parsed;
+    }
+    return COMPRESSION_MAX_RATIO;
 }
 
 function storedForm(input, error) {

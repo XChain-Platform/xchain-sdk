@@ -1,3 +1,16 @@
+/*********************************************************************
+ *
+ * Copyright © 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************/
 // Unit coverage for src/addressRefFields.js, the canonical map of which
 // ACTION params carry an ADDRESS value (a consensus surface: it decides which
 // values become ^id references). The SDK's general path compacts only the

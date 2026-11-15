@@ -88,9 +88,11 @@ function buildCreateTxParams(params) {
     if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
     if (params.feeQuote !== undefined)         rpcParams.feeQuote = params.feeQuote;
     // Ask the encoder to attach each segwit input's full previous
-    // transaction. Only a hardware signer needs it (see the encoder's own
-    // note), and it costs a node round trip plus real PSBT weight per
-    // input, so it is opt-in per request rather than always-on.
+    // transaction. It costs a node round trip plus real PSBT weight per
+    // input, so this raw client sends it only when asked. The reconciled
+    // submit, reveal, estimate and message paths ask by default, because a
+    // fee judged on amounts the encoder merely states is not bound to the
+    // signatures.
     if (params.attachPrevTx !== undefined)     rpcParams.attachPrevTx = params.attachPrevTx;
 
     // Transparent FILE payload compression. Tri-state on the

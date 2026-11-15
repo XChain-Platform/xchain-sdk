@@ -181,10 +181,12 @@ module.exports = {
         const messageIsBytes = validateSendParams(params, sdk);
         const actionParams = await buildMessageActionParams(this, params, sdk, messageIsBytes);
 
+        const encoder = Object.assign({}, params.encoder);
+        if (encoder.attachPrevTx === undefined) encoder.attachPrevTx = true;
         let actionResult = await sdk.createAction({
             action: 'MESSAGE',
             params: actionParams,
-            encoder: params.encoder
+            encoder
         });
 
         // Reconcile the encoder's outputs and fee on every wallet; a missing network only means an address it cannot parse authorizes nothing

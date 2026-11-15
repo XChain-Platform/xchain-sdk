@@ -20,10 +20,11 @@ const { isBytes, toBuffer, bytesEqual } = require('../../utils/bytes');
 
 // Satoshi values arrive as Number OR BigInt: applyBufferutilsPatch teaches
 // bip174/bitcoinjs to carry values above 2^53-1 (large DOGE UTXOs) as BigInt.
-// All arithmetic here is BigInt so a >2^53 value is neither rejected nor rounded.
+// A Number must be safe because an unsafe one has already been rounded; see
+// exactU64 below. All arithmetic here remains BigInt.
 function toU64(v) {
     if (typeof v === 'bigint') return v;
-    if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return BigInt(v);
+    if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) return BigInt(v);
     return null;
 }
 

@@ -21,6 +21,7 @@
 // Loading the betting constants here is cycle-safe; decoder parsing remains
 // deferred in the prototype part because it leads back to the validator.
 const { BET_LIMITS } = require('../../actions/betting.js');
+const { MAX_FEED_FEE_LENGTH } = require('../../actions/betting/bet_rules.js');
 
 // Validates market labels together because they define the displayed outcomes.
 function validateBetLabels(validator, fields, limits, errors) {
@@ -74,6 +75,10 @@ function validateBetTerms(validator, fields, limits, errors) {
             errors.push(validator.buildError('INVALID_FIELD_VALUE',
                 'FEE must be at most ' + limits.MAX_FEED_FEE + ' percent',
                 { field: 'FEE', value: fee, constraint: { max: limits.MAX_FEED_FEE } }));
+        else if (fee.length > MAX_FEED_FEE_LENGTH)
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'FEE must be at most ' + MAX_FEED_FEE_LENGTH + ' characters as written (leading zeros count)',
+                { field: 'FEE', value: fee, constraint: { max: MAX_FEED_FEE_LENGTH } }));
     }
 
     // DEADLINE is a Unix timestamp. "In the future" is a block-time

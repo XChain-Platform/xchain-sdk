@@ -164,9 +164,9 @@ const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
 //
 // Enforced IDENTICALLY by the hub (every PBFT tally engine), the indexer
 // (every settlement-signature gate + recovery), and the sdk/explorer/sync
-// verifiers. All five keep a local copy of this map; the cross-service
-// regression suite asserts they equal these values, so the activation height
-// can never silently diverge (a divergence forks the chain).
+// verifiers. The SDK holds this literal (wallet export) and the registry row
+// stake_weighted_quorum.STAKE_WEIGHTED_QUORUM_ACTIVATION (gate_registry/shared_rows_3.js); the
+// tests archive_match_count_mirror (by value) and consensus_primitive_conformance (byte for byte) bind each to the docs canon.
 //
 // mainnet is ARMED (2026-07-07) to a concrete near-term height: 961000, the
 // BTC-anchored flag-day at which mainnet flips from the count-based quorum
@@ -184,9 +184,9 @@ const STAKE_WEIGHTED_QUORUM_ACTIVATION = {
 // consensus canonical is prefixed with a uniform signed header
 // `EQUIV|<ENGINE_TAG>|<ROUND_ID>|<VIEW>||<CONTENT>`. This is consensus-breaking (it changes the
 // signed preimage of every settlement/checkpoint/price/attestation signature + the config-change
-// PBFT canonical), so it is gated, kept byte-identical to the local copies in
-// xchain-{hub,indexer,sdk,explorer,sync}/src/equivocation_header.js by the
-// cross-service regression suite, and must deploy hub + ALL indexers atomically. Its sole
+// PBFT canonical), so it is gated, held by the registry row
+// equivocation_header.EQUIV_HEADER_ACTIVATION (gate_registry/shared_rows_2.js) as well as this
+// literal, bound by the tests named at STAKE_WEIGHTED_QUORUM_ACTIVATION, and must deploy hub + ALL indexers atomically. Its sole
 // consumer is the SLASH v0 equivocation-slashing action, which is only constructible from
 // post-flag-day (header-carrying) messages. Same ARMED height and deploy-by convention as
 // STAKE_WEIGHTED_QUORUM_ACTIVATION: mainnet is armed to 961000 (2026-07-07; BTC anchor
@@ -234,9 +234,9 @@ const STATE_COMMITMENT_ACTIVATION = {
 // checkpoint canonical, exactly like STAKE_WEIGHTED_QUORUM_ACTIVATION / EQUIV_HEADER_ACTIVATION, so the
 // hub and the BTC/LTC/DOGE indexers all flip the SIGNED shape on the same anchor. The operator MUST pick
 // a snapshot_block at/after which every checkpointed chain is already past its own STATE_COMMITMENT
-// flag-day (else the engine would have no roots to sign). Kept byte-identical to the local copies in
-// xchain-{hub,indexer,sdk,explorer,sync}/src/checkpoint_commitment_activation.js (sync consumes it at
-// checkpoint.js to decide whether to expect the roots) by the cross-service regression suite. Same
+// flag-day (else the engine would have no roots to sign). Also held by the registry row
+// checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION (gate_registry/shared_rows_2.js, read by
+// checkpoint.js to decide whether to expect the roots), bound by the tests named at STAKE_WEIGHTED_QUORUM_ACTIVATION. Same
 // ARMED height and deploy-by convention as the maps above: mainnet is armed to 961000
 // (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
 const CHECKPOINT_COMMITMENT_ACTIVATION = {

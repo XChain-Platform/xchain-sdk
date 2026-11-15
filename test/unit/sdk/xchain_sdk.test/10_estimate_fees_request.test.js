@@ -94,8 +94,9 @@ describe('XChainSDK', function () {
             const estimate = sinon.stub(sdk.encoder, 'estimateFee').resolves({ psbt: plainPsbt(), encoding: 'OP_RETURN' });
             await sdk.estimateFees(SEND, { pubkey: 'mypub' });
             const sent = estimate.firstCall.args[0];
-            for (const key of ['compress', 'feeQuote', 'rawData', 'sourceAddress', 'attachPrevTx'])
+            for (const key of ['compress', 'feeQuote', 'rawData', 'sourceAddress'])
                 expect(Object.prototype.hasOwnProperty.call(sent, key), key).to.equal(false);
+            expect(sent.attachPrevTx).to.equal(true);
         });
 
         it('keeps the native-fee output when the caller also passes customOutputs', async function () {

@@ -781,8 +781,8 @@ export interface NetworkSummary {
         block: number;
         /** Unix time of the tip block (0 when the chain is empty) */
         time: number;
-        /** Unconfirmed XChain-carrying transactions (0 when the decoder is unreachable) */
-        unconfirmed: number;
+        /** Unconfirmed XChain-carrying transactions; null when a configured decoder endpoint cannot answer, which is unknown and not an empty mempool */
+        unconfirmed: number | null;
         /** The coin node's TOTAL mempool count, XChain or not; null when no decoder API resolves */
         unconfirmed_node?: number | null;
     };
@@ -1346,14 +1346,14 @@ export declare const AttestationHelpers: {
 
 /*
  *  GatedFileUtils: AES-256-GCM encryption / key-handoff (de)serialization
- *  for FILE v1 token-gated content.
+ *  for token-gated FILE content (format 0).
  *  Spec: protocol/token-gated-content.md
  */
 
 export interface GenerateKeyResult {
     /** 32-byte symmetric key */
     key: Buffer;
-    /** hex sha256(key), matches the FILE v1 KEY_HASH field */
+    /** hex sha256(key), matches the gated FILE KEY_HASH field */
     keyHash: string;
 }
 
@@ -2452,7 +2452,7 @@ export declare class XChainSDK {
     readonly controller: ControllerHelpers;
 
     /**
-     * AES-256-GCM encryption / key-handoff utilities for FILE v1 token-gated content.
+     * AES-256-GCM encryption / key-handoff utilities for token-gated FILE content (format 0).
      * Spec: protocol/token-gated-content.md
      */
     readonly gatedFile: GatedFileUtils;

@@ -59,6 +59,7 @@ function buildTransactionRequest(manager, actionData, encoderOpts, resolvedParam
     // Map optional encoder fields through the shared list so createTx additions
     // such as feeQuote, compression options and sourceAddress are retained.
     EncoderClient.pickCreateTxOptions(encoderOpts, txParams);
+    if (txParams.attachPrevTx === undefined) txParams.attachPrevTx = true;
     return { createResult, txParams };
 }
 

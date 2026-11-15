@@ -16,7 +16,10 @@ const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checko
 const { FINDING_CODES } = require('../../../../src/preflight/constants.js');
 const { declareAmountRepresentability } = require('../../../../src/preflight/checks/dispenser/amount_rules.js');
 
-const INDEXER = path.join(__dirname, '..', '..', '..', '..', '..', 'xchain-indexer', 'src', 'protocol_changes');
+// The checkout the run was pointed at wins, exactly as the other indexer readers resolve it.
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '..', '..', '..', '..', '..');
+const INDEXER = path.resolve(process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR
+    || path.join(SIBLING_ROOT, 'xchain-indexer'), 'src', 'protocol_changes');
 let indexerDir = null;
 const read = (f) => fs.readFileSync(path.join(indexerDir, f), 'utf8');
 

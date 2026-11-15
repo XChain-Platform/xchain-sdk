@@ -111,6 +111,14 @@ describe('decoder.parse', function () {
             expect(at(MAX_ACTION_DATA_LENGTH).ok).to.equal(true);
             expect(at(MAX_ACTION_DATA_LENGTH + 1).code).to.equal('TOO_LONG');
         });
+
+        it('strictWire uses a named carrier ceiling without relaxing the default', function () {
+            const large = 'BROADCAST|0|' + 'm'.repeat(9000);
+            expect(parse(large, { strictWire: true, validate: false, carrier: 'TAPROOT' }).ok)
+                .to.equal(true);
+            expect(parse(large, { strictWire: true, validate: false, carrier: 'OP_RETURN' }).code)
+                .to.equal('TOO_LONG');
+        });
     });
 });
 

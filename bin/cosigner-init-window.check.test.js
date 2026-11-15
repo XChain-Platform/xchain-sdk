@@ -77,7 +77,8 @@ describe('cosigner-init-window CLI', () => {
             const parsed = JSON.parse(snapshot.content);
             assert.deepStrictEqual(parsed.entries, []);
             assert.ok(Number.isFinite(parsed.lastSeen) && parsed.lastSeen > 0);
-            assert.deepStrictEqual(Object.keys(parsed).sort(), ['entries', 'lastSeen']);
+            assert.strictEqual(parsed.hours, 24);
+            assert.deepStrictEqual(Object.keys(parsed).sort(), ['entries', 'hours', 'lastSeen']);
             assert.strictEqual(fs.existsSync(`${file}.lock`), false);
         });
 

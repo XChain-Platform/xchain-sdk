@@ -37,7 +37,8 @@ function fixture(outputs) {
     prev.addOutput(script, 100000);
     const psbt = new bitcoin.Psbt({ network: net });
     for (const index of [0, 1])
-        psbt.addInput({ hash: prev.getId(), index, sequence: 0xfffffffd, witnessUtxo: { script, value: 100000 } });
+        psbt.addInput({ hash: prev.getId(), index, sequence: 0xfffffffd,
+            witnessUtxo: { script, value: 100000 }, nonWitnessUtxo: prev.toBuffer() });
     for (const out of outputs(script, prev.getId())) psbt.addOutput(out);
     return { wallet, kp, script, psbt, txid: prev.getId() };
 }

@@ -226,6 +226,12 @@ module.exports = {
                 if (denial) return denial;
                 continue;
             }
+            // A cancel skips policy and window charging only because it returns
+            // value to this account. Do not let an allow-list turn that exemption
+            // into a second, unjudged payment.
+            if (env && env.role === 'cancel')
+                return this.deny('UNAUTHORIZED_OUTPUT', { index: i, value: out.value,
+                    detail: 'an envelope cancel may only return value to the account' });
             const match = this.allowedOutputs.find((a) => bytesEqual(out.script, a.script));
             if (match) {
                 const denial = checkAllowedOutput(this, out, i, match, spent);
@@ -254,11 +260,11 @@ module.exports = {
     // Returns a denial object, or null when the fee is within bounds.
     // Values arrive as Number OR BigInt: apply_bufferutils_patch.js teaches
     // bip174/bitcoinjs to carry satoshi values above 2^53-1 (e.g. large DOGE
-    // UTXOs) as BigInt (see narrowU64). The arithmetic below is done entirely
-    // in BigInt so a >2^53 value is neither rejected outright nor rounded.
+    // UTXOs) as BigInt (see narrowU64). A Number must be safe because an unsafe
+    // one has already been rounded; see exactU64 above. Arithmetic stays BigInt.
     toU64(v) {
         if (typeof v === 'bigint') return v;
-        if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return BigInt(v);
+        if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) return BigInt(v);
         return null;
     },
 

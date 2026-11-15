@@ -62,6 +62,9 @@ const SPLIT_ADDED = {
     BettingHelpers: [
         ['editMarketListsParams', false, true, true, 'function', 0],
     ],
+    WindowStore: [
+        ['hours', false, null, true, 'accessor', null],
+    ],
     // Not a split: the cross-field consensus rules (validator/consensus_action_rules.js)
     // arrived after it, installed by the same installer with the same flags.
     Validator: [

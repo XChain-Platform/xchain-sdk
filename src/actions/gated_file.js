@@ -14,7 +14,7 @@
  *
  * XChain Platform SDK - Token-Gated File Utilities
  *
- * AES-256-GCM symmetric encryption for FILE v1 gated content,
+ * AES-256-GCM symmetric encryption for gated FILE content (format 0),
  * key-handoff payload (de)serialization, and pack helpers.
  *
  * The handoff payload is a compact binary blob:
@@ -152,7 +152,7 @@ class GatedFileUtils {
      * before attempting to decrypt the ciphertext.
      *
      * @param {Buffer} key - 32-byte symmetric key.
-     * @param {string} keyHash - hex sha256(key) from the FILE v1 action.
+     * @param {string} keyHash - hex sha256(key) from the gated FILE action.
      * @returns {boolean}
      */
     verifyKey(key, keyHash) {

@@ -90,7 +90,8 @@ const BATCH_ACTION_LIMITS = BATCH_ACTION_LIMITS_ACTIVE;
  *                  form: 1-2 digit VERSION, no legacy VERSION injection, no
  *                  trim, extra segments a FIELD_COUNT_MISMATCH failure. For
  *                  callers that must refuse anything non-canonical (the
- *                  co-signer), with its unchanged raw-length size gate.
+ *                  co-signer). A named carrier selects that carrier's ceiling;
+ *                  without one, the legacy raw-length gate remains in force.
  * @param {string} [opts.carrier]  OP_RETURN, P2SH, P2WSH or MULTISIGN bound the
  *                  compiled push at MAX_ACTION_DATA_LENGTH; TAPROOT or no carrier
  *                  only at ENVELOPE_MAX_PAYLOAD, so nothing the chain stores is
@@ -109,15 +110,15 @@ function parse(input, opts = {}) {
 
     // Rule 1: input-size gate FIRST, on the raw input, before any
     // split, alias lookup, regex, or UTF-8 work. Measured per carrier as the
-    // on-chain decoder measures it (see opts.carrier); strictWire keeps the
-    // raw-length gate.
+    // on-chain decoder measures it (see opts.carrier). A strictWire caller that
+    // does not name a carrier keeps the legacy raw-length gate.
     const rawLength = isBytes(input)
         ? input.length
         : Buffer.byteLength(String(input), 'utf8');
-    if (strictWire && rawLength > MAX_ACTION_DATA_LENGTH)
+    if (strictWire && !opts.carrier && rawLength > MAX_ACTION_DATA_LENGTH)
         return failure('TOO_LONG', rawLength + ' bytes > ' + MAX_ACTION_DATA_LENGTH);
     const ceiling = carrierCeiling(rawLength, opts.carrier);
-    if (!strictWire && ceiling.size > ceiling.limit)
+    if ((!strictWire || opts.carrier) && ceiling.size > ceiling.limit)
         return failure('TOO_LONG', rawLength + ' bytes measure ' + ceiling.size + ' > ' + ceiling.limit);
 
     const decoded = toText(input);

@@ -173,12 +173,12 @@ function primeBigIntSafeAmts(psbt) {
     if (fee < 0n) {
         throw new Error('Outputs are spending more than Inputs')
     }
-    // Fees are always tiny relative to 2^53; Number() is exact in practice
-    // and the cached fee is only used for the fee-rate sanity check anyway.
-    const feeNumber = Number(fee)
-    c.__FEE = feeNumber
+    // Same reader rule as the amounts: a Number while exact, a BigInt above 2^53-1.
+    // The rate stays a Number (stock multiplies it by the vsize) and is divided
+    // while the fee is still exact.
+    c.__FEE = narrowU64(fee)
     c.__EXTRACTED_TX = tx
-    c.__FEE_RATE = Math.floor(feeNumber / tx.virtualSize())
+    c.__FEE_RATE = Number(fee / BigInt(tx.virtualSize()))
 }
 
 // Would stock's Number sums round? Values are non-negative, so every partial sum is

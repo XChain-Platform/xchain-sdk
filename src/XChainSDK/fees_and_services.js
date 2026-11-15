@@ -90,6 +90,7 @@ async function resolveNativeFeeOutputs(sdk, actionData, opts, source) {
 // returns describes the transaction submitAction would build for the same options.
 function buildFeeEstimateRequest(result, encoderOpts, customOutputs) {
     const req = EncoderClient.pickCreateTxOptions(encoderOpts, {});
+    if (req.attachPrevTx === undefined) req.attachPrevTx = true;
     // Excluded on purpose: the AUTO capability hint lets the encoder answer with an
     // envelope pair, which this method can price but never return signable.
     delete req.options;

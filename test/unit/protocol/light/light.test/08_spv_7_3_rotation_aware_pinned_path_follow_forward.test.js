@@ -207,9 +207,9 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
 
     it('followForward adopts a rotated checkpoint proven against the trusted stakes_root', async function () {
         const s1 = rsigner();
-        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
         const cp0 = pinnedCp(vs.stateRoot);                       // commits the set that signs cp1
-        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 110, checkpoint_seq: 1,
+        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 106, checkpoint_seq: 1,
             state_root: 'dd'.repeat(32), state_root_version: 1, block_merkle_root: 'bb'.repeat(32),
             block_merkle_version: 1, validator_signatures: [] }, [s1]);
         const f = spyFetch([['/api/checkpoints/range', { checkpoints: [cp1] }], ['/api/proof/validator-set', { proof: vs.proof }]]);
@@ -221,9 +221,9 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
 
     it('followForward STOPS at a checkpoint the proven set does not sign (QUORUM_FAILED)', async function () {
         const s1 = rsigner(), rogue = rsigner();
-        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
         const cp0 = pinnedCp(vs.stateRoot);
-        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 110, checkpoint_seq: 1,
+        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 106, checkpoint_seq: 1,
             state_root: 'dd'.repeat(32), state_root_version: 1, block_merkle_root: 'bb'.repeat(32),
             block_merkle_version: 1, validator_signatures: [] }, [rogue]);   // signed by a key NOT in the proven set
         const f = spyFetch([['/api/checkpoints/range', { checkpoints: [cp1] }], ['/api/proof/validator-set', { proof: vs.proof }]]);
@@ -235,9 +235,9 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
 
     it('followForward STOPS when the validator-set proof does not bind to the trusted root', async function () {
         const s1 = rsigner();
-        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
         const cp0 = pinnedCp('ff'.repeat(32));                     // trusted root the VS proof can't bind into
-        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 110, checkpoint_seq: 1,
+        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 106, checkpoint_seq: 1,
             state_root: 'dd'.repeat(32), state_root_version: 1, block_merkle_root: 'bb'.repeat(32),
             block_merkle_version: 1, validator_signatures: [] }, [s1]);
         const f = spyFetch([['/api/checkpoints/range', { checkpoints: [cp1] }], ['/api/proof/validator-set', { proof: vs.proof }]]);
@@ -257,10 +257,10 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
 
     it('verifyBalance follows the pinned root forward to a rotated checkpoint and verifies (no /verify)', async function () {
         const launch = rsigner(), s1 = rsigner();               // launch set rotated OUT; s1 signs in its place
-        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
         const cp0 = pinnedCp(vs.stateRoot);
         const bal = buildBalanceProof(ADDR_A, TICK, '42', 110);  // served at cp1's height
-        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 110, checkpoint_seq: 1,
+        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 106, checkpoint_seq: 1,
             state_root: bal.stateRoot, state_root_version: 1, block_merkle_root: 'bb'.repeat(32),
             block_merkle_version: 1, validator_signatures: [] }, [s1]);
         const f = spyFetch([
@@ -279,10 +279,10 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
 
     it('verifyBalance rotation fails closed (CHECKPOINT_QUORUM_FAILED, no /verify) when the walk cannot reach the served checkpoint', async function () {
         const launch = rsigner(), s1 = rsigner();
-        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
         const cp0 = pinnedCp(vs.stateRoot);
         const bal = buildBalanceProof(ADDR_A, TICK, '42', 110);  // served at cp1's height
-        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 110, checkpoint_seq: 1,
+        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 110, snapshot_block: 106, checkpoint_seq: 1,
             state_root: bal.stateRoot, state_root_version: 1, block_merkle_root: 'bb'.repeat(32),
             block_merkle_version: 1, validator_signatures: [] }, [s1]);
         const f = spyFetch([
@@ -306,10 +306,10 @@ describe('SPV §7.3: rotation-aware pinned path (followForward)', function () {
 
     it('verifyAction also follows the pinned root forward across rotation', async function () {
         const launch = rsigner(), s1 = rsigner();
-        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 210);
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
         const cp0 = pinnedCp(vs.stateRoot);
         const act = buildActionProof(210);                       // served at cp1's height, action_index 11
-        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 210, snapshot_block: 210, checkpoint_seq: 1,
+        const cp1 = signCp({ chain: CHAIN, network: NET, block_index: 210, snapshot_block: 106, checkpoint_seq: 1,
             state_root: 'cc'.repeat(32), state_root_version: 1, block_merkle_root: act.blockMerkleRoot,
             block_merkle_version: 1, validator_signatures: [] }, [s1]);
         const f = spyFetch([
@@ -355,11 +355,11 @@ describe('SPV §7.3: followForward refuses range steps that roll back or leave t
 
     it('skips a genuinely signed step at or below the trusted height and adopts the next one', async function () {
         const s1 = rsigner();
-        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
         const cp0 = pinnedCp(vs.stateRoot);
         const older = stepAt(90, [s1]);
         const same = stepAt(100, [s1]);
-        const f = spyFetch([['/api/checkpoints/range', { checkpoints: [older, same, stepAt(110, [s1])] }],
+        const f = spyFetch([['/api/checkpoints/range', { checkpoints: [older, same, stepAt(110, [s1], { snapshot_block: 106 })] }],
             ['/api/proof/validator-set', { proof: vs.proof }]]);
         const r = await light.followForward({ explorerUrl: 'https://x', btcCoin: COIN, trustedCheckpoint: cp0, toHeight: 110, fetchImpl: f });
         assert.strictEqual(r.reason, null, r.reason);

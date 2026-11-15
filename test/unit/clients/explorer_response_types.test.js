@@ -310,6 +310,20 @@ describe('explorer response types in index.d.ts', function () {
                 assert.match(body, new RegExp('^ {8}' + key + '\\??:', 'm'), 'NetworkSummary.network lacks ' + key);
             }
         });
+
+        it('types network.unconfirmed nullable, as the explorer OpenAPI schema does', function () {
+            const nestedType = (body, key) => {
+                const m = new RegExp('^ {8}' + key + '\\??:\\s*(.+?);?$', 'm').exec(body);
+                assert.ok(m, 'NetworkSummary.network lacks ' + key);
+                return m[1];
+            };
+            const body = interfaceBody(dts, 'NetworkSummary');
+            const schema = explorerSchema(this, 'NetworkResponse');
+            for (const key of ['unconfirmed', 'unconfirmed_node']) {
+                assert.ok(/\|\s*null\b/.test(nestedType(body, key)), key + ' must admit null in index.d.ts');
+                assert.ok(schemaNullable(schema.properties.network.properties[key].type), key + ' must admit null in the OpenAPI schema');
+            }
+        });
     });
 });
 

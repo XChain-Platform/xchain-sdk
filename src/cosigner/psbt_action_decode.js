@@ -133,7 +133,7 @@ function decodeActionFromPsbt(psbtOrHex, opts = {}) {
         ? extractEnvelopeActionString(psbtObj)
         : extractInlineActionString(psbtOrHex, opts);
     if (!extracted.ok) return extracted;
-    return judgeActionString(extracted.actionString);
+    return judgeActionString(extracted.actionString, carriesEnvelope ? 'TAPROOT' : undefined);
 }
 
 /*
@@ -156,7 +156,7 @@ function decodeEnvelopeAction(script) {
     let actionString;
     try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
     catch (e) { return fail('NOT_UTF8'); }
-    return judgeActionString(actionString);
+    return judgeActionString(actionString, 'TAPROOT');
 }
 
 function resolveActionFormat(segments) {
@@ -218,7 +218,7 @@ function validateActionShape(action, version, fieldNames) {
     return { ok: true, bounded };
 }
 
-function parseActionParams(actionString, action, version, bounded) {
+function parseActionParams(actionString, action, version, bounded, carrier) {
     // BATCH bundles N sub-commands into one action. The evaluator judges a
     // SINGLE leg - one action, one amount, one tick - so it cannot bound a
     // bundle at all, and there is no version of it that it could.
@@ -235,9 +235,10 @@ function parseActionParams(actionString, action, version, bounded) {
     // flat single-leg dict the policy evaluator expects. The returned
     // actionString stays the RAW decoded string (contract frozen: aliases
     // are NOT rewritten in it), while action is the canonical name.
-    const parsed = parseActionString(actionString, { validate: false, strictWire: true });
+    const parsed = parseActionString(actionString, { validate: false, strictWire: true, carrier });
     if (!parsed.ok) {
         if (parsed.code === 'FIELD_COUNT_MISMATCH') return fail('FIELD_COUNT_MISMATCH', parsed.detail);
+        if (parsed.code === 'TOO_LONG') return fail('OVERSIZED', parsed.detail);
         return fail('UNKNOWN_ACTION', `${action} v${version}`);
     }
 
@@ -267,7 +268,7 @@ function parseActionParams(actionString, action, version, bounded) {
 // The single judgment path shared by the inline, envelope-reveal and
 // envelope-commit routes: format lookup, rest/multi-leg refusals, BATCH,
 // param extraction and charset validation.
-function judgeActionString(actionString) {
+function judgeActionString(actionString, carrier) {
     const segments = actionString.split('|');
     if (segments.length < 2) return fail('MALFORMED_ACTION_STRING');
 
@@ -277,7 +278,7 @@ function judgeActionString(actionString) {
     const shape = validateActionShape(format.action, format.version, format.fieldNames);
     if (!shape.ok) return shape;
 
-    return parseActionParams(actionString, format.action, format.version, shape.bounded);
+    return parseActionParams(actionString, format.action, format.version, shape.bounded, carrier);
 }
 
 /*
@@ -297,7 +298,7 @@ function judgeActionString(actionString) {
  *
  * @param {bitcoin.Psbt|string} psbtOrHex  a bitcoinjs Psbt or its hex
  * @param {object} [opts]   { network } for hex parsing
- * @returns { ok:true, actionString } | { ok:false, reason, detail }
+ * @returns { ok:true, actionString, pushes } | { ok:false, reason, detail }
  */
 function decodeActionStringFromPsbt(psbtOrHex, opts = {}) {
     return extractInlineActionString(psbtOrHex, opts);

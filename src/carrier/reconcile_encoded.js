@@ -66,10 +66,46 @@ function createDeny(psbtHex, label) {
     };
 }
 
+function trustedPrevTxMap(intent, deny) {
+    const map = new Map();
+    for (const raw of (Array.isArray(intent.trustedPrevTxs) ? intent.trustedPrevTxs : [])) {
+        try {
+            const bytes = Buffer.isBuffer(raw) ? raw
+                : (typeof raw === 'string' && /^(?:[0-9a-fA-F]{2})+$/.test(raw)
+                    ? Buffer.from(raw, 'hex') : null);
+            if (!bytes) return deny('UNRECONCILABLE_PSBT', 'trustedPrevTxs contains a non-transaction value');
+            const tx = bitcoin.Transaction.fromBuffer(bytes);
+            map.set(tx.getHash().toString('hex'), tx);
+        } catch (e) {
+            return deny('UNRECONCILABLE_PSBT', 'trustedPrevTxs contains an invalid transaction: ' + e.message);
+        }
+    }
+    return map;
+}
+
+function isTaprootScript(script) {
+    const b = Buffer.from(script);
+    return b.length === 34 && b[0] === bitcoin.opcodes.OP_1 && b[1] === 32;
+}
+
+function witnessAmountIsBound(psbt, i, trusted, deny) {
+    const data = psbt.data.inputs[i];
+    if (data.nonWitnessUtxo) return true;
+    const tx = trusted.get(psbt.txInputs[i].hash.toString('hex'));
+    if (!data.witnessUtxo || !tx) return false;
+    const out = tx.outs[psbt.txInputs[i].index];
+    let sameValue = false;
+    try { sameValue = !!out && BigInt(out.value) === BigInt(data.witnessUtxo.value); } catch (e) { /* false */ }
+    if (!out || !bytesEqual(out.script, data.witnessUtxo.script) || !sameValue)
+        return deny('INCONSISTENT_PREVOUT', 'input ' + i + ' witnessUtxo disagrees with trustedPrevTxs');
+    return true;
+}
+
 // Read signer-owned funding state once so output authorization uses proven scripts.
 // A P2SH input paying the caller key's P2SH-P2WPKH script is single-key as well.
 function readInputs(psbt, deny, intent) {
     const nestedOwn = callerNestedScripts(intent.callerIdentities, intent.network);
+    const trusted = trustedPrevTxMap(intent, deny);
     // Funding scripts authorize change only when unsigned AND single-key: the WIF must
     // finalize every input, so it alone controls them; a shared-key script (1-of-2) never qualifies.
     const fundingScripts = [];
@@ -77,12 +113,17 @@ function readInputs(psbt, deny, intent) {
     const spent = [];
     let totalIn = 0n;
     let feeComputable = true;
+    const unverified = [];
     for (let i = 0; i < psbt.txInputs.length; i++) {
         // Refuse UTXO fields that disagree: the key signs the nonWitnessUtxo prevout, so judging a forged witnessUtxo approves a drain
         try { findVerifiedPrevout(psbt, i); }
         catch (e) { return deny('INCONSISTENT_PREVOUT', e.message); }
         const script = inputScript(psbt, i);
         if (!script) return deny('UNRECONCILABLE_PSBT', 'input ' + i + ' carries no witnessUtxo or nonWitnessUtxo, so its funding script cannot be established');
+        const data = psbt.data.inputs[i];
+        const finalized = !!(data.finalScriptSig || data.finalScriptWitness);
+        if (!finalized && !isTaprootScript(script) && !witnessAmountIsBound(psbt, i, trusted, deny))
+            unverified.push(i);
         if (!inputPresigned(psbt, i)) {
             unsignedInputs++;
             if (singleKeyInput(psbt, i, script) || nestedOwn.some((s) => bytesEqual(s, script))) fundingScripts.push(script);
@@ -95,6 +136,9 @@ function readInputs(psbt, deny, intent) {
     // inputs but no signer-owned one, and it is denied below with its own reason
     // rather than mislabelled as input-less.
     if (!psbt.txInputs.length) return deny('UNRECONCILABLE_PSBT', 'the encoder returned a transaction with no inputs');
+    if (unverified.length >= 2)
+        return deny('UNVERIFIED_INPUT_VALUE', { inputs: unverified,
+            detail: 'two or more segwit-v0 input amounts are not bound to previous transactions; request attachPrevTx' });
     if (!unsignedInputs) return deny('NO_SIGNER_OWNED_INPUT',
         'every input in the encoder response already carries a signature, so none of them is the local signer\'s');
 
@@ -295,6 +339,8 @@ function reconcileFee(intent, inputs, outputs, deny) {
  *   requiredSpends {Array}    funding legs an EARLIER phase paid out that this PSBT
  *                             must consume as inputs, so value the SDK authorized by
  *                             shape is proven to come back rather than stay parked
+ *   trustedPrevTxs {Array}    raw transactions the SDK built and signed, which
+ *                             bind witness-only phase inputs to their real outputs
  *   maxPhaseFundingSats       absolute ceiling on the TOTAL value across this PSBT's
  *                  {number}   shaped funding legs, or null. maxFeeSats does not
  *                             bound them, so this is the caller's only value cap on

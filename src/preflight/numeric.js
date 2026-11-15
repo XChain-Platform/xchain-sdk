@@ -113,7 +113,7 @@ function sub(a, b) { return mathjs.format(mathjs.subtract(bn(a), bn(b)), { notat
 // band this family exists to get right, and it rounds UP, which a distribution
 // must never do.
 function mulFloor(a, b, decimals) {
-    const d = Number.isInteger(decimals) ? decimals : 0;
+    const d = (!util.isNull(decimals)) ? parseInt(decimals) : 0;
     const product = mathjs.multiply(bn(a), bn(b));
     const scale = mathjs.bignumber(10).pow(d);
     const floored = bn(product).times(scale).floor().div(scale);

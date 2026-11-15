@@ -46,6 +46,51 @@ const { addDecimal, UNRESOLVED_TICK_BUCKET } = require('../policy_evaluator.js')
 // absorb NTP slew and a coarse filesystem clock, far tighter than any window.
 const CLOCK_SKEW_TOLERANCE_MS = 60 * 1000;
 
+function assertRowsWellFormed(store, parsed) {
+    // Fail CLOSED on a structurally bad ROW, not just a bad file. pruned's
+    // `e.t >= cutoff` silently drops a row with a non-finite t (undefined >= n is
+    // false), and snapshot() quarantines an unaddable amount out of perTick: both
+    // LOWER a consumed budget, which is the wrong direction.
+    for (let i = 0; i < parsed.entries.length; i++) {
+        const e = parsed.entries[i];
+        let bad = null;
+        if (!e || typeof e !== 'object') bad = 'is not an object';
+        else if (!Number.isFinite(e.t)) bad = 'has a non-finite timestamp';
+        else if (e.amount !== undefined) {
+            // A count-only row (amount undefined) is legitimate and stays allowed.
+            try { addDecimal('0', e.amount); }
+            catch (err) { bad = 'has an unaddable amount (' + err.message + ')'; }
+        }
+        if (bad) {
+            const err = new Error(`co-signer window state at ${store._stateFile} entry ${i} ${bad}; ` +
+                `such a row is silently dropped from the window, which re-opens spending budget. ` +
+                `Inspect and repair the file deliberately rather than letting it reset.`);
+            err.code = 'WINDOW_STATE_CORRUPT';
+            throw err;
+        }
+    }
+}
+
+// Window length is part of the state's identity: a store opened for a shorter
+// window would age entries out early. Legacy state without it is stamped once.
+function reconcileHours(store, parsed) {
+    const legacyHours = parsed.hours === undefined;
+    if (!legacyHours && (!Number.isFinite(parsed.hours) || parsed.hours <= 0)) {
+        const err = new Error(`co-signer window state at ${store._stateFile} has invalid hours`);
+        err.code = 'WINDOW_STATE_CORRUPT';
+        throw err;
+    }
+    if (!legacyHours && parsed.hours !== store._hours) {
+        const err = new Error(`co-signer window state was created for ${parsed.hours}h but this `
+            + `store was opened for ${store._hours}h; changing the window can age entries out and `
+            + `re-open spent budget, so create a new state file deliberately`);
+        err.code = 'WINDOW_HOURS_MISMATCH';
+        throw err;
+    }
+    if (legacyHours) parsed.hours = store._hours;
+    return legacyHours;
+}
+
 module.exports = {
     load() {
         if (this._usage) return this._usage;
@@ -64,7 +109,7 @@ module.exports = {
                 err.code = 'WINDOW_STATE_MISSING';
                 throw err;
             }
-            this._usage = { entries: [], lastSeen: this._now() };
+            this._usage = { entries: [], lastSeen: this._now(), hours: this._hours };
             this.persist(this._usage);
             return this._usage;
         }
@@ -79,30 +124,11 @@ module.exports = {
             err.code = 'WINDOW_STATE_CORRUPT';
             throw err;
         }
-        // Fail CLOSED on a structurally bad ROW, not just a bad file. pruned's
-        // `e.t >= cutoff` silently drops a row with a non-finite t (undefined >= n is
-        // false), and snapshot() quarantines an unaddable amount out of perTick: both
-        // LOWER a consumed budget, which is the wrong direction.
-        for (let i = 0; i < parsed.entries.length; i++) {
-            const e = parsed.entries[i];
-            let bad = null;
-            if (!e || typeof e !== 'object') bad = 'is not an object';
-            else if (!Number.isFinite(e.t)) bad = 'has a non-finite timestamp';
-            else if (e.amount !== undefined) {
-                // A count-only row (amount undefined) is legitimate and stays allowed.
-                try { addDecimal('0', e.amount); }
-                catch (err) { bad = 'has an unaddable amount (' + err.message + ')'; }
-            }
-            if (bad) {
-                const err = new Error(`co-signer window state at ${this._stateFile} entry ${i} ${bad}; ` +
-                    `such a row is silently dropped from the window, which re-opens spending budget. ` +
-                    `Inspect and repair the file deliberately rather than letting it reset.`);
-                err.code = 'WINDOW_STATE_CORRUPT';
-                throw err;
-            }
-        }
+        assertRowsWellFormed(this, parsed);
+        const legacyHours = reconcileHours(this, parsed);
         this.applyClockGuards(parsed);
         this._usage = parsed;
+        if (legacyHours) this.persist(parsed);
         return this._usage;
     },
 

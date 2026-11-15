@@ -42,7 +42,8 @@ describe('MuSig2', function () { beforeEach(resetMuSig2);
             // depend on this rejection.
             const dup = h('02'.padEnd(66, '0'));
             expect(() => musig.aggregateKeys([dup, dup])).to.throw(/pairwise distinct/);
-            expect(() => musig.aggregateKeys([dup, h('03'.padEnd(66, '0')), dup]))
+            const distinctMiddle = h('02' + '00'.repeat(31) + '01');
+            expect(() => musig.aggregateKeys([dup, distinctMiddle, dup]))
                 .to.throw(/pairwise distinct/);
             // Hex and Uint8Array forms of the same key are the same participant.
             expect(() => musig.aggregateKeys([dup, '02'.padEnd(66, '0')]))

@@ -262,7 +262,7 @@ function validateAddressFields(validator, action, field, value, allFields, error
 function validateEncryptionMethodField(validator, action, field, value, allFields, errors) {
     // ENCRYPTION_METHOD validation (numeric in all contexts)
     // - MESSAGE: 1=ECIES, 2=ECDH, 3=AES (symmetric-with-pre-shared-key)
-    // - FILE v1 (gated): 1=AES-256-GCM. Other values reserved for future v1 algorithms.
+    // - FILE (gated, format 0): 1=AES-256-GCM. Other values are reserved for future algorithms.
     if (field === 'ENCRYPTION_METHOD') {
         if (action === 'FILE') {
             if (!validator.util.isValidValue(value, [1]))

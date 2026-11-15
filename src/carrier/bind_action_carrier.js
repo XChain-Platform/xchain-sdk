@@ -158,12 +158,19 @@ function mismatch(code, label, details) {
  * emit bare-multisig carrier outputs the decoder reads; with no read-back for
  * them here, assertCarrierBinding refuses any such output before this rule runs.
  */
-function assertInlineCarrier({ psbt, actionString, encoding, network, label }) {
+function assertInlineCarrier({ psbt, actionString, encoding, rawData, network, label }) {
     const decoded = decodeActionStringFromPsbt(psbt, network ? { network } : {});
     if (decoded.ok) {
         if (!carriedActionMatches(decoded.actionString, actionString))
             throw mismatch('CARRIER_ACTION_MISMATCH', label,
                 { submitted: actionString, carried: decoded.actionString });
+        if (!Array.isArray(decoded.pushes))
+            throw mismatch('CARRIER_UNREADABLE', label,
+                { submitted: actionString, reason: 'INLINE_PUSHES_MISSING' });
+        const rawDataCompressed = decoded.actionString !== actionString;
+        if (!rawDataMatches(decoded.pushes, rawData, rawDataCompressed))
+            throw mismatch('CARRIER_ACTION_MISMATCH', label,
+                { submitted: actionString, reason: 'RAW_DATA_MISMATCH' });
         return;
     }
     // Pass only the reasons that mean no inline action carrier is present.
@@ -202,7 +209,7 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ra
         throw mismatch('CARRIER_UNREADABLE', label,
             { submitted: actionString, reason: 'MULTISIG_CARRIER_UNSUPPORTED' });
 
-    assertInlineCarrier({ psbt, actionString, encoding, network, label });
+    assertInlineCarrier({ psbt, actionString, encoding, rawData, network, label });
 
     // The chunk lanes carry the LARGEST payloads inside redeem scripts, so no
     // PSBT-only check can see them. verifyCarrierScripts hashes the scripts the

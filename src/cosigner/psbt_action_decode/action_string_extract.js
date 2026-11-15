@@ -127,7 +127,7 @@ function extractInlineActionString(psbtOrHex, opts = {}) {
     try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
     catch (e) { return fail('NOT_UTF8'); }
 
-    return { ok: true, actionString };
+    return { ok: true, actionString, pushes: decompiled };
 }
 
 /*

@@ -26,7 +26,7 @@ const {
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateFileKeyHash(validator, action, field, value, allFields, errors) {
-    // FILE v1 gated-content fields
+    // Gated FILE fields (format 0)
     // The /i is deliberate and mirrors consensus: xchain-indexer accepts either
     // case and records the lowercase form, so tightening this to lowercase-only
     // would make the decoder's advisory findings disagree with chain validity on

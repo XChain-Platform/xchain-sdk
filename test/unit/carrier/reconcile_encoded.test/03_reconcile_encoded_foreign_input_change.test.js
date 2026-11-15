@@ -50,8 +50,13 @@ function psbtWithForeignInput(funding, outputs, foreignValue) {
     const foreignKey = ECPair.makeRandom({ network: NET });
     const foreign = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(foreignKey.publicKey), network: NET });
     const psbt = new bitcoin.Psbt({ network: NET });
-    psbt.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: funding.script, value: 100000 } });
-    psbt.addInput({ hash: 'ee'.repeat(32), index: 0, witnessUtxo: { script: foreign.output, value: foreignValue } });
+    const walletPrev = new bitcoin.Transaction(), foreignPrev = new bitcoin.Transaction();
+    walletPrev.addInput(crypto.randomBytes(32), 0); walletPrev.addOutput(funding.script, 100000);
+    foreignPrev.addInput(crypto.randomBytes(32), 0); foreignPrev.addOutput(foreign.output, foreignValue);
+    psbt.addInput({ hash: walletPrev.getHash(), index: 0, nonWitnessUtxo: walletPrev.toBuffer(),
+        witnessUtxo: { script: funding.script, value: 100000 } });
+    psbt.addInput({ hash: foreignPrev.getHash(), index: 0, nonWitnessUtxo: foreignPrev.toBuffer(),
+        witnessUtxo: { script: foreign.output, value: foreignValue } });
     for (const out of outputs(foreign)) psbt.addOutput(out);
     psbt.signInput(1, foreignKey);                                // the attacker signs its OWN input
     return { hex: psbt.toHex(), foreign };

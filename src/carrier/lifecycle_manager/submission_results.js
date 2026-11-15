@@ -74,6 +74,7 @@ function buildPhase2Request(signed, encoded, encoderOpts, carriedAction) {
     // Every createTx option the caller set, from the list createTx reads, so the
     // reveal keeps the hub feeQuote and whatever createTx gains next.
     const request = pickRevealOptions(encoderOpts);
+    if (request.attachPrevTx === undefined) request.attachPrevTx = true;
     // Chunk reveals must reproduce the stored payload exactly. Re-entering the
     // compression pass could produce a carrier that cannot spend the commit.
     if (carriedAction.encoderCompressed) request.compress = false;
@@ -88,13 +89,14 @@ function buildPhase2Request(signed, encoded, encoderOpts, carriedAction) {
 }
 
 // Reconcile, bind and sign phase 2 synchronously before its broadcast begins.
-function preparePhase2(manager, spendResult, reconcileState, createResult, wif) {
+function preparePhase2(manager, spendResult, reconcileState, createResult, wif, signed) {
     // The reveal must spend every shaped funding output from phase 1, which avoids
     // leaving undecodable carrier value under encoder control.
     reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileState.reconcileIntent, {
         label: 'phase-2 reveal',
         customOutputs: reconcileState.revealCustomOutputs,
         requiredSpends: reconcileState.phase1.phaseFunding,
+        trustedPrevTxs: [signed.txHex],
     }));
 
     // Phase-2 input scripts reveal the carrier committed by phase 1. This check
@@ -117,7 +119,7 @@ async function prepareChunkReveal(manager, state) {
     if (encoded.encoding !== 'P2SH' && encoded.encoding !== 'P2WSH') return null;
     progress('p2sh_spending', { phase1Txid: signed.txid });
     const spendResult = await encoder.spendP2sh(buildPhase2Request(signed, encoded, encoderOpts, carriedAction));
-    return { spendResult, spendSigned: preparePhase2(manager, spendResult, reconcileState, createResult, wif) };
+    return { spendResult, spendSigned: preparePhase2(manager, spendResult, reconcileState, createResult, wif, signed) };
 }
 
 // Update phase-2 tracking synchronously after its broadcast has succeeded.

@@ -110,6 +110,22 @@ function reconcileRecoveryFee(inputs, outputs) {
     return fee;
 }
 
+// Absurd-fee ceiling (sat/vB), checked before signing so a refused spend never
+// reaches a remote signer. Mirrors WalletUtils.resolveMaxFeeRate and the 5000
+// sat/vB default of bitcoinjs. Low-unit-value chains (e.g. DOGE) whose ordinary
+// fee-rate exceeds this must pass an explicit cfg.maximumFeeRate, or set
+// cfg.acceptHighFee to bypass the check entirely.
+function assertRecoveryFeeCeiling(cfg, fee, estimatedVsize) {
+    const maxFeeRate = (Number.isFinite(cfg.maximumFeeRate) && cfg.maximumFeeRate > 0)
+        ? cfg.maximumFeeRate : 5000;
+    // Compared in BigInt; flooring the rate only ever TIGHTENS the ceiling, the safe
+    // direction for an anti-burn guard (a no-op on the 5000 default).
+    if (!cfg.acceptHighFee && fee > BigInt(Math.floor(maxFeeRate)) * BigInt(estimatedVsize)) {
+        const shown = (Number(fee) / estimatedVsize).toFixed(1);
+        throw new Error(`recovery fee-rate ${shown} sat/vB exceeds the ${maxFeeRate} sat/vB ceiling (fee ${fee} sat); pass cfg.maximumFeeRate or cfg.acceptHighFee if intentional`);
+    }
+}
+
 /*
  * Build a finalized script-path recovery spend.
  *
@@ -149,6 +165,14 @@ async function buildRecoverySpend(cfg = {}) {
 
     const fee = reconcileRecoveryFee(inputs, outputs);
 
+    // The final witness shape is fixed, so an unsigned clone with same-sized
+    // placeholders gives the exact vsize before any remote signer sees a hash.
+    const sizer = tx.clone();
+    for (let i = 0; i < inputs.length; i++)
+        sizer.ins[i].witness = [Buffer.alloc(64), leaf.script, leaf.controlBlock];
+    const estimatedVsize = sizer.virtualSize();
+    assertRecoveryFeeCeiling(cfg, fee, estimatedVsize);
+
     // Every input spends the same account output (the prevout set the sighash
     // commits to). One tapleaf sighash + signature per input.
     const prevScripts = inputs.map(() => account.output);
@@ -165,20 +189,9 @@ async function buildRecoverySpend(cfg = {}) {
         tx.ins[i].witness = [sigBuf, leaf.script, leaf.controlBlock];
     }
 
-    // Absurd-fee ceiling (sat/vB), computed after the witnesses are attached so
-    // the vsize is accurate. Mirrors WalletUtils.resolveMaxFeeRate / bitcoinjs's 5000
-    // sat/vB default. Low-unit-value chains (e.g. DOGE) whose ordinary fee-rate
-    // exceeds this must pass an explicit cfg.maximumFeeRate, or set
-    // cfg.acceptHighFee to bypass the check entirely.
-    const maxFeeRate = (Number.isFinite(cfg.maximumFeeRate) && cfg.maximumFeeRate > 0)
-        ? cfg.maximumFeeRate : 5000;
-    // Compare in BigInt; flooring the rate only ever TIGHTENS the ceiling, the safe
-    // direction for an anti-burn guard (a no-op on the 5000 default).
-    const vsize = BigInt(tx.virtualSize());
-    if (!cfg.acceptHighFee && fee > BigInt(Math.floor(maxFeeRate)) * vsize) {
-        const shown = (Number(fee) / tx.virtualSize()).toFixed(1);
-        throw new Error(`recovery fee-rate ${shown} sat/vB exceeds the ${maxFeeRate} sat/vB ceiling (fee ${fee} sat); pass cfg.maximumFeeRate or cfg.acceptHighFee if intentional`);
-    }
+    // The fee check ran on the placeholder size, so the signed size must match it.
+    if (tx.virtualSize() !== estimatedVsize)
+        throw new Error('recovery witness size changed after the pre-sign fee check');
 
     return { txHex: tx.toHex(), txid: tx.getId() };
 }

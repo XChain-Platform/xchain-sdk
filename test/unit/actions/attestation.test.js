@@ -266,6 +266,13 @@ describe('AttestationHelpers.httpGet', function () {
         expect(() => Attestation.httpGet('https://[::1]/x')).to.throw(/SSRF/);
     });
 
+    it('refuses 6to4 and Teredo literals while allowing adjacent public IPv6 ranges', function () {
+        expect(() => Attestation.httpGet('https://[2002:a9fe:a9fe::]/x')).to.throw(/SSRF/);
+        expect(() => Attestation.httpGet('https://[2001::1]/x')).to.throw(/SSRF/);
+        expect(() => Attestation.httpGet('https://[2001:4860:4860::8888]/x')).to.not.throw();
+        expect(() => Attestation.httpGet('https://[2001:db8::1]/x')).to.not.throw();
+    });
+
     it('allowPrivate:true bypasses the IP-literal SSRF guard (regtest/e2e)', function () {
         expect(Attestation.httpGet({ url: 'https://10.0.0.5/price', allowPrivate: true })).to.equal('https://10.0.0.5/price');
     });

@@ -17,8 +17,10 @@ const os      = require('os');
 const path    = require('path');
 
 const crypto  = require('crypto');
+const { secp256k1 } = require('@noble/curves/secp256k1.js');
 
 const WindowStore = require('../../../../src/cosigner/window_store.js');
+const CoSigner = require('../../../../src/cosigner/co_signer.js');
 
 describe('WindowStore (fail-closed budget)', function () {
     let stateFile;
@@ -68,6 +70,38 @@ describe('WindowStore (fail-closed budget)', function () {
         try { new WindowStore(stateFile, 24); } catch (e) { err = e; }
         expect(err).to.not.equal(null);
         expect(err.code).to.equal('WINDOW_STATE_MISSING');
+    });
+});
+
+describe('WindowStore (window length identity)', function () {
+    let stateFile;
+    beforeEach(() => { stateFile = path.join(os.tmpdir(), `ws-${crypto.randomBytes(6).toString('hex')}.json`); });
+    afterEach(() => { try { fs.unlinkSync(stateFile); } catch (e) { /* ignore */ } });
+
+    it('pins hours in state and refuses to reopen with a different window', function () {
+        const first = new WindowStore(stateFile, 24, null, { init: true });
+        expect(JSON.parse(fs.readFileSync(stateFile, 'utf8')).hours).to.equal(24);
+        first.release();
+        let error;
+        try { new WindowStore(stateFile, 1); } catch (e) { error = e; }
+        expect(error.code).to.equal('WINDOW_HOURS_MISMATCH');
+        const correct = new WindowStore(stateFile, 24);
+        correct.release();
+    });
+
+    it('migrates a legacy state and rejects a store-policy mismatch', function () {
+        fs.writeFileSync(stateFile, JSON.stringify({ entries: [], lastSeen: Date.now() }));
+        const store = new WindowStore(stateFile, 1);
+        expect(JSON.parse(fs.readFileSync(stateFile, 'utf8')).hours).to.equal(1);
+        const a = crypto.randomBytes(32), b = crypto.randomBytes(32);
+        const config = { secretKey: b,
+            publicKeys: [secp256k1.getPublicKey(a, true), secp256k1.getPublicKey(b, true)],
+            policy: { allowedActions: new Set(['SEND']), maxPerWindow: { hours: 24, maxActions: 5 } },
+            windowStore: store };
+        let error;
+        try { new CoSigner(config); } catch (e) { error = e; }
+        expect(error.code).to.equal('WINDOW_HOURS_MISMATCH');
+        store.release();
     });
 });
 

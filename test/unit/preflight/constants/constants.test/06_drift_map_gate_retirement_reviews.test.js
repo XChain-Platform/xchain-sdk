@@ -53,7 +53,7 @@ function airdropFeeTallyReview() {
 function sendHandoffRetirementReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/').hash)
-        .to.equal('1591aa81bb189edbbdb088d5a75de8fab817e1669209ff4eff67d8150cb703ac');
+        .to.equal('341e27553187341c1539d52c47b2d3ab56f3f7bb22190403bfa95005e3971fa0');
     const heading = '### 2026-10-18 - GATED_HANDOFF_REF gate is retired';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
@@ -63,7 +63,7 @@ function sendHandoffRetirementReview() {
 function batchSnapshotReviews() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad');
+        .to.equal('c6ca292c4c8a52424f1fe7779c9b8361c41e5fbde17bb4ba6c5fb1c313dd1c13');
     const reviews = [
         ['### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot', '`7e138a16` to `e7d7825d`'],
         ['### 2026-10-20 - a BATCH\'s own status is restored off the probe path too', '`e7d7825d` to `9f1e45a3`']
@@ -83,7 +83,7 @@ function gasBalanceReadReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`ee30f903` to `0cbeede9`', '1591aa81bb189edbbdb088d5a75de8fab817e1669209ff4eff67d8150cb703ac'],
+        ['send', '`ee30f903` to `0cbeede9`', '341e27553187341c1539d52c47b2d3ab56f3f7bb22190403bfa95005e3971fa0'],
         ['destroy', '`597c2728` to `b172b6cc`', 'f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40'],
         ['mint', '`f69fdb91` to `998c2d88`', '998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48']
     ];
@@ -133,7 +133,7 @@ function notNullAmountWidthReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`6bd08ac4` to `82c77168`', '1591aa81bb189edbbdb088d5a75de8fab817e1669209ff4eff67d8150cb703ac'],
+        ['send', '`6bd08ac4` to `82c77168`', '341e27553187341c1539d52c47b2d3ab56f3f7bb22190403bfa95005e3971fa0'],
         ['destroy', '`56a05750` to `f6423fc8`', 'f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40'],
         ['stake', '`eef1360e` to `b38ea784`', 'b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc'],
     ];
@@ -246,13 +246,32 @@ function mintWindowReview() {
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     expect(entry).to.include('The `issue` pin moves from `48e96f75` to `259d0055`');
-    expect(text).to.include('**Pins taken at indexer commit:** `265c85c86`');
     expect(entry).to.include('validateStoredMintWindow');
     expect(entry).to.include('universal/prefixed_integers.js');
     expect(entry).to.include('**Direction: TIGHTENING, ungated.**');
 }
 
+// The BATCH probe's per-leg SEND fold re-pins send and batch and holds the anchor.
+function batchLegFoldReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    expect(rows.find((r) => r.handler === 'src/actions/send/').hash)
+        .to.equal('341e27553187341c1539d52c47b2d3ab56f3f7bb22190403bfa95005e3971fa0');
+    expect(rows.find((r) => r.handler === 'src/actions/batch/').hash)
+        .to.equal('c6ca292c4c8a52424f1fe7779c9b8361c41e5fbde17bb4ba6c5fb1c313dd1c13');
+    const heading = '### 2026-11-14 - a BATCH probe answers a multi-leg SEND sub-command with its first refused leg';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    expect(entry).to.include('The `send` pin moves from `1591aa81` to `341e2755`');
+    expect(entry).to.include('the `batch` pin moves from `9a5147d0` to `c6ca292c`');
+    expect(text).to.include('**Pins taken at indexer commit:** `f9d86586d`');
+    expect(entry).to.include('foldLegVerdicts');
+    expect(entry).to.include('NO CLIENT CHECK MOVES');
+    expect(entry).to.include('**Direction: NEUTRAL for validity.**');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
+    it('pins and records the BATCH probe multi-leg SEND fold review', batchLegFoldReview);
     it('pins and records the ISSUE prefixed mint window review', mintWindowReview);
     it('pins and records the ISSUE, DISPENSER, ORDER, SWAP and BET prefixed integer review', prefixedIntegerReview);
     it('pins and records the ISSUE, PRICE v1 and BET column-width review', columnWidthReview);

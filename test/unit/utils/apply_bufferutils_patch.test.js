@@ -1,3 +1,16 @@
+/*********************************************************************
+ *
+ * Copyright © 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************/
 // Unit coverage for the SDK's copy of src/utils/apply_bufferutils_patch.js. The SDK
 // patches bitcoinjs bufferutils so 64-bit amount fields round-trip through a
 // BigInt-safe path (values above 2^53 would otherwise silently corrupt on the

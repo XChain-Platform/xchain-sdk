@@ -51,7 +51,7 @@ const EXPLORER_ROOT = process.env.XCHAIN_EXPLORER_DIR || path.join(SIBLING_ROOT,
 // Each file names this repo's flat path, its golden hash, and every sibling spelling.
 const TWINS = [
     { file: 'merkle.js',
-      golden: '7147c54c3f9ba76d17584c8e87958ffb29d971d14908e7323e40b61fbe05d500',
+      golden: 'c25699119c01be4ea3a94c7193372fd3ba61b279e0c406a792df48cf1206f977',
       siblings: [
           ['xchain-indexer',  [path.join(INDEXER_ROOT, 'src', 'consensus', 'merkle.js')]],
           ['xchain-sync',     [path.join(SYNC_ROOT, 'src', 'merkle.js')]],

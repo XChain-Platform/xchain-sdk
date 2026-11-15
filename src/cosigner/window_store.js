@@ -167,6 +167,8 @@ class WindowStore {
         }
     }
 
+    get hours() { return this._hours; }
+
     // Publish the holder record and the lockfile NAME in one atomic step: build a
     // complete `<lock>.<pid>.tmp` first, then hardlink it into place. link() either
     // creates the name or fails EEXIST, and it can only ever create a name that
