@@ -23,6 +23,7 @@ const config = require('../config.js');
 const { SDKConfigError } = require('../utils/errors.js');
 const { buildCoinExplorers } = require('../utils/list/coin_explorers.js');
 const { isListTickCoinActive } = require('../protocol/list_tick_coin.js');
+const fileMultipart = require('../actions/workflows/file_multipart_publish.js');
 
 // Keep wallet and messaging delegates together so account-facing operations stay grouped.
 module.exports = {
@@ -71,6 +72,16 @@ module.exports = {
     // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.
     async getGatedFileRaw(actionIndex, coin = null) { return this.requireExplorer().getGatedFileRaw(actionIndex, coin); },
 
+    async getFileAssembly(actionIndex, coin = null) { return this.requireExplorer().getFileAssembly(actionIndex, coin); },
+
+    async waitForFileComplete(actionIndex, opts) {
+        return fileMultipart.waitForFileComplete.call(this, actionIndex, opts);
+    },
+
+    async publishMultipartFile(wif, bytes, meta, opts) {
+        return fileMultipart.publishMultipartFile.call(this, wif, bytes, meta, opts);
+    },
+
     // Absolute URL of a FILE action's raw bytes on the configured explorer:
     // the resolution target for TIS data_ref entries and on-chain TIS docs.
     fileRawUrl(actionIndex, coin = null) { return this.requireExplorer().fileRawUrl(actionIndex, coin); },
@@ -81,13 +92,13 @@ module.exports = {
      * and queries them in parallel.
      */
     async getAllMessagesForAddress(address, opts) {
-        let explorer = this.requireExplorer();
-        let network = this.options.network || config.env.network();
+        const explorer = this.requireExplorer();
+        const network = this.options.network || config.env.network();
         // Messages are looked up per network, so without one we would not know which chain to ask.
         if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');
 
-        let tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
-        let explorers = buildCoinExplorers(explorer, tier, ExplorerClient);
+        const tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
+        const explorers = buildCoinExplorers(explorer, tier, ExplorerClient);
 
         return this.messaging.getAllMessages(address, opts, explorers);
     },
