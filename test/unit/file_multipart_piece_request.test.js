@@ -57,7 +57,8 @@ describe('piece request shapes', function () {
         assert.strictEqual(request.compress, false);
         assert.strictEqual(request.feePerKb, 12500);
         assert.strictEqual(request.data, args.data);
-        assert.strictEqual(request.rawData, args.rawData);
+        assert.strictEqual(typeof request.rawData, 'string');
+        assert.ok(Buffer.from(request.rawData, 'binary').equals(Buffer.from(args.rawData)));
         assert.ok(!Object.hasOwn(request, 'unconfirmed'));
         assertNoUndefined(request);
     });

@@ -40,7 +40,10 @@ function commonParams({ pubkey, sourceAddress, rate, data, rawData }, encoding) 
         encoding,
         compress: false,
         feePerKb: rate * 1000,
-        rawData,
+        // The encoder RPC takes rawData as a binary string and rebuilds the bytes with
+        // Buffer.from(rawData, 'binary'); a Buffer is refused as not a string.
+        rawData: Buffer.isBuffer(rawData) || rawData instanceof Uint8Array
+            ? Buffer.from(rawData).toString('binary') : rawData,
     }, {
         pubkey,
         change: sourceAddress,
