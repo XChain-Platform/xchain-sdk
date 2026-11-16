@@ -197,6 +197,7 @@ describe('multipart fake chain raw reads', function () {
         let detail = (await chain.explorer().getAction(added.actionIndex)).data[0];
         expect(detail.multipart.status).to.equal('mismatch');
         part(chain, MISMATCH, 1, 'part-good', 'alice', 'confirmed', Buffer.from('expected'));
+        chain.drop('part-bad');
         detail = (await chain.explorer().getAction(added.actionIndex)).data[0];
         expect(detail.multipart.status).to.equal('mismatch');
         const error = await caught(chain.explorer().getGatedFileRaw(added.actionIndex));
