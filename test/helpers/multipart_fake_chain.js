@@ -111,6 +111,20 @@ function rawError(status, index, body) {
     );
 }
 
+function actionNotIndexedError(index, indexedThrough) {
+    const url = '/action/' + index;
+    const data = {
+        error: 'This action has not been indexed yet.',
+        code: 'ACTION_NOT_YET_INDEXED',
+        indexed_through: String(indexedThrough),
+    };
+    return new SDKExplorerError(
+        'EXPLORER_HTTP_404',
+        'Explorer returned HTTP 404 for ' + url,
+        { url, status: 404, data }
+    );
+}
+
 function rawFor(model, index) {
     const piece = indexedPieces(model).find((entry) => entry.actionIndex === index);
     if (!piece) throw rawError(404, index, { error: 'Not found', code: 'NOT_FOUND' });
@@ -172,7 +186,10 @@ function createExplorer(model, blockTimes, calls) {
         async getAction(index) {
             calls.push({ method: 'getAction', args: [index] });
             const piece = indexedPieces(model).find((entry) => entry.actionIndex === index);
-            return { data: piece ? [detailFor(model, piece)] : [] };
+            if (piece) return { data: [detailFor(model, piece)] };
+            const indexedThrough = model.nextActionIndex - 1;
+            if (index > indexedThrough) throw actionNotIndexedError(index, indexedThrough);
+            return { data: [] };
         },
         async getStatus() {
             calls.push({ method: 'getStatus', args: [] });

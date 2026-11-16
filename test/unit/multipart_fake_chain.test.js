@@ -129,11 +129,19 @@ describe('multipart fake chain transaction lifecycle', function () {
         expect(detail.multipart).to.include({ parts_received: 2, status: 'complete' });
     });
 
-    it('returns an empty action read before a future index is assigned', async function () {
+    it('rejects an action read above the highest assigned index', async function () {
         const chain = createFakeMultipartChain();
         const waiting = part(chain, RAW, 0, 'part-0', 'alice', 'mempool');
         expect(waiting.actionIndex).to.equal(null);
-        expect(await chain.explorer().getAction(0)).to.deep.equal({ data: [] });
+        const error = await caught(chain.explorer().getAction(0));
+        expect(error).to.be.instanceof(SDKExplorerError);
+        expect(error.code).to.equal('EXPLORER_HTTP_404');
+        expect(error.details).to.include({ status: 404, url: '/action/0' });
+        expect(error.details.data).to.deep.equal({
+            error: 'This action has not been indexed yet.',
+            code: 'ACTION_NOT_YET_INDEXED',
+            indexed_through: '-1',
+        });
         chain.mine();
         expect((await chain.explorer().getAction(0)).data[0].tx_hash).to.equal('part-0');
     });
@@ -147,7 +155,9 @@ describe('multipart fake chain transaction lifecycle', function () {
         expect(chain.actionIndexOf('part-0')).to.equal(null);
         expect(chain.mine()).to.deep.equal([]);
         expect(chain.piecesFor('alice')).to.have.length(1);
-        expect(await chain.explorer().getAction(0)).to.deep.equal({ data: [] });
+        const error = await caught(chain.explorer().getAction(0));
+        expect(error.code).to.equal('EXPLORER_HTTP_404');
+        expect(error.details.data.indexed_through).to.equal('-1');
     });
 
     it('returns an empty read for a dropped assigned action slot', async function () {
@@ -219,7 +229,11 @@ describe('multipart fake chain network reads and calls', function () {
                 { block_index: 1, block_time: 200 },
             ],
         });
-        expect(await explorer.getAction(12)).to.deep.equal({ data: [] });
+        const error = await caught(explorer.getAction(12));
+        expect(error.code).to.equal('EXPLORER_HTTP_404');
+        expect(error.details.data).to.include({
+            code: 'ACTION_NOT_YET_INDEXED', indexed_through: '-1',
+        });
         expect(chain.calls).to.deep.equal([
             { method: 'getStatus', args: [] },
             { method: 'get', args: ['/blocks', { limit: 2, sortorder: 'desc' }] },
