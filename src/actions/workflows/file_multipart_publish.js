@@ -254,9 +254,11 @@ function actionIndexOf(indexed, kind) {
     const top = indexed && Array.isArray(indexed.actions) ? indexed.actions
         : (indexed && Array.isArray(indexed.data) ? indexed.data : []);
     const rows = flattenActionRows(top).filter(Boolean);
-    const row = kind === 'manifest'
-        ? rows.find(item => item.action === 'FILE' && Number(item.action_format) === 1)
-        : rows.find(item => item.action === 'FILE');
+    // The explorer's transaction rows carry no action_format; a manifest transaction
+    // holds one FILE (beside a MESSAGE inside a gated BATCH), so the FILE row is it.
+    const files = rows.filter(item => item.action === 'FILE');
+    const row = (kind === 'manifest'
+        && files.find(item => Number(item.action_format) === 1)) || files[0];
     const source = row || (indexed && indexed.action_index !== undefined ? indexed : null);
     return source ? source.action_index : null;
 }
@@ -274,11 +276,11 @@ async function submitOneCall(sdk, piece, utxo, source, rate, opts, modules) {
     return result;
 }
 
-function reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules) {
+function reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules, signedCommitHex) {
     const network = sdk.wallet.getBitcoinNetwork();
     const callerXOnly = source.publicKey.subarray(1, 33);
     const funding = modules.assertEnvelopeCommitBinding({
-        commitPsbt: commit.psbt, revealPsbt: reveal.psbt, callerXOnly, network,
+        commitPsbt: commit.psbt, revealPsbt: reveal.psbt, callerXOnly, network, signedCommitHex,
     });
     const intent = { network, changeAddresses: source.sourceAddress,
         callerIdentities: source.pubkey, maxFeeSats: opts.maxFeeSats };
@@ -296,7 +298,7 @@ async function submitTwoStep(sdk, piece, utxo, source, rate, opts, modules) {
     const commit = await encoder.createTx(modules.twoStepCommitParams(params));
     const commitSigned = sdk.wallet.signPsbt(commit.psbt, opts.wif);
     const reveal = await encoder.createTx(modules.twoStepRevealParams(params, commitSigned.txHex));
-    reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules);
+    reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules, commitSigned.txHex);
     const revealSigned = sdk.wallet.signEnvelopeRevealPsbt(reveal.psbt, opts.wif);
     const recovery = modules.twoStepRecoveryRecord(reveal);
     if (typeof opts.onRecovery === 'function') opts.onRecovery(recovery, piece);

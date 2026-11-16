@@ -86,6 +86,21 @@ describe('single-WIF envelope commit binding', function () {
         expect(bind(pair)).to.throw(/caller-owned commit output/);
     });
 
+    it('binds a two-step reveal to the signed legacy commit, whose txid changed', function () {
+        const pair = pairFor();
+        const signed = pair.commit.__CACHE.__TX.clone();
+        signed.ins[0].script = Buffer.from('aabbcc', 'hex');
+        pair.reveal.__CACHE.__TX.ins[0].hash = signed.getHash();
+        expect(bind(pair)).to.throw(/caller-owned commit output/);
+        const withSigned = () => assertEnvelopeCommitBinding({ commitPsbt: pair.commit,
+            revealPsbt: pair.reveal, callerXOnly: CALLER_X, network: NET, signedCommitHex: signed.toHex() });
+        expect(withSigned).to.not.throw();
+        signed.outs[1].value = 1;
+        pair.reveal.__CACHE.__TX.ins[0].hash = signed.getHash();
+        expect(() => assertEnvelopeCommitBinding({ commitPsbt: pair.commit, revealPsbt: pair.reveal,
+            callerXOnly: CALLER_X, network: NET, signedCommitHex: signed.toHex() })).to.throw(/caller-owned commit output/);
+    });
+
     it('refuses any second reveal input spending another output of the commit', function () {
         const pair = pairFor();
         const commitTx = pair.commit.__CACHE.__TX;

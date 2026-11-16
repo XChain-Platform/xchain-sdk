@@ -313,8 +313,23 @@ function equalValue(a, b) {
 
 // Re-derive the single-leaf output from the caller key and bind it to both
 // halves of the encoder response before either transaction can be signed.
+// signedCommitHex: a two-step build signs the commit before the reveal is built, and a
+// legacy (P2PKH, P2SH) input's scriptSig changes the txid, so the reveal spends the
+// signed commit's txid; its outputs must still be the unsigned PSBT's.
+function commitTxOf(commit, signedCommitHex, label) {
+    if (!signedCommitHex) return commit.__CACHE && commit.__CACHE.__TX;
+    let signed;
+    try { signed = bitcoin.Transaction.fromHex(signedCommitHex); }
+    catch (e) { throw envelopeCommitMismatch(label, 'SIGNED_COMMIT_PARSE_FAILED', e.message); }
+    const outs = commit.txOutputs;
+    const same = signed.outs.length === outs.length && signed.outs.every((out, i) =>
+        bytesEqual(out.script, outs[i].script) && equalValue(out.value, outs[i].value));
+    if (!same) throw envelopeCommitMismatch(label, 'SIGNED_COMMIT_OUTPUTS_MISMATCH');
+    return signed;
+}
+
 function assertEnvelopeCommitBinding({ commitPsbt, revealPsbt, callerXOnly, network,
-                                       label = 'envelope commit' }) {
+                                       signedCommitHex, label = 'envelope commit' }) {
     const commit = asPsbt(commitPsbt, network);
     const reveal = asPsbt(revealPsbt, network);
     if (!commit || !reveal) throw envelopeCommitMismatch(label, 'PSBT_PARSE_FAILED');
@@ -332,7 +347,7 @@ function assertEnvelopeCommitBinding({ commitPsbt, revealPsbt, callerXOnly, netw
         throw envelopeCommitMismatch(label, 'CONTROL_BLOCK_MISMATCH');
     if (input0.tapInternalKey && !bytesEqual(input0.tapInternalKey, callerXOnly))
         throw envelopeCommitMismatch(label, 'INTERNAL_KEY_MISMATCH');
-    const tx = commit.__CACHE && commit.__CACHE.__TX;
+    const tx = commitTxOf(commit, signedCommitHex, label);
     const prevout = reveal.txInputs[0];
     if (!tx || !prevout || !bytesEqual(prevout.hash, tx.getHash()))
         throw envelopeCommitMismatch(label, 'COMMIT_TXID_MISMATCH');

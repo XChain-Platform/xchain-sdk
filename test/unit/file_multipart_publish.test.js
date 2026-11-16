@@ -150,7 +150,8 @@ async function submitResult(actionData, calls) {
     calls.submissions.push(actionData);
     const format = actionData.action === 'BATCH' || actionData.params.version === 1 ? 1 : 2;
     return { txid: 'tx-' + calls.submissions.length,
-        indexed: { actions: [{ action: 'FILE', action_format: format,
+        // The explorer's /tx rows, as the rail returns them, carry no action_format.
+        indexed: { actions: [{ action: 'FILE',
             action_index: format === 1 ? 50 : 10 + calls.submissions.length }] } };
 }
 
