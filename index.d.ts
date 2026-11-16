@@ -2190,6 +2190,14 @@ export declare class XChainSDK {
 
     /** Raw bytes of a gated FILE action (token-gated content). */
     getGatedFileRaw(actionIndex: number | string, coin?: string): Promise<any>;
+    /** Multi-part FILE assembly state, or null when the action is not a multi-part manifest. */
+    getFileAssembly(actionIndex: number | string, coin?: string): Promise<{
+        file_hash: string;
+        total_parts: number;
+        parts_received: number;
+        total_bytes: number;
+        status: 'pending' | 'complete' | 'mismatch';
+    } | null>;
     /** Build the raw-content URL for a gated FILE action (no request issued). */
     fileRawUrl(actionIndex: number | string, coin?: string): string;
 
