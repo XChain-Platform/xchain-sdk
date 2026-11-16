@@ -24,6 +24,7 @@ const { SDKConfigError } = require('../utils/errors.js');
 const { buildCoinExplorers } = require('../utils/list/coin_explorers.js');
 const { isListTickCoinActive } = require('../protocol/list_tick_coin.js');
 const fileMultipart = require('../actions/workflows/file_multipart_publish.js');
+const { planMultipartFile } = require('../file/multipart.js');
 
 // Keep wallet and messaging delegates together so account-facing operations stay grouped.
 module.exports = {
@@ -76,6 +77,12 @@ module.exports = {
 
     async waitForFileComplete(actionIndex, opts) {
         return fileMultipart.waitForFileComplete.call(this, actionIndex, opts);
+    },
+
+    // Plan a multipart file without broadcasting: the parts, FILE_HASH, totals and
+    // manifest fields publishMultipartFile would send, for a quote or a resume check.
+    async planMultipartFile(bytes, meta, opts) {
+        return planMultipartFile(bytes, meta, opts);
     },
 
     async publishMultipartFile(wif, bytes, meta, opts) {
