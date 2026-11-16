@@ -2,6 +2,8 @@
 
 const assert = require('assert');
 const Module = require('module');
+const Actions = require('../../src/actions/index.js');
+const Utility = require('../../src/utils/utility.js');
 
 const WORKFLOW = '../../src/actions/workflows/file_multipart_publish.js';
 const FILE_HASH = 'ab'.repeat(32);
@@ -37,7 +39,8 @@ function dependencyStubs(overrides = {}) {
             change: args.sourceAddress, compress: false, feePerKb: args.rate * 1000 }),
         gatedManifestBatchEntries: input => [
             { action: 'FILE', params: input.manifestParams },
-            { action: 'MESSAGE', params: { destination: input.sourceAddress, encryptedMessage: 'ff' } },
+            { action: 'MESSAGE', params: { coin: input.coin,
+                destination: input.sourceAddress, encryptedMessage: 'ff' } },
         ],
         twoStepCommitParams: params => ({ ...params,
             options: { ...params.options, twoStepEnvelope: true } }),
@@ -138,6 +141,11 @@ function batchBuilder(calls) {
             fields: { COMMAND: entries.map(entry => entry.action).join(';') } }; } };
 }
 
+function wireAction(action, params) {
+    const actions = new Actions({ config: {}, util: new Utility() });
+    return actions.composeActionString({ action, params }, { validate: false }).actionString;
+}
+
 async function submitResult(actionData, calls) {
     calls.submissions.push(actionData);
     const format = actionData.action === 'BATCH' || actionData.params.version === 1 ? 1 : 2;
@@ -219,6 +227,8 @@ describe('publishMultipartFile gated two-step envelope', function () {
             onRecovery: recovery => recoveries.push(recovery), pollInterval: 1,
         });
         assert.deepStrictEqual(calls.batches[0].map(entry => entry.action), ['FILE', 'MESSAGE']);
+        const message = calls.batches[0].find(entry => entry.action === 'MESSAGE');
+        assert.strictEqual(wireAction(message.action, message.params).split('|')[1], '2');
         assert.strictEqual(calls.creates.filter(call => call.options && call.options.twoStepEnvelope).length, 3);
         const reveals = calls.creates.filter(call => call.options && call.options.envelopeCommitHex);
         assert.strictEqual(reveals.length, 3);
