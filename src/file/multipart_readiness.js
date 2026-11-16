@@ -17,7 +17,6 @@ function medianTimePast(blockTimesNewestFirst) {
 
     const times = blockTimesNewestFirst
         .slice(0, MEDIAN_TIME_SPAN)
-        .map(Number)
         .filter(time => Number.isFinite(time) && time > 0)
         .sort((a, b) => a - b);
 

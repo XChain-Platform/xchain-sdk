@@ -38,6 +38,10 @@ describe('multi-part file readiness', function () {
             assert.strictEqual(medianTimePast([30, 10, 20]), 20);
         });
 
+        it('drops non-number values instead of coercing them', function () {
+            assert.strictEqual(medianTimePast([200, 100, '1', true]), 200);
+        });
+
         it('returns null for an empty window', function () {
             assert.strictEqual(medianTimePast([]), null);
         });
