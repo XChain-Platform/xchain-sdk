@@ -526,6 +526,12 @@
     },
     "test/unit/preflight/activation/activation_coin_first_precedence.test.js": {
       "pre-flight activation lookup is coin-first every network-only mirrored row is the cancelling-match row": "pre-flight activation lookup is coin-first identifies every network-only mirrored row"
+    },
+    "test/unit/clients/explorer.test/20_public_methods.test.js": {
+      "ExplorerClient public methods has 134 public methods": "ExplorerClient public methods has 135 public methods"
+    },
+    "test/unit/cosigner/cosigner_hardening2.test/01_g9_allowed_destinations_enforceability.test.js": {
+      "G9: allowedDestinations enforceability pins the 8-of-72 figure the G9 rationale quotes, derived from the format table": "G9: allowedDestinations enforceability pins the decoder-reachable figure the G9 rationale quotes, derived from the format table"
     }
   }
 }
