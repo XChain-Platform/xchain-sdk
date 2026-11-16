@@ -23,6 +23,7 @@ const config = require('../config.js');
 const { SDKConfigError } = require('../utils/errors.js');
 const { buildCoinExplorers } = require('../utils/list/coin_explorers.js');
 const { isListTickCoinActive } = require('../protocol/list_tick_coin.js');
+const fileMultipart = require('../actions/workflows/file_multipart_publish.js');
 
 // Keep wallet and messaging delegates together so account-facing operations stay grouped.
 module.exports = {
@@ -72,6 +73,14 @@ module.exports = {
     async getGatedFileRaw(actionIndex, coin = null) { return this.requireExplorer().getGatedFileRaw(actionIndex, coin); },
 
     async getFileAssembly(actionIndex, coin = null) { return this.requireExplorer().getFileAssembly(actionIndex, coin); },
+
+    async waitForFileComplete(actionIndex, opts) {
+        return fileMultipart.waitForFileComplete.call(this, actionIndex, opts);
+    },
+
+    async publishMultipartFile(wif, bytes, meta, opts) {
+        return fileMultipart.publishMultipartFile.call(this, wif, bytes, meta, opts);
+    },
 
     // Absolute URL of a FILE action's raw bytes on the configured explorer:
     // the resolution target for TIS data_ref entries and on-chain TIS docs.
