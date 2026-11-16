@@ -38,6 +38,9 @@ function validateRequiredFields(validator, action, fields, legs) {
 
     if (!isIndexOperation) {
         let required = ACTION_REQUIRED_FIELDS[action] || [];
+        // A FILE part (format 2, VERSION|FILE_HASH|PART_INDEX) carries no TYPE: only the
+        // single-shot file (0) and the multipart manifest (1) name a content type.
+        if(action === 'FILE' && String(fields.VERSION) === '2') required = required.filter(field => field !== 'TYPE');
         for (let field of required) {
             // With legs, a required field is satisfied per leg: SEND legs
             // each need AMOUNT/DESTINATION, while a shared TICK may sit at
