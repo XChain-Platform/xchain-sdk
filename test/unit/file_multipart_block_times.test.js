@@ -58,6 +58,19 @@ describe('readRecentBlockTimes explorer request', function () {
     });
 });
 
+describe('readRecentBlockTimes explorer row shape', function () {
+    it('reads the explorer /blocks timestamp field', async function () {
+        const explorer = explorerReturning({
+            total: 2,
+            data: [
+                { block_index: '71178', timestamp: '1794803000' },
+                { block_index: '71179', timestamp: '1794803062' }
+            ]
+        });
+        assert.deepStrictEqual(await readRecentBlockTimes(explorer, 2), [1794803062, 1794803000]);
+    });
+});
+
 describe('readRecentBlockTimes result filtering', function () {
     it('drops invalid times before trimming the ordered result', async function () {
         const explorer = explorerReturning([

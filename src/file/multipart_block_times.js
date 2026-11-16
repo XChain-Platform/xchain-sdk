@@ -37,8 +37,11 @@ function blockIndex(row) {
     return Number.isFinite(index) ? index : Number.NEGATIVE_INFINITY;
 }
 
+// The explorer's /blocks rows name the header time `timestamp`; `block_time` is
+// kept for callers that hand in indexer-shaped rows.
 function blockTime(row) {
-    const time = Number(row && row.block_time);
+    const raw = row && (row.block_time != null ? row.block_time : row.timestamp);
+    const time = Number(raw);
     return Number.isFinite(time) && time > 0 ? time : null;
 }
 
