@@ -150,6 +150,7 @@ module.exports = {
         ['getFeeQuote', false, true, true, 'function', 0],
         ['getFeeSchedule', false, true, true, 'function', 0],
         ['getFees', false, true, true, 'function', 2],
+        ['getFileAssembly', false, true, true, 'function', 1],
         ['getFiles', false, true, true, 'function', 2],
         ['getFullNodeVerifications', false, true, true, 'function', 2],
         ['getGatedFileRaw', false, true, true, 'function', 1],
