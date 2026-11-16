@@ -44,8 +44,7 @@ function stubFetch(body) {
     return async () => ({ ok: true, json: async () => body });
 }
 
-describe('served checkpoint final (SDK)', function () {
-
+function registerFinalityPassThroughCases() {
     it('passes final false through for a height inside an open replay window', function () {
         let result = Checkpoint.verifyServedCheckpoint(signedBody({ final: false }), null);
         assert.strictEqual(result.valid, true);
@@ -77,6 +76,10 @@ describe('served checkpoint final (SDK)', function () {
         assert.strictEqual(result.validatorSource, 'supplied');
         assert.strictEqual(result.final, false);
     });
+}
+
+describe('served checkpoint final (SDK)', function () {
+    registerFinalityPassThroughCases();
 
     it('fetchAndVerifyCheckpoint reports final false inside the window and true once replayed', async function () {
         let open = await Checkpoint.fetchAndVerifyCheckpoint('https://explorer.xchain.io', 'BTC', 900123,

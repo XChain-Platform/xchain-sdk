@@ -44,6 +44,26 @@ function registerAuthoritativeDryRunCases() {
     });
 }
 
+function registerResolvedTickDeltaCase() {
+    it('keeps a reservation warning when the delta uses the resolved tick name', async function () {
+        for (const wireTick of ['jdog', '^42']) {
+            const sdk = mockSdk({ explorerSpec: {
+                getToken: () => ({ tick: 'JDOG', divisible: 0 }),
+                getBalances: () => [{ tick: 'JDOG', amount: '1000' }],
+                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+            } });
+            const r = await sdk.preflight(`SEND|0|${wireTick}|600|addr`, {
+                source: 's', preflight: 'report', localDeltas: [{ tick: 'JDOG', amount: '600' }],
+            });
+            const bal = r.findings.find(f => f.code === 'BALANCE_INSUFFICIENT');
+            expect(bal.severity).to.equal('warning');
+            expect(bal._downgradedBy).to.equal('dryrun-valid-local-delta');
+            expect(bal.data.localDeltaApplied).to.equal('600');
+            expect(r.verdict).to.equal('warn');
+        }
+    });
+}
+
 function registerBalancePrecedenceCases() {
     describe('tier precedence (§4.2)', function () {
         // §4.7. A dry-run says valid because the CONFIRMED balance
@@ -68,23 +88,7 @@ function registerBalancePrecedenceCases() {
             expect(r.verdict).to.equal('warn');       // NOT 'pass' - no clean "Looks good"
         });
 
-        it('keeps a reservation warning when the delta uses the resolved tick name', async function () {
-            for (const wireTick of ['jdog', '^42']) {
-                const sdk = mockSdk({ explorerSpec: {
-                    getToken: () => ({ tick: 'JDOG', divisible: 0 }),
-                    getBalances: () => [{ tick: 'JDOG', amount: '1000' }],
-                    getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
-                } });
-                const r = await sdk.preflight(`SEND|0|${wireTick}|600|addr`, {
-                    source: 's', preflight: 'report', localDeltas: [{ tick: 'JDOG', amount: '600' }],
-                });
-                const bal = r.findings.find(f => f.code === 'BALANCE_INSUFFICIENT');
-                expect(bal.severity).to.equal('warning');
-                expect(bal._downgradedBy).to.equal('dryrun-valid-local-delta');
-                expect(bal.data.localDeltaApplied).to.equal('600');
-                expect(r.verdict).to.equal('warn');
-            }
-        });
+        registerResolvedTickDeltaCase();
 
         it('Tier-1 valid still flattens a shortfall with no localDeltas behind it', async function () {
             // Same shape without the §4.7 netting: the client and the network

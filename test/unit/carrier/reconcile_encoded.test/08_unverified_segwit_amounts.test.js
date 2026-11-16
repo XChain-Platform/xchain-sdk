@@ -41,7 +41,7 @@ function spending(prevs, opts = {}) {
     return psbt;
 }
 
-describe('reconcileEncoded segwit-v0 amount binding', function () {
+function registerBasicSegwitAmountCases() {
     it('keeps one witness-only input but refuses two before fee accounting', function () {
         const one = previous(walletScript(), 10000);
         assert.strictEqual(reconcileEncoded(spending([one]).toHex(), { network: NET }).fee, 1000n);
@@ -82,7 +82,9 @@ describe('reconcileEncoded segwit-v0 amount binding', function () {
             output: destination.output,
         }).toHex(), intent).fee, 1000n);
     });
+}
 
+function registerMixedSegwitAmountCases() {
     it('refuses an unbound input beside trusted and encoder-proved inputs', function () {
         const redeem = bitcoin.script.compile([bitcoin.opcodes.OP_TRUE]);
         const trustedScript = bitcoin.payments.p2wsh({ redeem: { output: redeem }, network: NET }).output;
@@ -131,6 +133,11 @@ describe('reconcileEncoded segwit-v0 amount binding', function () {
         assert.strictEqual(normal.txParams.attachPrevTx, true);
         assert.strictEqual(optedOut.txParams.attachPrevTx, false);
     });
+}
+
+describe('reconcileEncoded segwit-v0 amount binding', function () {
+    registerBasicSegwitAmountCases();
+    registerMixedSegwitAmountCases();
 });
 
 describe('reveal binding through the chunk reveal path', function () {
