@@ -59,11 +59,11 @@ function sendHandoffRetirementReview() {
     expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
 }
 
-// The batch pin is held at the hash origin develop carries until its indexer commit lands, so each entry must name the pairing.
+// The batch pin follows the hash origin develop carries, so each entry must name the pairing.
 function batchSnapshotReviews() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('c6ca292c4c8a52424f1fe7779c9b8361c41e5fbde17bb4ba6c5fb1c313dd1c13');
+        .to.equal('ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821');
     const reviews = [
         ['### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot', '`7e138a16` to `e7d7825d`'],
         ['### 2026-10-20 - a BATCH\'s own status is restored off the probe path too', '`e7d7825d` to `9f1e45a3`']
@@ -271,7 +271,7 @@ function batchLegFoldReview() {
 function batchDispenseNoteReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('c6ca292c4c8a52424f1fe7779c9b8361c41e5fbde17bb4ba6c5fb1c313dd1c13');
+        .to.equal('ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821');
     const heading = '### 2026-11-15 - a BATCH probe says why it cannot judge a payment-triggered DISPENSE';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');

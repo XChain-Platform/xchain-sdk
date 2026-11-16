@@ -92,13 +92,13 @@ module.exports = {
      * and queries them in parallel.
      */
     async getAllMessagesForAddress(address, opts) {
-        const explorer = this.requireExplorer();
-        const network = this.options.network || config.env.network();
+        let explorer = this.requireExplorer();
+        let network = this.options.network || config.env.network();
         // Messages are looked up per network, so without one we would not know which chain to ask.
         if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');
 
-        const tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
-        const explorers = buildCoinExplorers(explorer, tier, ExplorerClient);
+        let tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
+        let explorers = buildCoinExplorers(explorer, tier, ExplorerClient);
 
         return this.messaging.getAllMessages(address, opts, explorers);
     },
