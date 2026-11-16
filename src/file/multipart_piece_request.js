@@ -28,6 +28,8 @@ function requireUtxo(utxo) {
     }
 }
 
+const COMPRESSED_KEY = /^0[23][0-9a-fA-F]{64}$/;
+
 function setDefined(into, values) {
     for (const [key, value] of Object.entries(values)) {
         if (value !== undefined) into[key] = value;
@@ -45,7 +47,11 @@ function commonParams({ pubkey, sourceAddress, rate, data, rawData }, encoding) 
         rawData: Buffer.isBuffer(rawData) || rawData instanceof Uint8Array
             ? Buffer.from(rawData).toString('binary') : rawData,
     }, {
-        pubkey,
+        // The encoder reads `pubkey` as the source: an address passes through, while a
+        // bare key resolves to the network default type (P2WPKH on bitcoin), which is the
+        // wrong source for a P2PKH owner. The key itself is the TAPROOT internal key.
+        pubkey: sourceAddress || pubkey,
+        compressedPubKey: COMPRESSED_KEY.test(String(pubkey || '')) ? pubkey : undefined,
         change: sourceAddress,
         data,
     });

@@ -220,7 +220,8 @@ async function fundPieces(sdk, pieces, source, rate, opts, modules, progress) {
     const encoder = sdk.requireEncoder();
     const values = fundingValues(sdk, pieces, source, rate, opts, modules);
     const expected = modules.multipartFundingOutputs(values, source.sourceAddress).customOutputs;
-    const encoded = await encoder.createTx({ pubkey: source.pubkey, sourceAddress: source.sourceAddress,
+    // The encoder picks UTXOs from `pubkey`; the address keeps a P2PKH owner's source exact.
+    const encoded = await encoder.createTx({ pubkey: source.sourceAddress || source.pubkey, sourceAddress: source.sourceAddress,
         change: source.sourceAddress, customOutputs: expected, feePerKb: rate * 1000 });
     modules.reconcileEncoded(encoded.psbt, { network: sdk.wallet.getBitcoinNetwork(),
         customOutputs: expected, changeAddresses: source.sourceAddress,

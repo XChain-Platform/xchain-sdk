@@ -46,10 +46,14 @@ describe('piece request shapes', function () {
         const args = fixture({ rate: 12.5 });
         const request = pieceCreateTxParams(args);
         assert.deepStrictEqual(sortedKeys(request), [
-            'change', 'compress', 'data', 'encoding', 'feePerKb', 'options',
-            'pubkey', 'rawData', 'sourceAddress', 'utxos',
+            'change', 'compress', 'compressedPubKey', 'data', 'encoding', 'feePerKb',
+            'options', 'pubkey', 'rawData', 'sourceAddress', 'utxos',
         ]);
         assert.strictEqual(request.encoding, 'TAPROOT');
+        // The encoder selects the source from `pubkey`, so it carries the address; the
+        // key rides as the envelope's internal key.
+        assert.strictEqual(request.pubkey, args.sourceAddress);
+        assert.strictEqual(request.compressedPubKey, args.pubkey);
         assert.deepStrictEqual(request.utxos, [args.utxo]);
         assert.deepStrictEqual(request.options, { exactInputs: true });
         assert.strictEqual(request.sourceAddress, args.sourceAddress);
@@ -67,8 +71,8 @@ describe('piece request shapes', function () {
         const args = fixture({ lane: 'standard', phase: 'commit', rate: 1 });
         const request = pieceCreateTxParams(args);
         assert.deepStrictEqual(sortedKeys(request), [
-            'change', 'compress', 'data', 'encoding', 'feePerKb', 'options',
-            'pubkey', 'rawData', 'sourceAddress', 'utxos',
+            'change', 'compress', 'compressedPubKey', 'data', 'encoding', 'feePerKb',
+            'options', 'pubkey', 'rawData', 'sourceAddress', 'utxos',
         ]);
         assert.strictEqual(request.encoding, 'P2SH');
         assert.strictEqual(request.feePerKb, 1000);
@@ -84,8 +88,8 @@ describe('piece reveal shape', function () {
         const args = fixture({ lane: 'standard', phase: 'reveal', rate: 12.5 });
         const request = pieceCreateTxParams(args);
         assert.deepStrictEqual(sortedKeys(request), [
-            'change', 'compress', 'data', 'encoding', 'feePerKb', 'p2shHash',
-            'p2shHex', 'pubkey', 'rawData',
+            'change', 'compress', 'compressedPubKey', 'data', 'encoding', 'feePerKb',
+            'p2shHash', 'p2shHex', 'pubkey', 'rawData',
         ]);
         assert.strictEqual(request.encoding, 'P2SH');
         assert.strictEqual(request.p2shHash, args.p2shHash);
