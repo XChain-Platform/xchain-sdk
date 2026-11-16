@@ -176,6 +176,8 @@ const TABLE = {
     },
     FILE: {
         0: { class: NONE },
+        1: { class: NONE },
+        2: { class: NONE },
     },
     ISSUE: {
         0: { class: NONE, unless: ['TRANSFER', 'TRANSFER_SUPPLY'] },  // minting to self is a credit; TRANSFER hands away the token's OWNERSHIP and TRANSFER_SUPPLY hands away MINT_SUPPLY, neither expressible as a capped amount
