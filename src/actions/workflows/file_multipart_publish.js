@@ -23,6 +23,7 @@ const assemblyWait = require('../../utils/action_waiter/file_assembly_wait.js');
 const reconcile = require('../../carrier/reconcile_encoded.js');
 const carrierBinding = require('../../carrier/bind_action_carrier.js');
 const { FILE_MULTIPART_ACTIVATION_TIME } = require('../../protocol/constants.js');
+const { sourceDetails } = require('./file_multipart_source.js');
 
 const MULTIPART = Object.assign({}, multipartPlan, readiness, funding, pieceRequest,
     fundingMatch, resume, progress, lane, gatedBatch, blockTimes, twoStep,
@@ -50,17 +51,6 @@ async function assertActive(sdk, opts, modules) {
     modules.assertMultipartActive([statusBlockTime(status, explorer.coin)], activation);
     const times = await modules.readRecentBlockTimes(explorer, 11);
     return modules.assertMultipartActive(times, activation);
-}
-
-function sourceDetails(sdk, wif, opts, modules) {
-    const pair = sdk.wallet.importWIF(wif);
-    const net = sdk.wallet.getBitcoinNetwork();
-    const taprootChain = net.supportsSegwit !== false;
-    const sourceType = opts.sourceType || (taprootChain ? 'p2wpkh' : 'p2pkh');
-    const lane = modules.multipartLaneFor({ taprootChain, sourceType });
-    const sourceAddress = opts.sourceAddress || sdk.wallet.deriveAddress(pair.publicKey, { type: sourceType });
-    return { ...lane, sourceType, sourceAddress, pubkey: pair.publicKeyHex,
-        publicKey: Buffer.from(pair.publicKey) };
 }
 
 function baseCoin(sdk, opts) {
@@ -181,12 +171,15 @@ function fundingValues(sdk, pieces, source, rate, opts, modules) {
         throw new Error('multipart funding values do not cover every piece being sent');
     }
     const outputFloor = outputFloorOf(sdk, opts);
+    // Litecoin's stripped-size floor makes the encoder pad the envelope reveal.
+    const revealPad = baseCoin(sdk, opts) === 'LTC';
     return pieces.map((piece, index) => modules.pieceFundingValue({
         lane: source.lane,
         rate,
         pairSize: pairSizeOf(piece, source, opts, index),
         outputFloor,
         payloadBytes: piece.payloadBytes,
+        revealPad,
     }));
 }
 
@@ -251,9 +244,16 @@ function oneCallEncoderOpts(piece, utxo, source, rate, modules) {
         data: piece.data, rawData: piece.rawData });
 }
 
+// A gated manifest rides a BATCH, whose reply row nests its sub-actions in `actions`.
+function flattenActionRows(rows) {
+    return rows.flatMap(row => [row].concat(row && Array.isArray(row.actions)
+        ? flattenActionRows(row.actions) : []));
+}
+
 function actionIndexOf(indexed, kind) {
-    const rows = indexed && Array.isArray(indexed.actions) ? indexed.actions
+    const top = indexed && Array.isArray(indexed.actions) ? indexed.actions
         : (indexed && Array.isArray(indexed.data) ? indexed.data : []);
+    const rows = flattenActionRows(top).filter(Boolean);
     const row = kind === 'manifest'
         ? rows.find(item => item.action === 'FILE' && Number(item.action_format) === 1)
         : rows.find(item => item.action === 'FILE');

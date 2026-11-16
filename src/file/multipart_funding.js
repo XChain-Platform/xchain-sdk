@@ -18,7 +18,14 @@ function standardChunkCount(payloadBytes) {
     return Math.ceil(payloadBytes / STANDARD_CHUNK_BYTES);
 }
 
-function pieceFundingValue({ lane, rate, pairSize, outputFloor, payloadBytes }) {
+// The encoder floors every fee and authored output it builds, so a small piece needs
+// more than its rate-priced fee. Envelope: the commit fee and the reveal fee are each
+// floored at dust, the commit output also carries the reveal change at the floor, and on
+// litecoin a second floor output pads the reveal to minStandardTxNonWitnessSize
+// (data_outputs.js emitEnvelopeCommit). Standard: the commit fee is floored at dust and
+// sits beside one floored P2SH leg per chunk plus the reveal change headroom
+// (script_hash_legs.js fundP2shLeg and topUpFirstLeg).
+function pieceFundingValue({ lane, rate, pairSize, outputFloor, payloadBytes, revealPad = false }) {
     if (lane !== 'envelope' && lane !== 'standard')
         throw new TypeError('unknown multipart funding lane: ' + lane);
 
@@ -26,10 +33,12 @@ function pieceFundingValue({ lane, rate, pairSize, outputFloor, payloadBytes }) 
     assertNonNegativeFinite(pairSize, 'pairSize');
     assertNonNegativeFinite(outputFloor, 'outputFloor');
     assertNonNegativeFinite(payloadBytes, 'payloadBytes');
+    if (typeof revealPad !== 'boolean') throw new TypeError('revealPad must be a boolean');
 
     const pairFee = Math.ceil(1.25 * rate * pairSize);
-    if (lane === 'envelope') return pairFee + (2 * outputFloor);
-    return pairFee + ((standardChunkCount(payloadBytes) + 1) * outputFloor);
+    if (lane === 'envelope')
+        return Math.max(pairFee, 2 * outputFloor) + (2 * outputFloor) + (revealPad ? outputFloor : 0);
+    return Math.max(pairFee, outputFloor) + ((standardChunkCount(payloadBytes) + 1) * outputFloor);
 }
 
 function multipartFundingOutputs(values, sourceAddress) {

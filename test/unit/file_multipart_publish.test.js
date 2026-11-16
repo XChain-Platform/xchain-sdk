@@ -268,3 +268,96 @@ describe('SDK multipart methods', function () {
         } finally { restore(); }
     });
 });
+
+function publishWith(sdk, workflow, opts) {
+    sdk.waitForFileComplete = (index, waitOpts) => workflow.waitForFileComplete.call(sdk, index, waitOpts);
+    return workflow.publishMultipartFile.call(sdk, 'wif', Buffer.from('x'), {}, {
+        activationTime: 100, pollInterval: 1, ...opts });
+}
+
+function typedAddresses(sdk) {
+    sdk.wallet.deriveAddress = (publicKey, { type }) => {
+        if (type === 'p2tr') throw new Error('Unknown address type');
+        return type + '-address';
+    };
+}
+
+describe('publishMultipartFile source type from the source address', function () {
+    let restore;
+    afterEach(function () { if (restore) restore(); restore = null; });
+
+    it('routes a P2PKH source address to the two-step envelope build', async function () {
+        restore = installDependencies(dependencyStubs());
+        const workflow = require(WORKFLOW);
+        const { sdk, calls } = makeSdk({ taproot: true });
+        typedAddresses(sdk);
+        const result = await publishWith(sdk, workflow, { sourceAddress: 'p2pkh-address',
+            pieceFundingValues: [40, 41, 42] });
+        assert.strictEqual(result.source.sourceType, 'p2pkh');
+        assert.strictEqual(result.source.buildMode, 'two_step');
+        assert.strictEqual(calls.submissions.length, 0);
+        assert.strictEqual(calls.creates.filter(call => call.options && call.options.twoStepEnvelope).length, 3);
+    });
+
+    it('matches a nested-segwit source address', async function () {
+        restore = installDependencies(dependencyStubs());
+        const workflow = require(WORKFLOW);
+        const { sdk } = makeSdk({ taproot: true });
+        typedAddresses(sdk);
+        const result = await publishWith(sdk, workflow, { sourceAddress: 'p2sh-p2wpkh-address',
+            pieceFundingValues: [40, 41, 42] });
+        assert.strictEqual(result.source.sourceType, 'p2sh-p2wpkh');
+    });
+
+    it('refuses a source address this key does not derive', async function () {
+        restore = installDependencies(dependencyStubs());
+        const workflow = require(WORKFLOW);
+        const { sdk } = makeSdk({ taproot: true });
+        typedAddresses(sdk);
+        await assert.rejects(() => publishWith(sdk, workflow, { sourceAddress: 'someone-else',
+            pieceFundingValues: [40, 41, 42] }),
+        error => error.code === 'MULTIPART_SOURCE_MISMATCH' && /pass opts\.sourceType/.test(error.message));
+    });
+});
+
+describe('publishMultipartFile reveal pad', function () {
+    let restore;
+    afterEach(function () { if (restore) restore(); restore = null; });
+
+    async function padFor(coin) {
+        const seen = [];
+        restore = installDependencies(dependencyStubs({
+            pieceFundingValue: args => { seen.push(args.revealPad); return 40 + seen.length - 1; },
+        }));
+        const workflow = require(WORKFLOW);
+        const { sdk } = makeSdk({ taproot: true });
+        sdk.requireExplorer().coin = coin;
+        await publishWith(sdk, workflow, { sourceType: 'p2wpkh', rate: 1, pairSize: 100 });
+        restore();
+        restore = null;
+        return seen;
+    }
+
+    it('asks for the reveal pad on litecoin only', async function () {
+        assert.deepStrictEqual(await padFor('RLTC'), [true, true, true]);
+        assert.deepStrictEqual(await padFor('RBTC'), [false, false, false]);
+    });
+});
+
+describe('publishMultipartFile gated manifest action index', function () {
+    let restore;
+    afterEach(function () { if (restore) restore(); restore = null; });
+
+    it('finds the FILE format 1 row nested in a BATCH reply', async function () {
+        restore = installDependencies(dependencyStubs({ planMultipartFile: async () => plan(true) }));
+        const workflow = require(WORKFLOW);
+        const { sdk } = makeSdk({ taproot: true, gated: true });
+        sdk.waitForAction = async () => ({ actions: [{ action: 'BATCH', action_index: 90, actions: [
+            { action: 'MESSAGE', action_index: 92 },
+            { action: 'FILE', action_format: 1, action_index: 93 },
+        ] }] });
+        const result = await publishWith(sdk, workflow, { sourceType: 'p2pkh',
+            pieceFundingValues: [40, 41, 42] });
+        assert.strictEqual(result.actionIndex, 93);
+    });
+});

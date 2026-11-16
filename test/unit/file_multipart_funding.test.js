@@ -38,6 +38,32 @@ describe('multipart piece funding values', function () {
         expect(pieceFundingValue({ lane: 'envelope', ...FIXED_QUOTE })).to.equal(4846);
     });
 
+    // Rail needs: bitcoin floor 546 with pairFee 543 needs 1638; litecoin floor 5460
+    // with pairFee 540 and the stripped-size reveal pad needs 21840.
+    it('lifts a small bitcoin envelope piece over the encoder floors', function () {
+        const quote = { lane: 'envelope', rate: 1, pairSize: 434, outputFloor: 546, payloadBytes: 0 };
+        const value = pieceFundingValue(quote);
+        expect(value).to.equal(2184);
+        expect(value).to.be.at.least(1638);
+    });
+
+    it('adds the litecoin reveal pad to a small envelope piece', function () {
+        const quote = { lane: 'envelope', rate: 1, pairSize: 432, outputFloor: 5460, payloadBytes: 0 };
+        const value = pieceFundingValue({ ...quote, revealPad: true });
+        expect(value).to.equal(27300);
+        expect(value).to.be.at.least(21840);
+        expect(pieceFundingValue(quote)).to.equal(21840);
+    });
+
+    it('floors a small standard piece at the commit fee floor', function () {
+        const quote = { lane: 'standard', rate: 1, pairSize: 100, outputFloor: 546, payloadBytes: 476 };
+        expect(pieceFundingValue(quote)).to.equal(546 + (2 * 546));
+    });
+
+    it('refuses a non-boolean revealPad', function () {
+        expect(() => pieceFundingValue({ lane: 'envelope', ...FIXED_QUOTE, revealPad: 1 })).to.throw('revealPad');
+    });
+
     it('quotes standard pieces on both sides of the chunk boundary', function () {
         expect(pieceFundingValue({ lane: 'standard', ...FIXED_QUOTE, payloadBytes: 476 })).to.equal(4846);
         expect(pieceFundingValue({ lane: 'standard', ...FIXED_QUOTE })).to.equal(5392);
