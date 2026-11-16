@@ -266,7 +266,8 @@ function actionIndexOf(indexed, kind) {
 async function submitOneCall(sdk, piece, utxo, source, rate, opts, modules) {
     const encoderOpts = oneCallEncoderOpts(piece, utxo, source, rate, modules);
     let recovery = null;
-    const lifecycle = { ...submitOptions(opts), onProgress(step, data) {
+    const lifecycle = { ...submitOptions(opts), maxFeeSats: opts.maxFeeSats,
+        maxPhaseFundingSats: opts.maxPhaseFundingSats, onProgress(step, data) {
         if (step !== 'envelope_recovery_record') return;
         recovery = data && data.recovery;
         if (typeof opts.onRecovery === 'function') opts.onRecovery(recovery, piece);
@@ -283,7 +284,8 @@ function reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules, sig
         commitPsbt: commit.psbt, revealPsbt: reveal.psbt, callerXOnly, network, signedCommitHex,
     });
     const intent = { network, changeAddresses: source.sourceAddress,
-        callerIdentities: source.pubkey, maxFeeSats: opts.maxFeeSats };
+        callerIdentities: source.pubkey, maxFeeSats: opts.maxFeeSats,
+        maxPhaseFundingSats: opts.maxPhaseFundingSats };
     const phase = modules.reconcileEncoded(commit.psbt, { ...intent,
         label: 'multipart envelope commit', phaseShapes: ['p2tr'], phaseSpends: [funding] });
     modules.reconcileEncoded(reveal.psbt, { ...intent,

@@ -95,7 +95,8 @@ function installDependencies(stubs) {
 }
 
 function makeSdk({ taproot = false, gated = false, assemblies } = {}) {
-    const calls = { creates: [], submissions: [], broadcasts: [], batches: [], waits: 0 };
+    const calls = { creates: [], submissions: [], submissionOptions: [], broadcasts: [],
+        batches: [], waitOptions: [], waits: 0 };
     const explorer = { coin: taproot ? 'RBTC' : 'RDOGE',
         getStatus: async () => ({ last_block_time: 200 }),
         get: async () => ({ data: Array.from({ length: 11 }, (_, i) => ({ block_time: 190 + i })) }),
@@ -129,8 +130,14 @@ function sdkShape({ explorer, encoder, wallet, calls }) {
         createAction: data => ({ actionString: data.action + '|wire', fields: { COMMAND: data.params.command } }),
     }, requireExplorer: () => explorer, requireEncoder: () => encoder,
     batch: () => batchBuilder(calls), getFileAssembly: index => explorer.getFileAssembly(index),
-    submitAction: async actionData => submitResult(actionData, calls),
-    waitForAction: async () => ({ actions: [{ action: 'FILE', action_format: 1, action_index: 91 }] }) };
+    submitAction: async (actionData, encoderOpts, lifecycle) => {
+        calls.submissionOptions.push({ encoderOpts, lifecycle });
+        return submitResult(actionData, calls);
+    },
+    waitForAction: async (txid, opts) => {
+        calls.waitOptions.push(opts);
+        return { actions: [{ action: 'FILE', action_format: 1, action_index: 91 }] };
+    } };
     return { sdk, calls };
 }
 
@@ -170,6 +177,7 @@ describe('publishMultipartFile resume', function () {
         const originalSha256 = require('crypto').createHash('sha256').update(bytes).digest('hex');
         const result = await workflow.publishMultipartFile.call(sdk, 'wif', Buffer.from('file'), {}, {
             activationTime: 100, sourceType: 'p2pkh', pieceFundingValues: [40, 41],
+            maxFeeSats: 123, maxPhaseFundingSats: 456,
             resumeRecord: { originalSha256, fileHash: FILE_HASH, totalParts: 2 },
             onChainPieces: [{ kind: 'part', fileHash: FILE_HASH, partIndex: 0,
                 partDigest: '0'.repeat(64), actionIndex: 1 }],
@@ -178,6 +186,8 @@ describe('publishMultipartFile resume', function () {
         assert.strictEqual(result.actionIndex, 50);
         assert.strictEqual(result.originalSha256, originalSha256);
         assert.strictEqual(calls.submissions.length, 2);
+        assert(calls.submissionOptions.every(call => call.lifecycle.maxFeeSats === 123));
+        assert(calls.submissionOptions.every(call => call.lifecycle.maxPhaseFundingSats === 456));
         assert.deepStrictEqual(calls.creates[0].customOutputs.map(output => output.value), [40, 41]);
         assert(progress.includes('piece_skipped'));
         assert(progress.includes('complete'));
@@ -218,13 +228,21 @@ describe('publishMultipartFile gated two-step envelope', function () {
     afterEach(function () { if (restore) restore(); restore = null; });
 
     it('sends a FILE and MESSAGE batch and uses commit then reveal builds', async function () {
-        restore = installDependencies(dependencyStubs({ planMultipartFile: async () => plan(true) }));
+        const reconciles = [];
+        restore = installDependencies(dependencyStubs({
+            planMultipartFile: async () => plan(true),
+            reconcileEncoded: (psbt, intent) => {
+                reconciles.push({ psbt, intent });
+                return { phaseFunding: [{ txid: 'phase', vout: 0 }] };
+            },
+        }));
         const workflow = require(WORKFLOW);
         const { sdk, calls } = makeSdk({ taproot: true, gated: true });
         sdk.waitForFileComplete = (index, opts) => workflow.waitForFileComplete.call(sdk, index, opts);
         const recoveries = [];
         const result = await workflow.publishMultipartFile.call(sdk, 'wif', Buffer.from('x'), {}, {
             activationTime: 100, sourceType: 'p2pkh', pieceFundingValues: [40, 41, 42],
+            maxFeeSats: 123, maxPhaseFundingSats: 456,
             onRecovery: recovery => recoveries.push(recovery), pollInterval: 1,
         });
         assert.deepStrictEqual(calls.batches[0].map(entry => entry.action), ['FILE', 'MESSAGE']);
@@ -235,6 +253,11 @@ describe('publishMultipartFile gated two-step envelope', function () {
         assert.strictEqual(reveals.length, 3);
         assert(reveals.every(call => call.options.exactInputs === undefined));
         assert.strictEqual(recoveries.length, 3);
+        const actionReconciles = reconciles.filter(call => /^multipart envelope/.test(call.intent.label));
+        assert.strictEqual(actionReconciles.length, 6);
+        assert(actionReconciles.every(call => call.intent.maxFeeSats === 123));
+        assert(actionReconciles.every(call => call.intent.maxPhaseFundingSats === 456));
+        assert(calls.waitOptions.every(opts => !('maxFeeSats' in opts) && !('maxPhaseFundingSats' in opts)));
         assert.strictEqual(result.actionIndex, 91);
     });
 });

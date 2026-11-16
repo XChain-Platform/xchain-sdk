@@ -33,7 +33,7 @@ function spending(prevs, opts = {}) {
         const witness = { script: prev.outs[0].script,
             value: opts.values ? opts.values[i] : prev.outs[0].value };
         const input = { hash: prev.getHash(), index: 0, witnessUtxo: witness };
-        if (opts.full) input.nonWitnessUtxo = prev.toBuffer();
+        if (opts.full || (opts.fullAt && opts.fullAt[i])) input.nonWitnessUtxo = prev.toBuffer();
         psbt.addInput(input);
     }
     const total = prevs.reduce((sum, tx) => sum + Number(tx.outs[0].value), 0);
@@ -58,6 +58,43 @@ describe('reconcileEncoded segwit-v0 amount binding', function () {
         assert.throws(() => reconcileEncoded(spending(prevs, { full: true,
             values: [9000, 12000] }).toHex(), { network: NET }),
         (e) => e.code === 'INCONSISTENT_PREVOUT');
+    });
+
+    it('refuses either role assignment in a mixed-proof multi-input response', function () {
+        const prevs = [previous(walletScript(), 10000), previous(walletScript(), 12000)];
+        for (const fullAt of [[false, true], [true, false]]) {
+            const hex = spending(prevs, { fullAt }).toHex();
+            assert.throws(() => reconcileEncoded(hex, { network: NET }),
+                (e) => e.code === 'UNVERIFIED_INPUT_VALUE');
+            assert.throws(() => reconcileEncoded(hex, { network: NET, maxFeeSats: 5000 }),
+                (e) => e.code === 'UNVERIFIED_INPUT_VALUE');
+        }
+    });
+
+    it('keeps a trusted input beside one witness-only input', function () {
+        const redeem = bitcoin.script.compile([bitcoin.opcodes.OP_TRUE]);
+        const trustedScript = bitcoin.payments.p2wsh({ redeem: { output: redeem }, network: NET }).output;
+        const prevs = [previous(trustedScript, 10000), previous(walletScript(), 12000)];
+        const destination = bitcoin.payments.p2wpkh({ pubkey: ECPair.makeRandom().publicKey, network: NET });
+        const intent = { network: NET, trustedPrevTxs: [prevs[0].toHex()],
+            customOutputs: [{ address: destination.address, value: 21000 }] };
+        assert.strictEqual(reconcileEncoded(spending(prevs, {
+            output: destination.output,
+        }).toHex(), intent).fee, 1000n);
+    });
+
+    it('refuses an unbound input beside trusted and encoder-proved inputs', function () {
+        const redeem = bitcoin.script.compile([bitcoin.opcodes.OP_TRUE]);
+        const trustedScript = bitcoin.payments.p2wsh({ redeem: { output: redeem }, network: NET }).output;
+        const prevs = [previous(trustedScript, 10000), previous(walletScript(), 12000),
+            previous(walletScript(), 14000)];
+        const destination = bitcoin.payments.p2wpkh({ pubkey: ECPair.makeRandom().publicKey, network: NET });
+        const intent = { network: NET, trustedPrevTxs: [prevs[0].toHex()],
+            customOutputs: [{ address: destination.address, value: 35000 }] };
+        const hex = spending(prevs, { output: destination.output,
+            fullAt: [false, true, false] }).toHex();
+        assert.throws(() => reconcileEncoded(hex, intent),
+            (e) => e.code === 'UNVERIFIED_INPUT_VALUE');
     });
 
     it('counts partial signatures as unbound and exempts taproot commitments', function () {

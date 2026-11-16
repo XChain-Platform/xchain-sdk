@@ -40,6 +40,17 @@ function makeWaiter(txResult) {
     return new ActionWaiter(sdk);
 }
 
+function makePollingWaiter(results) {
+    let calls = 0;
+    const sdk = {
+        ws: null,
+        requireExplorer: () => ({
+            getTransaction: async () => results[Math.min(calls++, results.length - 1)],
+        }),
+    };
+    return { waiter: new ActionWaiter(sdk), calls: () => calls };
+}
+
 function tx(actions) {
     return { tx_hash: 'aa'.repeat(32), actions };
 }
@@ -138,6 +149,49 @@ describe('ActionWaiter.waitForTxid status honesty', function () {
             (err) => err.code === 'CONFIRMATION_TIMEOUT');
     });
 
+});
+
+describe('ActionWaiter.waitForTxid mempool results', function () {
+
+    const TXID = 'dd'.repeat(32);
+    const pending = {
+        tx_hash: TXID,
+        block_index: null,
+        pending: true,
+        actions: [{ action: 'SEND', action_index: null }],
+    };
+
+    it('keeps polling a pending transaction until confirmation timeout', async function () {
+        const waiter = makeWaiter(pending);
+        await assert.rejects(
+            () => waiter.waitForTxid(TXID, { timeout: 900, pollInterval: 50 }),
+            (err) => err.code === 'CONFIRMATION_TIMEOUT');
+    });
+
+    it('does not report a pending transaction as unknown in strict mode', async function () {
+        const waiter = makeWaiter(pending);
+        await assert.rejects(
+            () => waiter.waitForTxid(TXID,
+                { timeout: 900, pollInterval: 50, strictStatus: true }),
+            (err) => err.code === 'CONFIRMATION_TIMEOUT');
+    });
+
+    it('settles after a pending transaction becomes indexed', async function () {
+        const indexed = {
+            tx_hash: TXID,
+            tx_index: 9,
+            block_index: 100,
+            actions: [{ action: 'SEND', action_index: 0, status: 'valid' }],
+        };
+        const { waiter, calls } = makePollingWaiter([pending, pending, pending, indexed]);
+        const result = await waiter.waitForTxid(TXID, { timeout: 2000, pollInterval: 50 });
+
+        assert.strictEqual(result.status, 'valid');
+        assert.strictEqual(result.statusKnown, true);
+        assert.strictEqual(result.statusSource, 'indexer');
+        assert.strictEqual(result.block_index, 100);
+        assert.ok(calls() >= 4);
+    });
 });
 
 describe('ActionWaiter.waitForTxid status honesty', function () {

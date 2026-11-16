@@ -40,7 +40,7 @@ describe('CheckpointVerifier (SDK): a forged validator set', function () {
     });
 
     function fetchVerify(opts) {
-        return Checkpoint.fetchAndVerifyCheckpoint('https://x', 'BTC', 1, stubFetch, opts);
+        return Checkpoint.fetchAndVerifyCheckpoint('', 'BTC', 900123, stubFetch, opts);
     }
 
     it('passes against the served set and says the explorer chose the set', async function () {
@@ -63,11 +63,11 @@ describe('CheckpointVerifier (SDK): a forged validator set', function () {
 
     it('the pooled sdk.verifyCheckpoint honours a supplied set the same way', async function () {
         const queries = require('../../../src/XChainSDK/explorer_network_queries.js');
-        const host = { requireExplorer: () => ({ getCheckpointVerify: async () => ({ checkpoint: cp, validators: [attacker.pubkeyHex] }) }) };
-        const served = await queries.verifyCheckpoint.call(host, 1);
+        const host = { requireExplorer: () => ({ coin: 'BTC', getCheckpointVerify: async () => ({ checkpoint: cp, validators: [attacker.pubkeyHex] }) }) };
+        const served = await queries.verifyCheckpoint.call(host, 900123);
         assert.strictEqual(served.valid, true);
         assert.strictEqual(served.validatorSource, 'explorer');
-        const pinned = await queries.verifyCheckpoint.call(host, 1, { validators: [honest.pubkeyHex] });
+        const pinned = await queries.verifyCheckpoint.call(host, 900123, { validators: [honest.pubkeyHex] });
         assert.strictEqual(pinned.valid, false);
         assert.strictEqual(pinned.validatorSource, 'supplied');
     });

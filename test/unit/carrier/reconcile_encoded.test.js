@@ -125,6 +125,14 @@ describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', functio
         assert.strictEqual(reconcileEncoded(hex, { network: NET }).fee, 10000n);
     });
 
+    it('applies maxFeeSats independently to each reconciled transaction', function () {
+        const funding = payTo();
+        const hex = psbtHex(funding, [carrier(0), { script: funding.script, value: 90000 }]);
+        const intent = { network: NET, maxFeeSats: 10000 };
+        assert.strictEqual(reconcileEncoded(hex, intent).fee, 10000n);
+        assert.strictEqual(reconcileEncoded(hex, intent).fee, 10000n);
+    });
+
     it('a >2^53 fee cap is compared exactly, not through a rounding Number() hop', function () {
         // DOGE has no supply cap, so a fee this size is reachable rather than
         // hypothetical. Number('9007199254740993') is 9007199254740992, so the cap

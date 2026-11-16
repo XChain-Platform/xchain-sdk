@@ -174,7 +174,8 @@ class LifecycleManager {
     //                         tick, minQuantity, timeout, pollInterval }
     //                     Results land on result.contractState or
     //                     result.contractBalance.
-    //   maxFeeSats      - local miner-fee ceiling; opts wins over encoderOpts
+    //   maxFeeSats      - miner-fee ceiling applied to each transaction separately;
+    //                     opts wins over encoderOpts
     //   maxPhaseFundingSats - local shaped-funding ceiling; opts wins over encoderOpts
     //   explorer        - explorer client polled during the indexer wait
     //   explorerUrl     - explorer URL for constructing that client
@@ -182,8 +183,9 @@ class LifecycleManager {
     //   onProgress      - callback(step, data) for lifecycle notifications
     //
     // Caps are checked locally before signing, malformed values are refused, and
-    // they are never sent to the encoder. estimateFees reads them only from
-    // encoderOpts, so put shared caps there.
+    // they are never sent to the encoder. maxFeeSats is not a running action total:
+    // a commit and its reveal are each checked against it. estimateFees reads caps
+    // only from encoderOpts, so put shared caps there.
     //
     // The reveal for either envelope or chunk encoding is built, reconciled and
     // signed before its commit is broadcast, so no commit goes out unless a reveal

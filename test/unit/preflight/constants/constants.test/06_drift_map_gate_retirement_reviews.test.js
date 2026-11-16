@@ -276,7 +276,8 @@ function batchDispenseNoteReview() {
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     expect(entry).to.include('The `batch` pin moves from `c6ca292c` to `ca3e05eb`');
-    expect(text).to.include('**Pins taken at indexer commit:** `8960c6ed1`');
+    expect(text).to.include('**Pins taken at indexer commit:** `93cde565f`');
+    expect(text).to.include('(Re-anchored 2026-11-16 to `93cde565f`');
     expect(entry).to.include('NO CLIENT CHECK MOVES');
     expect(entry).to.include('**Direction: NEUTRAL for validity.**');
 }

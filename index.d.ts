@@ -224,6 +224,7 @@ export interface EncoderOptions {
     sourceAddress?: string;
     /**
      * Local miner-fee ceiling for submitAction, estimateFees and message signing.
+     * Applied to each transaction separately, not accumulated across an action.
      * Submit opts wins; unsigned builders that return ActionResult ignore it.
      */
     maxFeeSats?: number | bigint | string;
@@ -2731,7 +2732,10 @@ export interface SubmitActionOpts {
     preflight?: false | 'off' | 'warn' | 'report' | 'local' | 'enforce';
     /** Sign the reconciled PSBT instead of using wallet.signPsbt */
     signer?: (psbtHex: string, context: { encoding: string }) => Promise<SignPsbtResult>;
-    /** Local miner-fee ceiling; wins over encoderOpts.maxFeeSats. Malformed values are refused. */
+    /**
+     * Local miner-fee ceiling for each transaction separately, not the action total.
+     * Wins over encoderOpts.maxFeeSats. Malformed values are refused.
+     */
     maxFeeSats?: number | bigint | string;
     /** Local shaped-funding ceiling; wins over encoderOpts. Malformed values are refused. */
     maxPhaseFundingSats?: number | bigint | string;

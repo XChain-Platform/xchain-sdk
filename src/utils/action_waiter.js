@@ -90,7 +90,8 @@ async function pollForTxid(wait) {
     if (wait.settled) return;
     try {
         let result = await wait.explorerTarget.getTransaction(wait.txid, 'tx_hash');
-        if (result && result.tx_hash) resolvePolledTransaction(wait, result);
+        if (result && result.tx_hash && result.pending !== true)
+            resolvePolledTransaction(wait, result);
     } catch (e) {
         // A missing transaction or network error leaves polling active.
     }

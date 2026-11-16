@@ -82,7 +82,11 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `8960c6ed1`
+**Pins taken at indexer commit:** `93cde565f`
+
+(Re-anchored 2026-11-16 to `93cde565f`, the origin develop commit where the `batch` pin
+`ca3e05eb` was taken and all sixteen rows hash as pinned. The previous anchor `8960c6ed1`
+hashes `batch` to `c6ca292c`; it remains an ancestor of this anchor. No pin moves.)
 
 (Re-anchored 2026-11-15 to `8960c6ed1`, the origin develop head the next review round sits on. At
 that commit every one of the sixteen rows hashes as pinned. The `batch` pin moved to `ca3e05eb` once the
@@ -528,7 +532,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 8960c6ed1..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 93cde565f..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command

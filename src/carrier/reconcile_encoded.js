@@ -90,7 +90,7 @@ function isTaprootScript(script) {
 
 function witnessAmountIsBound(psbt, i, trusted, deny) {
     const data = psbt.data.inputs[i];
-    if (data.nonWitnessUtxo) return true;
+    if (data.nonWitnessUtxo) return 'prevtx';
     const tx = trusted.get(psbt.txInputs[i].hash.toString('hex'));
     if (!data.witnessUtxo || !tx) return false;
     const out = tx.outs[psbt.txInputs[i].index];
@@ -98,7 +98,7 @@ function witnessAmountIsBound(psbt, i, trusted, deny) {
     try { sameValue = !!out && BigInt(out.value) === BigInt(data.witnessUtxo.value); } catch (e) { /* false */ }
     if (!out || !bytesEqual(out.script, data.witnessUtxo.script) || !sameValue)
         return deny('INCONSISTENT_PREVOUT', 'input ' + i + ' witnessUtxo disagrees with trustedPrevTxs');
-    return true;
+    return 'trusted';
 }
 
 // Read signer-owned funding state once so output authorization uses proven scripts.
@@ -114,6 +114,7 @@ function readInputs(psbt, deny, intent) {
     let totalIn = 0n;
     let feeComputable = true;
     const unverified = [];
+    let encoderDependent = 0;
     for (let i = 0; i < psbt.txInputs.length; i++) {
         // Refuse UTXO fields that disagree: the key signs the nonWitnessUtxo prevout, so judging a forged witnessUtxo approves a drain
         try { findVerifiedPrevout(psbt, i); }
@@ -122,8 +123,11 @@ function readInputs(psbt, deny, intent) {
         if (!script) return deny('UNRECONCILABLE_PSBT', 'input ' + i + ' carries no witnessUtxo or nonWitnessUtxo, so its funding script cannot be established');
         const data = psbt.data.inputs[i];
         const finalized = !!(data.finalScriptSig || data.finalScriptWitness);
-        if (!finalized && !isTaprootScript(script) && !witnessAmountIsBound(psbt, i, trusted, deny))
-            unverified.push(i);
+        if (!finalized && !isTaprootScript(script)) {
+            const binding = witnessAmountIsBound(psbt, i, trusted, deny);
+            if (binding !== 'trusted') encoderDependent++;
+            if (!binding) unverified.push(i);
+        }
         if (!inputPresigned(psbt, i)) {
             unsignedInputs++;
             if (singleKeyInput(psbt, i, script) || nestedOwn.some((s) => bytesEqual(s, script))) fundingScripts.push(script);
@@ -136,9 +140,13 @@ function readInputs(psbt, deny, intent) {
     // inputs but no signer-owned one, and it is denied below with its own reason
     // rather than mislabelled as input-less.
     if (!psbt.txInputs.length) return deny('UNRECONCILABLE_PSBT', 'the encoder returned a transaction with no inputs');
-    if (unverified.length >= 2)
+    // A previous transaction supplied by the encoder can move between otherwise
+    // identical signing responses. Refuse a witness-only v0 input when another
+    // v0 input also depends on the encoder, so signatures cannot be combined
+    // across role-swapped responses with different claimed amounts.
+    if (unverified.length >= 1 && encoderDependent >= 2)
         return deny('UNVERIFIED_INPUT_VALUE', { inputs: unverified,
-            detail: 'two or more segwit-v0 input amounts are not bound to previous transactions; request attachPrevTx' });
+            detail: 'a segwit-v0 input amount is unbound while another input amount depends on the encoder; request attachPrevTx' });
     if (!unsignedInputs) return deny('NO_SIGNER_OWNED_INPUT',
         'every input in the encoder response already carries a signature, so none of them is the local signer\'s');
 
@@ -329,7 +337,8 @@ function reconcileFee(intent, inputs, outputs, deny) {
  *   callerIdentities {Array}  the caller's own `pubkey` identity (address or raw
  *                             pubkey hex), whose default-type scripts a reveal with
  *                             no wallet input of its own returns change to
- *   maxFeeSats     {number}   absolute fee ceiling from the caller, or null
+ *   maxFeeSats     {number}   absolute fee ceiling for this PSBT, or null. Callers
+ *                             reconciling several PSBTs apply it to each, not their sum
  *   phaseShapes    {string[]} script shapes this phase's encoder-derived funding
  *                             legs may take ('p2sh' / 'p2wsh' / 'p2tr'), empty or
  *                             absent for a plain single-phase action

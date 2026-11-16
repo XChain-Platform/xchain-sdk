@@ -44,13 +44,14 @@ const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.
 
 const LOCAL_DIR = path.join(__dirname, '../..', '..', 'src');
 // Resolve the canonical xchain-documentation repo: an explicit XCHAIN_DOCS_DIR, then
-// XCHAIN_DOCUMENTATION_DIR (the order tooling/sibling_coverage reports), then the
-// ../xchain-documentation sibling layout that CI and local runs check out.
+// XCHAIN_DOCUMENTATION_DIR (the order tooling/sibling_coverage reports), then
+// XCHAIN_SIBLING_ROOT and the default sibling layout used by that roster.
 
 // When none resolves, the guards skip unless XCHAIN_REQUIRE_SIBLINGS=1 makes
 // sibling coverage mandatory, in which case they fail.
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
 const DOCS_DIR  = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR
-    || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
+    || path.join(SIBLING_ROOT, 'xchain-documentation');
 const CANON_DIR = path.join(DOCS_DIR, 'protocol', 'reference-impl');
 const VEC_DIR   = path.join(DOCS_DIR, 'protocol', 'test-vectors');
 const VEC_CHECKOUT   = siblingCheckout(__dirname, VEC_DIR);
