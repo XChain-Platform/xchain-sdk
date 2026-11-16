@@ -181,6 +181,12 @@ export interface CustomOutput {
     [key: string]: any;
 }
 
+export interface EncoderFeeQuote {
+    address: string;
+    amount: number | bigint | string;
+    [key: string]: any;
+}
+
 export interface EncoderOptions {
     /** Sender's public key or address (required when encoding to a PSBT) */
     pubkey: string;
@@ -206,6 +212,26 @@ export interface EncoderOptions {
     customOutputs?: CustomOutput[];
     /** Raw binary data appended after the ACTION string (used by the FILE action) */
     rawData?: string | Buffer;
+    /** Attach full previous transactions so segwit input amounts can be verified */
+    attachPrevTx?: boolean;
+    /** Protocol fee output quoted by the hub */
+    feeQuote?: EncoderFeeQuote;
+    /** Enable or disable transparent payload compression */
+    compress?: boolean;
+    /** Per-call encoder capabilities and funding-selection controls */
+    options?: Record<string, any>;
+    /** Funding address used for SDK-side UTXO selection */
+    sourceAddress?: string;
+    /**
+     * Local miner-fee ceiling for submitAction, estimateFees and message signing.
+     * Submit opts wins; unsigned builders that return ActionResult ignore it.
+     */
+    maxFeeSats?: number | bigint | string;
+    /**
+     * Local shaped-funding ceiling for submitAction and estimateFees.
+     * Submit opts wins; unsigned builders that return ActionResult ignore it.
+     */
+    maxPhaseFundingSats?: number | bigint | string;
     /** Projected inclusion height used by BatchBuilder for height-gated weight rules */
     targetHeight?: number;
 }
@@ -378,13 +404,15 @@ export interface PreflightReport {
     /**
      * When the engine stamped this report (`nowMs()`), for staleness.
      *
-     * Underscore-led and still part of the returned surface: the SDK's own
+     * Underscore-led and still part of the returned surface: the reference
      * `isStale(report, { now, knownTip })` in src/preflight/lifecycle.js reads
-     * it to decide whether a report is too old to sign against, and
-     * test/unit/preflight/lifecycle.test.js pins that behaviour. Every report
-     * the engine returns carries it, so a tarball consumer writing its own
-     * Approve-time re-check has it to read; omitting it from this declaration
-     * would describe a report the engine does not produce.
+     * it, and test/unit/preflight/lifecycle.test.js pins that behaviour. The
+     * engine does not call `isStale`, the package entry does not export it,
+     * and the in-tree wallet ages a report from its own receipt time, so no
+     * signing path reads this field. Every report the engine returns carries
+     * it, so a tarball consumer writing its own Approve-time re-check has it
+     * to read; omitting it from this declaration would describe a report the
+     * engine does not produce.
      */
     _stampedAt: number;
 }
@@ -2687,6 +2715,18 @@ export interface SubmitActionOpts {
      * indexer executes them against the contract.
      */
     strictStatus?: boolean;
+    /** Refuse stale explorer data before encoding or signing */
+    strictFreshness?: boolean;
+    /** Skip address-resolver compaction of action parameters */
+    skipAddressCompaction?: boolean;
+    /** Per-call halt gate mode; omitted uses the SDK-wide mode */
+    preflight?: false | 'off' | 'warn' | 'report' | 'local' | 'enforce';
+    /** Sign the reconciled PSBT instead of using wallet.signPsbt */
+    signer?: (psbtHex: string, context: { encoding: string }) => Promise<SignPsbtResult>;
+    /** Local miner-fee ceiling; wins over encoderOpts.maxFeeSats. Malformed values are refused. */
+    maxFeeSats?: number | bigint | string;
+    /** Local shaped-funding ceiling; wins over encoderOpts. Malformed values are refused. */
+    maxPhaseFundingSats?: number | bigint | string;
     /**
      * Gate on the CONTRACT'S OWN state before resolving, the only signal that
      * cannot race the indexer. The state gate runs when key or match is given,

@@ -32,8 +32,8 @@
  * guessed from the encoder's answer.
  *
  * Fail-closed: throws SDKActionError on the first output or fee it cannot account
- * for. Returns { fee, totalIn, totalOut } (fee null when the PSBT does not carry
- * enough input data to compute one).
+ * for. Returns { fee, totalIn, totalOut } only after every value needed for fee
+ * accounting has been verified.
  */
 
 const bitcoin = require('bitcoinjs-lib');
@@ -283,10 +283,19 @@ function checkPhaseFundingCap(intent, outputs, deny) {
             { total: String(outputs.phaseFundingTotal), legs: outputs.phaseFunding.length, maxPhaseFundingSats: String(maxPhaseFunding) });
 }
 
-// Finish fee accounting only when every input value is available.
+// A fee gate that cannot read every input value must fail closed.
 function reconcileFee(intent, inputs, outputs, deny) {
+    // Parse the caller's cap before any fee-dependent branch. An unreadable fee
+    // must not turn a malformed or unenforceable cap into an uncapped approval.
+    const maxFee = exactU64(intent.maxFeeSats);
+    if (intent.maxFeeSats != null && maxFee === null)
+        return deny('MALFORMED_FEE_CAP',
+            { maxFeeSats: String(intent.maxFeeSats),
+              detail: 'maxFeeSats must be a non-negative integer (number, bigint, or digit string); the cap cannot be enforced as given' });
     if (!inputs.feeComputable)
-        return { fee: null, totalIn: null, totalOut: outputs.totalOut, phaseFunding: outputs.phaseFunding };
+        return deny('UNCOMPUTABLE_FEE',
+            { totalOut: String(outputs.totalOut),
+              detail: 'an input value could not be read, so the fee guards and any maxFeeSats cap cannot be enforced' });
     // (e) Fee. The action string never constrains the miner fee, so an encoder can
     //     drain the balance by omitting or undersizing change and leaving the
     //     remainder to miners. Two always-on guards that cannot false-positive: a
@@ -299,16 +308,8 @@ function reconcileFee(intent, inputs, outputs, deny) {
     if (inputs.totalIn > 0n && outputs.totalOut === 0n)
         return deny('FULL_BURN_FEE', { totalIn: String(inputs.totalIn), detail: 'every satoshi would go to miners' });
     const fee = inputs.totalIn - outputs.totalOut;
-    // Caller-supplied cap is parsed exactly. Routing it through Number before
-    // toU64 rounds a >2^53 cap, which both slackens and false-positives the
-    // comparison. exactU64 also keeps the decimal-STRING form the encoder emits.
-    const maxFee = exactU64(intent.maxFeeSats);
-    // Same fail-closed rule as the phase-funding cap above: an unparseable ceiling
-    // is denied, never treated as no ceiling.
-    if (intent.maxFeeSats != null && maxFee === null)
-        return deny('MALFORMED_FEE_CAP',
-            { maxFeeSats: String(intent.maxFeeSats),
-              detail: 'maxFeeSats must be a non-negative integer (number, bigint, or digit string); the cap cannot be enforced as given' });
+    // maxFee was parsed exactly above. Routing it through Number would round a
+    // value above 2^53 and could weaken or falsely trigger the comparison.
     if (intent.maxFeeSats != null && fee > maxFee)
         return deny('FEE_OVER_CAP', { fee: String(fee), maxFeeSats: String(maxFee) });
 
@@ -379,4 +380,4 @@ function feeQuoteAuthorizedOutput(feeQuote) {
     return { address: feeQuote.address, value };
 }
 
-module.exports = { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput };
+module.exports = { reconcileEncoded, reconcileFee, psbtPrevouts, feeQuoteAuthorizedOutput };

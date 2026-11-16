@@ -152,7 +152,10 @@ class LifecycleManager {
     // Submit an action through the full lifecycle.
     //
     // actionData   - { action, params } (same shape as createAction input, without encoder)
-    // encoderOpts  - { pubkey, change, utxos, encoding, fee, feePerKb, ... }
+    // encoderOpts  - { pubkey, change, utxos, rawData, encoding, fee, feePerKb,
+    //                  rbf, dust, unconfirmed, compressedPubKey, customOutputs,
+    //                  attachPrevTx, feeQuote, compress, options, sourceAddress,
+    //                  maxFeeSats, maxPhaseFundingSats }
     // opts:
     //   wif             - WIF private key for signing (required)
     //   waitForIndexer  - wait for indexer confirmation (default true)
@@ -163,16 +166,24 @@ class LifecycleManager {
     //                     no indexer status can be read. Defaults to false for
     //                     ordinary actions and true for contract actions.
     //   strictFreshness - refuse stale explorer data before encoding or signing
+    //   skipAddressCompaction - keep action addresses in their supplied form
+    //   preflight       - per-call halt-gate mode
+    //   signer          - async (psbtHex, { encoding }) custom signer
     //   awaitContract   - gate on contract state or balance before returning:
     //                       { contractActionIndex, key, equals, match,
     //                         tick, minQuantity, timeout, pollInterval }
     //                     Results land on result.contractState or
     //                     result.contractBalance.
-    //   maxFeeSats      - absolute miner-fee ceiling for the encoder response
-    //   maxPhaseFundingSats - absolute ceiling for shaped funding outputs
+    //   maxFeeSats      - local miner-fee ceiling; opts wins over encoderOpts
+    //   maxPhaseFundingSats - local shaped-funding ceiling; opts wins over encoderOpts
     //   explorer        - explorer client polled during the indexer wait
     //   explorerUrl     - explorer URL for constructing that client
+    //   explorerPort    - port paired with explorerUrl
     //   onProgress      - callback(step, data) for lifecycle notifications
+    //
+    // Caps are checked locally before signing, malformed values are refused, and
+    // they are never sent to the encoder. estimateFees reads them only from
+    // encoderOpts, so put shared caps there.
     //
     // The reveal for either envelope or chunk encoding is built, reconciled and
     // signed before its commit is broadcast, so no commit goes out unless a reveal

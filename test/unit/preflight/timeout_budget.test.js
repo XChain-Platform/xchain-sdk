@@ -4,8 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // The pre-flight timeout is ONE budget for the whole run (constants.js:
-// DEFAULT_TIMEOUT_MS is the overall per-preflight budget, RECHECK_TIMEOUT_MS
-// the Approve-time re-check budget). Tier 2 reads run one after another
+// DEFAULT_TIMEOUT_MS is the overall per-preflight budget). Tier 2 reads run one after another
 // (the token lookup, then the balance listing), so a budget handed to each
 // read separately let a stalled explorer hold a pre-flight for about twice
 // its stated budget. These cases stall every endpoint and check that the

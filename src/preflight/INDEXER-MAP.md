@@ -82,7 +82,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `f9d86586d`
+**Pins taken at indexer commit:** `8960c6ed1`
+
+(Re-anchored 2026-11-15 to `8960c6ed1`, the origin develop head the next review round sits on. At
+that commit every one of the sixteen rows hashes as pinned except `batch`, which is pinned to the
+tree the round's two commits above it produce, so the review command below, run for the `batch`
+directory, is exactly the round's change to that row. The previous anchor `f9d86586d` is an
+object no branch reaches, the review-round landing having reached origin develop under other commit
+ids with the same mapped content, so it could not begin a range; `8960c6ed1` is on origin develop
+itself and stays reachable whether the round lands by fast-forward, as a merge parent or squashed.)
 
 (Re-anchored 2026-11-14 against the committed indexer tree `f9d86586d`, the review-round landing
 that folds a multi-leg SEND sub-command's leg verdicts into the BATCH probe answer, reviewed in the
@@ -520,7 +528,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff f9d86586d..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 8960c6ed1..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -603,7 +611,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7` |
 | `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
-| `checks/batch.js` | `src/actions/batch/` | `c6ca292c4c8a52424f1fe7779c9b8361c41e5fbde17bb4ba6c5fb1c313dd1c13` |
+| `checks/batch.js` | `src/actions/batch/` | `ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
 | `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
@@ -634,6 +642,34 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-15 - a BATCH probe says why it cannot judge a payment-triggered DISPENSE
+
+The `batch` pin moves from `c6ca292c` to `ca3e05eb`, hashed from the committed review-round tree by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` and read against the anchor above
+(`8960c6ed1`, which hashes `batch` to `c6ca292c`). The round's two commits change three parts of the
+directory and no other mapped row.
+
+- **BATCH, `batch/probe.js`:** `recordSubVerdict` now sets the `refused` note on a DISPENSE
+  sub-command whose probe status is null and which carries no `COIN_DESTINATION`, because the
+  synthetic pre-flight transaction pays no dispenser address. The row's `status` stays null, as it
+  already was for that case, and the note is the only new field value.
+- **BATCH, `batch/limits.js`, `batch/sub_command.js`:** comment-only, shortened. Every weight,
+  cap and activation constant and every code path is unchanged.
+
+**Client follow-up.** No admission predicate, status string, fee or weight rule, or validation order
+moves, so every on-chain verdict and row is unchanged and `checks/batch.js` stands. The network's
+BATCH answer for that sub-command was already unjudged and stays unjudged; only its stated reason
+changes. `classifySubCommands` in `index/tier1_findings.js` already files a `status: null` row as
+`DRYRUN_SUBCOMMAND_UNJUDGED` and prints the row's `refused` text in the disclosure, so the note
+reaches the caller with no code change, and only the comment naming the live causes of an unjudged
+row is extended. Tests:
+`test/unit/preflight/tier1/batch_tier1.test/10_a_payment_triggered_dispense_is_unjudged_with_its_reason.test.js`,
+the note carried into the disclosure, an unjudged row never overriding a client error, and an older
+answer with no note.
+
+**Direction: NEUTRAL for validity.** NO CLIENT CHECK MOVES. The anchor moves to the origin develop
+head and the other fifteen rows are unchanged.
 
 ### 2026-11-14 - a BATCH probe answers a multi-leg SEND sub-command with its first refused leg
 
