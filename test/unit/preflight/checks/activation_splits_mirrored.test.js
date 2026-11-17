@@ -39,6 +39,24 @@ function batchRowColumns(name) {
     });
 }
 
+// Resolve one time-table row of `file`, which may span lines, to its six columns; an identifier
+// column resolves through its literal in flag_times.js, where UNARMED stays 'UNARMED'.
+function changeRowColumns(file, name) {
+    const src = read(file);
+    const parts = src.split(`['${name}',`);
+    expect(parts, `the ${name} row appears exactly once in ${file}`).to.have.length(2);
+    const cols = parts[1].split('],')[0].split(',').map((c) => c.trim()).filter(Boolean).slice(1);
+    expect(cols, `${name} carries mainnet/testnet/regtest time and block columns`).to.have.length(6);
+    const flags = read('flag_times.js');
+    return cols.map((c) => {
+        if (/^\d+$/.test(c)) return Number(c);
+        if (c === 'UNARMED') return 'UNARMED';
+        const literal = new RegExp(`const ${c} = (\\d+|UNARMED);`).exec(flags);
+        expect(literal, `${name} column ${c} resolves to a literal in flag_times.js`).to.not.equal(null);
+        return literal[1] === 'UNARMED' ? 'UNARMED' : Number(literal[1]);
+    });
+}
+
 // Fail under XCHAIN_REQUIRE_SIBLINGS=1 and refuse a symlink into a live main checkout, like every sibling guard.
 function indexerRowsSuite() {
     before(function () {
@@ -91,12 +109,18 @@ function indexerRowsSuite() {
                 .to.deep.equal([0, 0, 0]);
         }
     });
+
+    it('the ORDER GET_ADDRESS coin time row matches the pinned table, with no block gate', function () {
+        const [mainnet, testnet, regtest, ...blocks] = changeRowColumns('changes_5.js', 'ORDER_GET_ADDRESS_COIN');
+        expect({ mainnet, testnet, regtest }).to.deep.equal(DISCLOSURE_MIRRORS.ORDER_GET_ADDRESS_COIN.table);
+        expect(blocks).to.deep.equal([0, 0, 0]);
+    });
 }
 
 describe('pre-flight activation splits are mirrored, not hard-coded', function () {
     it('pins the cumulative-cap and batch time rows; representability is a drift-gated activation row', function () {
         expect(Object.keys(DISCLOSURE_MIRRORS)).to.have.members(
-            ['ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', 'BATCH_ISSUANCE_LIMITS', 'BATCH_COST_WEIGHTING']);
+            ['ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', 'BATCH_ISSUANCE_LIMITS', 'BATCH_COST_WEIGHTING', 'ORDER_GET_ADDRESS_COIN']);
         expect(ACTIVATION_MIRRORS).to.have.property('AMOUNT_REPRESENTABILITY');
     });
 
