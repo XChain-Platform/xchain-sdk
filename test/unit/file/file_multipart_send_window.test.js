@@ -59,6 +59,9 @@ describe('multipart send window', function () {
         ]);
     });
 
+});
+
+describe('multipart send window failures', function () {
     it('stops starting items after a rejection and waits for pending workers', async function () {
         const calls = Array.from({ length: 8 }, deferred);
         const failure = new Error('item 3 failed');
