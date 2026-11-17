@@ -32,6 +32,8 @@ const { parseCoinCode } = require('../utils/endpoints.js');
 const { AMOUNT_FORMAT_FIELDS, isAmountFormatField, isChainValidZeroEscrow } = require('./universal/amount_fields.js');
 const { HALT_INDEX_FIELDS, HALT_REQUIRED_FIELDS, checkHaltFields } = require('./universal/halt_fields.js');
 const { NATIVE_TICK_REFUSED, checkPriceV1Tick, isCrossChainGet, nativeTickRefused } = require('./universal/tick_rules.js');
+const { BET_LIMITS } = require('../actions/betting/bet_rules.js');
+const { gasConfig, util } = require('./checks/batch/fee_projection.js');
 
 // Wire fields that reference a TICK whose existence is checkable.
 // ISSUE is excluded at the loop below (existence is legal there: format 0
@@ -301,12 +303,37 @@ async function checkTokenExistence(ctx, parsed) {
     }
 }
 
+function isFreeMarketCreate(ctx, parsed, nowMs = Date.now()) {
+    if (parsed.action !== 'BET' || String(parsed.version) !== '0') return false;
+
+    const deadline = ctx.params.DEADLINE;
+    const rawWindow = ctx.params.REFUND_WINDOW;
+    const refundWindow = rawWindow === undefined || rawWindow === null || String(rawWindow).trim() === ''
+        ? String(BET_LIMITS.DEFAULT_BET_REFUND_WINDOW)
+        : String(rawWindow).trim();
+    if (Array.isArray(deadline) || Array.isArray(rawWindow)) return false;
+    if (!/^\d+$/.test(String(deadline || '').trim()) || !/^\d+$/.test(refundWindow)) return false;
+
+    const gas = gasConfig(ctx.sdk);
+    if (!gas) return false;
+
+    // The indexer materializes EXPIRE_AT as DEADLINE + REFUND_WINDOW, then prices
+    // EXPIRE_AT - BLOCK_TIME through getUnifiedDurationFee
+    // (xchain-indexer/src/actions/bet/create_feed.js:149-164 and fees.js:34-41).
+    // Keep the same wall clock, nearest-day arithmetic, and configured freeDays
+    // used by this SDK's checks/batch/fee_projection.js:158-175.
+    const expireAt = util.bcadd(String(deadline).trim(), refundWindow, 0);
+    const nowSeconds = Math.floor(nowMs / 1000);
+    const durationDays = util.bcdiv(util.bcsub(expireAt, nowSeconds, 0), 86400, 0);
+    return !numeric.isPositive(util.bcsub(durationDays, gas.freeDays, 0));
+}
+
 function addNativeFeeForfeitureNotice(ctx, parsed) {
     // 5. Native-fee forfeiture notice: fee-charging actions on chains
     // with mandatory native fees forfeit the native output if the
-    // action is invalid. Always shown for fee-charging actions
-    // (warning; the highest-cost failure mode, spec §4.2).
-    if (FEE_CHARGING_ACTIONS.includes(parsed.action)) {
+    // action is invalid. The exception is a market create that the duration
+    // projection proves free (warning; the highest-cost failure mode, spec §4.2).
+    if (FEE_CHARGING_ACTIONS.includes(parsed.action) && !isFreeMarketCreate(ctx, parsed)) {
         ctx.addFinding(FINDING_CODES.NATIVE_FEE_FORFEIT, 'warning',
             'This action charges a protocol fee. If the chain rejects the action, any attached native-coin fee output is forfeited.',
             { action: parsed.action });

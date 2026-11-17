@@ -8,6 +8,22 @@ const { expect, has, reportFor } = require('./helpers/setup.js');
 describe('pre-flight Tier-2 per-action matrix', function () {
 
     describe('native-fee forfeiture disclosure (FEE_CHARGING_ACTIONS)', function () {
+        const day = 86400;
+
+        it('a market create inside the free-duration window has no forfeiture warning', async function () {
+            const now = Math.floor(Date.now() / 1000);
+            const r = await reportFor(`BET|0|Short market|yes,no|JDOG|0|${now + (2 * day)}|${14 * day}`, {});
+            expect(has(r, 'NATIVE_FEE_FORFEIT')).to.equal(false);
+        });
+
+        it('a market create beyond the free-duration window keeps the forfeiture warning', async function () {
+            const now = Math.floor(Date.now() / 1000);
+            // The close time alone is inside 90 days, but the indexer prices the
+            // full life through the refund window, making this a 94-day market.
+            const r = await reportFor(`BET|0|Long market|yes,no|JDOG|0|${now + (80 * day)}|${14 * day}`, {});
+            expect(has(r, 'NATIVE_FEE_FORFEIT', 'warning')).to.equal(true);
+        });
+
         it('BET warns about native-fee forfeiture like every other fee-charging action', async function () {
             // bet.js calls createFeesObject and takes the paymentMode === 'native'
             // branch, so a BET paid in native coin forfeits it exactly as ORDER does.

@@ -154,9 +154,9 @@ describe('decoder.describe', function () {
             'SLEEP|0|900000|JDOG': /until block 900000/,
             'CALLBACK|0|JDOG': /callback redemption of JDOG/,
             'PRICE|1|BTC|JDOG|USD|1.5': /^Publish oracle price 1 JDOG = 1.5 USD/,
-            'BET|0|Rain tomorrow|yes,no|JDOG|0.02|900000|86400': /^Open a betting market on JDOG/,
-            'BET|1|42': /^Cancel market 42 and refund every bet/,
-            'BET|2|42|1|10': /^Bet 10 on outcome 1 of market 42/,
+            'BET|0|Rain tomorrow|yes,no|JDOG|0.02|900000|86400': /^Open a market on JDOG/,
+            'BET|1|42': /^Cancel market 42 and refund every position/,
+            'BET|2|42|1|10': /^Commit 10 to outcome 1 of market 42/,
             'BET|3|42|1': /^Resolve market 42 to outcome 1/,
         };
         for (const [wire, re] of Object.entries(cases)) {
@@ -179,7 +179,7 @@ describe('decoder.describe', function () {
     describe('BET (§11.3)', function () {
         it('a placed bet states finality and the parimutuel share', function () {
             const w = describeAction(parse('BET|2|42|1|10')).warnings.join('\n');
-            expect(w).to.include('Bets are final');
+            expect(w).to.include('position is final');
             expect(w).to.include('parimutuel');
         });
 
@@ -197,6 +197,13 @@ describe('decoder.describe', function () {
             const d = describeAction(parse('BET|0|Rain tomorrow|yes,no|JDOG|0.02|900000|86400'));
             expect(d.warnings.join('\n')).to.include('You are the oracle');
             expect(d.details.find(x => x.label === 'Outcomes').value).to.equal('yes / no');
+        });
+
+        it('market creation formats its close time and refund window for review', function () {
+            const d = describeAction(parse('BET|0|Rain tomorrow|yes,no|JDOG|0.02|1793385000|1209600'));
+            expect(d.details.find(x => x.label === 'Market closes').value)
+                .to.equal('2026-10-30 18:30:00 UTC (1793385000)');
+            expect(d.details.find(x => x.label === 'Refund window').value).to.equal('14 days');
         });
 
         it('a single-outcome market is flagged', function () {

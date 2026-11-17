@@ -109,6 +109,6 @@ describe('BET v4 edit feed list safeguards', function () {
         expect(decoded.details.find(row => row.label === 'Block list').value).to.equal('Detach');
         expect(decoded.warnings.join('\n')).to.include('market creator');
         expect(decoded.warnings.join('\n')).to.include('market is open');
-        expect(decoded.warnings.join('\n')).to.include('future bets only');
+        expect(decoded.warnings.join('\n')).to.include('future positions only');
     });
 });
