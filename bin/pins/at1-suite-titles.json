@@ -3414,6 +3414,15 @@
       "HubConnector getAllConfig() treats a regressed hub watermark as a hub reset: alarms, drops the cache and re-fetches the full tree @regression",
       "HubConnector getAllConfig() tries next endpoint when first fails (multi-endpoint)"
     ],
+    "63c882a4f986d928": [
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
+      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
+    ],
     "63ee40d9ec379a48": [
       "pre-flight BATCH fee budget: priced classes beyond ISSUE PINNED: MINT refuses to price - an all-MINT no-gas batch raises no fee verdict",
       "pre-flight BATCH fee budget: priced classes beyond ISSUE PINNED: XEXEC refuses to price - it cannot even be encoded client-side",
@@ -4873,25 +4882,6 @@
       "wire collapse: a single request/response shape a single-input approval returns a one-element signatures array, not a bare sig",
       "wire collapse: a single request/response shape refuses the legacy single-input request shape"
     ],
-    "909cd7807a8cef9e": [
-      "vendored deploy-lint: banned-with banned-with is a consensus rule",
-      "vendored deploy-lint: banned-with clean code has no banned-with finding",
-      "vendored deploy-lint: banned-with does not flag the word with in identifiers, properties, strings or comments",
-      "vendored deploy-lint: banned-with flags a with statement with its line",
-      "vendored deploy-lint: banned-with flags every with statement, nested ones included",
-      "vendored deploy-lint: banned-with lintSource emits an error-severity finding carrying the line",
-      "vendored deploy-lint: banned-with yields no hits for unparseable source",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/nesting_depth.js matches xchain-vm/src/lint-core/nesting_depth.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
-      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
-    ],
     "90eae5e9ed3d466d": [
       "BATCH pre-flight (Tier 1 sub-command verdicts) oracle fees are disclosed, not judged a per-oracle total becomes an info finding naming the amount and address",
       "BATCH pre-flight (Tier 1 sub-command verdicts) oracle fees are disclosed, not judged no oracleFeesOwed means no finding",
@@ -5423,6 +5413,22 @@
     ],
     "9f8bf7a383946aa2": [
       "WalletUtils deriveAddress() - extended should throw INVALID_ADDRESS_TYPE for unknown type"
+    ],
+    "9f9e95207a9df5fd": [
+      "vendored deploy-lint: banned-with banned-with is a consensus rule",
+      "vendored deploy-lint: banned-with clean code has no banned-with finding",
+      "vendored deploy-lint: banned-with does not flag the word with in identifiers, properties, strings or comments",
+      "vendored deploy-lint: banned-with flags a with statement with its line",
+      "vendored deploy-lint: banned-with flags every with statement, nested ones included",
+      "vendored deploy-lint: banned-with lintSource emits an error-severity finding carrying the line",
+      "vendored deploy-lint: banned-with yields no hits for unparseable source",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
+      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
     ],
     "a13f37baf43851b0": [
       "CoSignerClient (agent side) msg-to-PSBT binding sign() throws COSIGNER_MSG_MISMATCH before signing when the returned msg is not the PSBT sighash",
@@ -7556,18 +7562,6 @@
       "FormatSelector.select(): explicit VERSION must be a canonical integer still rejects a well-shaped version the action does not define",
       "FormatSelector.select(): explicit VERSION must be a canonical integer the error names the value it refused, so the caller can see what it sent"
     ],
-    "e76d44ec1ed903fd": [
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/nesting_depth.js matches xchain-vm/src/lint-core/nesting_depth.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
-      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
-    ],
     "e79b34ecf9c11e4a": [
       "MessagingUtils @crypto @regression send(): validation guards encodes a real MESSAGE v2 action and returns txid on a successful ECIES send",
       "MessagingUtils @crypto @regression send(): validation guards encrypts a binary payload with AES method (round-trips via aesDecryptBytes)",
@@ -8134,7 +8128,7 @@
   "scripts": {
     "test": {
       "fileCount": 615,
-      "titleCount": 6464,
+      "titleCount": 6461,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8351,7 +8345,7 @@
         "test/unit/contract/chunk_helper/code_size.test.js": "80b9bd007d2ac9ff",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
         "test/unit/contract/contract_lint_banned_with.test.js": "f48a98be337a65d6",
-        "test/unit/contract/contract_lint_banned_with_parity.test.js": "e76d44ec1ed903fd",
+        "test/unit/contract/contract_lint_banned_with_parity.test.js": "63c882a4f986d928",
         "test/unit/contract/contract_lint_destructure.test.js": "9481a25a83b3f20c",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
         "test/unit/contract/contract_lint_optional_chain.test.js": "ddd6f2464ac1217e",
@@ -8755,7 +8749,7 @@
     },
     "test:all": {
       "fileCount": 655,
-      "titleCount": 6799,
+      "titleCount": 6796,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -9012,7 +9006,7 @@
         "test/unit/contract/chunk_helper.test.js": "e22290dc42295659",
         "test/unit/contract/chunk_helper/code_size.test.js": "80b9bd007d2ac9ff",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
-        "test/unit/contract/contract_lint_banned_with.test.js": "909cd7807a8cef9e",
+        "test/unit/contract/contract_lint_banned_with.test.js": "9f9e95207a9df5fd",
         "test/unit/contract/contract_lint_destructure.test.js": "9481a25a83b3f20c",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
         "test/unit/contract/contract_lint_optional_chain.test.js": "ddd6f2464ac1217e",
