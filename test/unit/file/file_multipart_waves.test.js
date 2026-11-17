@@ -76,7 +76,7 @@ function fakeWallet(psbts) {
 
 function fakeSdk(plan, chain, { stopBeforeFunding = null, prefix = 'run' } = {}) {
     const state = { funding: [], active: 0, highWater: 0, waveHighWater: 0,
-        activeWaves: new Set(), pieceCalls: 0 };
+        activeWaves: new Set(), pieceCalls: 0, confirmationCalls: 0 };
     const psbts = new Map();
     const encoder = { getFeeTiers: async () => ({ high: 2 }),
         async createTx(request) {
@@ -107,12 +107,16 @@ function fakeSdk(plan, chain, { stopBeforeFunding = null, prefix = 'run' } = {})
             const txid = prefix + '-piece-' + (++state.pieceCalls);
             addToChain(chain, plan, actionData, txid);
             await new Promise(resolve => setImmediate(resolve));
-            chain.mine();
             state.active -= 1;
+            return { txid };
+        },
+        async waitForAction(txid) {
+            state.confirmationCalls += 1;
+            chain.mine();
             if (!chain.piecesFor('source').some(piece => piece.state === 'mempool'))
-                state.activeWaves.delete(wave);
-            return { txid, indexed: { actions: [{ action: 'FILE',
-                action_index: chain.actionIndexOf(txid) }] } };
+                state.activeWaves.clear();
+            return { tx_hash: txid, block_index: state.funding.length,
+                actions: [{ action: 'FILE', action_index: chain.actionIndexOf(txid) }] };
         },
         waitForFileComplete: async () => ({ multipart: { status: 'complete' } }) };
     return { sdk, state };
@@ -152,6 +156,7 @@ describe('publishMultipartFile funding waves', function () {
         assert.strictEqual(run.state.highWater, 8);
         assert.strictEqual(run.state.waveHighWater, 1);
         assert.strictEqual(chain.mempoolHighWater(), 8);
+        assert.strictEqual(run.state.confirmationCalls, 251);
         assert.strictEqual(run.result.sent.length, 251);
         assert.deepStrictEqual(run.events.filter(event => event.step === 'wave_funded')
             .map(event => event.payload.wave), [1, 2, 3]);
@@ -189,5 +194,6 @@ describe('publishMultipartFile funding waves', function () {
         assert(run.result.sent.every(piece => piece.kind === 'part' && piece.index >= 99));
         assert.strictEqual(run.state.highWater, 8);
         assert.strictEqual(run.state.waveHighWater, 1);
+        assert.strictEqual(run.state.confirmationCalls, 151);
     });
 });

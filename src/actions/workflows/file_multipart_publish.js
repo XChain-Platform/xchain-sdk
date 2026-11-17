@@ -1,5 +1,12 @@
-/* Copyright © 2025-2026 Dankest, LLC. SPDX-License-Identifier: AGPL-3.0-or-later */
+/*********************************************************************
+ *
+ * Copyright © 2025-2026 Dankest, LLC
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ ********************************************************************/
+
 'use strict';
+
 const crypto = require('crypto');
 const multipartPlan = require('../../file/multipart.js');
 const readiness = require('../../file/multipart_readiness.js');
@@ -17,9 +24,11 @@ const reconcile = require('../../carrier/reconcile_encoded.js');
 const carrierBinding = require('../../carrier/bind_action_carrier.js');
 const { FILE_MULTIPART_ACTIVATION_TIME } = require('../../protocol/constants.js');
 const { sourceDetails } = require('./file_multipart_source.js');
+
 const MULTIPART = Object.assign({}, multipartPlan, readiness, funding, pieceRequest,
     fundingMatch, resume, progress, lane, gatedBatch, blockTimes, twoStep,
     assemblyWait, reconcile, carrierBinding);
+
 function tierOf(sdk) {
     const network = (sdk.options && sdk.options.network) || (sdk.wallet && sdk.wallet.network) || '';
     const tier = String(network).split('-').pop();
@@ -27,11 +36,13 @@ function tierOf(sdk) {
         throw new Error('publishMultipartFile requires a configured network tier');
     return tier;
 }
+
 function statusBlockTime(status, coin) {
     const raw = status && status.last_block_time;
     if (raw && typeof raw === 'object') return Number(raw[coin]);
     return Number(raw);
 }
+
 async function assertActive(sdk, opts, modules) {
     const explorer = sdk.requireExplorer();
     const activation = opts.activationTime !== undefined
@@ -41,11 +52,13 @@ async function assertActive(sdk, opts, modules) {
     const times = await modules.readRecentBlockTimes(explorer, 11);
     return modules.assertMultipartActive(times, activation);
 }
+
 function baseCoin(sdk, opts) {
     if (opts.coin) return String(opts.coin).toUpperCase();
     const coin = String(sdk.requireExplorer().coin || '').toUpperCase();
     return coin.replace(/^[RT](?=BTC$|LTC$|DOGE$)/, '');
 }
+
 async function manifestDescriptor(sdk, plan, source, opts, modules) {
     let actionData = { action: 'FILE', params: plan.manifestParams };
     if (plan.key) {
@@ -66,6 +79,7 @@ async function manifestDescriptor(sdk, plan, source, opts, modules) {
         actionData, data: composed.actionString,
         rawData: Buffer.alloc(0), payloadBytes: Buffer.byteLength(composed.actionString) };
 }
+
 async function plannedDescriptors(sdk, plan, source, opts, modules) {
     const parts = plan.parts.map(part => {
         const actionData = { action: 'FILE', params: part.params };
@@ -77,6 +91,7 @@ async function plannedDescriptors(sdk, plan, source, opts, modules) {
     parts.push(await manifestDescriptor(sdk, plan, source, opts, modules));
     return parts;
 }
+
 function resumeState(plan, descriptors, opts, modules) {
     const onChain = Array.isArray(opts.onChainPieces) ? opts.onChainPieces : [];
     const state = modules.piecesToSend({
@@ -95,6 +110,7 @@ function resumeState(plan, descriptors, opts, modules) {
     const manifest = onChain.find(piece => piece.kind === 'manifest' && piece.fileHash === plan.fileHash);
     return { state, send, manifestActionIndex: manifest && manifest.actionIndex };
 }
+
 function verifyResume(bytes, plan, opts, modules) {
     const digest = crypto.createHash('sha256').update(bytes).digest('hex');
     const records = opts.resumeRecord ? [opts.resumeRecord] : opts.resumeRecords;
@@ -108,11 +124,13 @@ function verifyResume(bytes, plan, opts, modules) {
     modules.confirmResumePlan(record, plan);
     return digest;
 }
+
 function valueAt(value, descriptor, position) {
     if (typeof value === 'function') return value(descriptor, position);
     if (Array.isArray(value)) return value[position];
     return value;
 }
+
 function pairSizeOf(piece, source, opts, position) {
     const quote = opts.quote || opts;
     const sizes = quote.sizes || opts.sizes || quote;
@@ -125,12 +143,14 @@ function pairSizeOf(piece, source, opts, position) {
         throw new Error('publishMultipartFile requires a finite multipart pair size quote');
     return size;
 }
+
 function outputFloorOf(sdk, opts) {
     const quote = opts.quote || opts;
     if (Number.isFinite(quote.outputFloor) && quote.outputFloor >= 0) return quote.outputFloor;
     if (baseCoin(sdk, opts) === 'DOGE') return 1000000;
     return sdk.wallet.getBitcoinNetwork().dustThreshold;
 }
+
 async function feeRateOf(encoder, opts) {
     const quote = opts.quote || opts;
     if (Number.isFinite(quote.rate) && quote.rate > 0) return quote.rate;
@@ -139,6 +159,7 @@ async function feeRateOf(encoder, opts) {
     if (!Number.isFinite(rate) || rate <= 0) throw new Error('encoder returned no high fee rate');
     return rate;
 }
+
 function fundingValues(sdk, pieces, source, rate, opts, modules) {
     const quote = opts.quote || opts;
     const supplied = quote.pieceFundingValues || quote.pieceValues || quote.outputs;
@@ -161,6 +182,7 @@ function fundingValues(sdk, pieces, source, rate, opts, modules) {
         revealPad,
     }));
 }
+
 function fundingOutputsFromPsbt(sdk, psbt) {
     return sdk.wallet.decomposePsbt(psbt).outputs.map((output, vout) => ({
         vout,
@@ -169,12 +191,14 @@ function fundingOutputsFromPsbt(sdk, psbt) {
         scriptPubKey: output.scriptPubKeyHex,
     }));
 }
+
 function fundingChange(outputs, utxos, txid, sourceAddress) {
     const pieceVouts = new Set(utxos.map(utxo => utxo.vout));
     const output = outputs.find(item => !pieceVouts.has(item.vout)
         && item.address === sourceAddress);
     return output ? { ...output, txid } : null;
 }
+
 async function waitForFunding(encoder, txid, opts) {
     if (typeof opts.waitForFunding === 'function') return opts.waitForFunding(txid);
     const timeout = opts.timeout > 0 ? opts.timeout : 120000;
@@ -190,6 +214,7 @@ async function waitForFunding(encoder, txid, opts) {
     error.code = 'FUNDING_CONFIRMATION_TIMEOUT';
     throw error;
 }
+
 async function fundPieces(sdk, wave, previousFunding, source, rate, opts, modules, progress) {
     const pieces = wave.pieces;
     const previousChange = previousFunding && previousFunding.change;
@@ -197,6 +222,7 @@ async function fundPieces(sdk, wave, previousFunding, source, rate, opts, module
     const encoder = sdk.requireEncoder();
     const values = fundingValues(sdk, pieces, source, rate, opts, modules);
     const expected = modules.multipartFundingOutputs(values, source.sourceAddress).customOutputs;
+    // The encoder picks UTXOs from `pubkey`; the address keeps a P2PKH owner's source exact.
     const request = { pubkey: source.sourceAddress || source.pubkey,
         sourceAddress: source.sourceAddress, change: source.sourceAddress,
         customOutputs: expected, feePerKb: rate * 1000 };
@@ -221,22 +247,26 @@ async function fundPieces(sdk, wave, previousFunding, source, rate, opts, module
     const change = fundingChange(outputs, utxos, signed.txid, source.sourceAddress);
     return { txid: signed.txid, signed, confirmed, expectedOutputs: expected, utxos, change };
 }
+
 function submitOptions(opts) {
     return { wif: opts.wif, waitForIndexer: true, timeout: opts.timeout,
         pollInterval: opts.pollInterval, requireValid: true, preflight: false,
         explorer: opts.explorer };
 }
+
 function oneCallEncoderOpts(piece, utxo, source, rate, modules) {
     return modules.pieceCreateTxParams({ lane: source.lane,
         phase: source.lane === 'standard' ? 'commit' : undefined,
         pubkey: source.pubkey, sourceAddress: source.sourceAddress, utxo, rate,
         data: piece.data, rawData: piece.rawData });
 }
+
 // A gated manifest rides a BATCH, whose reply row nests its sub-actions in `actions`.
 function flattenActionRows(rows) {
     return rows.flatMap(row => [row].concat(row && Array.isArray(row.actions)
         ? flattenActionRows(row.actions) : []));
 }
+
 function actionIndexOf(indexed, kind) {
     const top = indexed && Array.isArray(indexed.actions) ? indexed.actions
         : (indexed && Array.isArray(indexed.data) ? indexed.data : []);
@@ -249,6 +279,21 @@ function actionIndexOf(indexed, kind) {
     const source = row || (indexed && indexed.action_index !== undefined ? indexed : null);
     return source ? source.action_index : null;
 }
+
+function isBlockConfirmed(indexed) {
+    return !!(indexed && indexed.pending !== true
+        && indexed.block_index !== undefined && indexed.block_index !== null);
+}
+
+async function confirmPiece(sdk, piece, result, opts) {
+    const submittedIndex = actionIndexOf(result.indexed, piece.kind);
+    const indexed = isBlockConfirmed(result.indexed)
+        ? result.indexed : await sdk.waitForAction(result.txid, submitOptions(opts));
+    return { ...piece, result: { ...result, indexed },
+        actionIndex: submittedIndex === null
+            ? actionIndexOf(indexed, piece.kind) : submittedIndex };
+}
+
 async function submitOneCall(sdk, piece, utxo, source, rate, opts, modules) {
     const encoderOpts = oneCallEncoderOpts(piece, utxo, source, rate, modules);
     let recovery = null;
@@ -262,6 +307,7 @@ async function submitOneCall(sdk, piece, utxo, source, rate, opts, modules) {
     if (recovery) result.recovery = recovery;
     return result;
 }
+
 function reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules, signedCommitHex) {
     const network = sdk.wallet.getBitcoinNetwork();
     const callerXOnly = source.publicKey.subarray(1, 33);
@@ -278,6 +324,7 @@ function reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules, sig
     modules.assertEnvelopeCarrierBinding({ actionString: piece.data,
         revealPsbt: reveal.psbt, rawData: piece.rawData, network });
 }
+
 async function submitTwoStep(sdk, piece, utxo, source, rate, opts, modules) {
     const encoder = sdk.requireEncoder();
     const params = oneCallEncoderOpts(piece, utxo, source, rate, modules);
@@ -294,21 +341,25 @@ async function submitTwoStep(sdk, piece, utxo, source, rate, opts, modules) {
     return { txid: revealSigned.txid, indexed, signed: revealSigned,
         commit: commitSigned, recovery, encoding: 'TAPROOT' };
 }
+
 async function sendPiece(sdk, piece, utxo, source, rate, opts, modules) {
     if (source.buildMode === 'two_step')
         return submitTwoStep(sdk, piece, utxo, source, rate, opts, modules);
     return submitOneCall(sdk, piece, utxo, source, rate, opts, modules);
 }
+
 async function sendPieces(sdk, pieces, funding, source, rate, opts, modules, progress) {
     const sendWindow = modules.sendInWindow || ((items, limit, worker) => Promise.all(items.map(worker)));
     return sendWindow(pieces, 8, async (piece, index) => {
         const result = await sendPiece(sdk, piece, funding.utxos[index], source, rate, opts, modules);
-        const actionIndex = actionIndexOf(result.indexed, piece.kind);
+        const confirmed = await confirmPiece(sdk, piece, result, opts);
+        const { actionIndex } = confirmed;
         if (piece.kind === 'manifest') progress.emit('manifest_sent', { actionIndex, txid: result.txid });
         else progress.emit('piece_sent', { partIndex: piece.index, actionIndex, txid: result.txid });
-        return { ...piece, result, actionIndex };
+        return confirmed;
     });
 }
+
 async function sendWaves(sdk, waves, source, rate, opts, modules, progress) {
     const fundings = [];
     const sent = [];
@@ -330,6 +381,7 @@ async function sendWaves(sdk, waves, source, rate, opts, modules, progress) {
     }
     return { fundings, sent };
 }
+
 function manifestIndex(sent, resumed) {
     const manifest = sent.find(piece => piece.kind === 'manifest');
     const index = manifest ? manifest.actionIndex : resumed.manifestActionIndex;
@@ -337,6 +389,7 @@ function manifestIndex(sent, resumed) {
         throw new Error('Multipart manifest action_index is unavailable');
     return index;
 }
+
 async function publishMultipartFile(wif, bytes, meta = {}, opts = {}) {
     const sdk = this.sdk || this;
     const modules = MULTIPART;
@@ -375,6 +428,7 @@ async function publishMultipartFile(wif, bytes, meta = {}, opts = {}) {
         plan, source, funding: waveResult.fundings[0] || null,
         fundingWaves: waveResult.fundings, sent };
 }
+
 async function waitForFileComplete(actionIndex, opts = {}) {
     const sdk = this.sdk || this;
     const modules = MULTIPART;
