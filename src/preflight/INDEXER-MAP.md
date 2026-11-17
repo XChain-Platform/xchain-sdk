@@ -82,7 +82,15 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `93cde565f`
+**Pins taken at indexer commit:** `a6b8655f2`
+
+(Re-anchored 2026-11-16 to `a6b8655f2`, the committed tip of the indexer hand branch that adds
+ORDER_GET_ADDRESS_COIN, STATE_VALUE_ASTRAL_ESCAPE and LINT_REGEX_GROUP_DEPTH. Only the `order` pin
+moves, to `4e130541`; the other fifteen rows hash as pinned there. The previous anchor `93cde565f` is
+its ancestor. `a6b8655f2` sits six commits ahead of origin develop `5ceaa07c4`, so it stays reachable
+only if the branch lands by fast-forward or as a merge parent; a squash or rebased landing orphans it,
+and the anchor then moves to the landed commit with no pin change. Until that branch lands, SDK CI,
+which grades this map against indexer develop, reports `order` as drifted.)
 
 (Re-anchored 2026-11-16 to `93cde565f`, the origin develop commit where the `batch` pin
 `ca3e05eb` was taken and all sixteen rows hash as pinned. The previous anchor `8960c6ed1`
@@ -532,7 +540,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 93cde565f..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff a6b8655f2..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -611,7 +619,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/issue.js` | `src/actions/issue/` | `259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978` |
 | `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `8130c1a24aa0e3af97b773fdfdfb6ab6362b28cc5a5a9a55093db47e2736ffef` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `4e13054129b1ac076c96a8e2529135a7e3b7a326472300dc9cec40207422d869` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7` |
 | `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
@@ -646,6 +654,64 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-16 - a cross-chain ORDER's GET_ADDRESS is judged against GET_COIN behind ORDER_GET_ADDRESS_COIN
+
+The `order` pin moves from `86b0a7c3` to `4e130541`, hashed from the committed indexer tree at the
+anchor above by `node bin/preflight_handler_dirs.js <indexer> src/actions/order/` and read against the
+previous anchor `93cde565f`. Two parts change; `controller_guard.js`, `fees.js`, `index.js` and
+`settle.js` are untouched in the range.
+
+- **ORDER, `order/context.js`:** `detectSides` resolves `getAddressOnGetCoin`, true when the ORDER is
+  cross-chain (format 0, GET_COIN set and not this chain's COIN) and `ORDER_GET_ADDRESS_COIN` is
+  enabled at the ORDER's block. A same-chain ORDER skips the lookup.
+- **ORDER, `order/validate.js`:** `validateFormats` passes GET_COIN to `isCryptoAddress` when that flag
+  is set, so a cross-chain GET_ADDRESS must be a valid GET_COIN address on this network; below the flag
+  it is still checked against the local chain's format. The contract-address branch, the
+  missing-GET_ADDRESS rule and every error string are unchanged.
+
+**Activation.** `ORDER_GET_ADDRESS_COIN` is a `protocol_changes` time row (`changes_5.js`), unarmed on
+mainnet, armed on testnet at 1794873600 (2026-11-17T00:00Z) and active from genesis on regtest. It is
+not an `addGate` row, so it cannot join `ACTIVATION_MIRRORS`, whose drift-gate reader finds addGate
+calls only. It joins `DISCLOSURE_MIRRORS` in `activation.js` and is bound by value against `changes_5.js`
+and `flag_times.js` in `test/unit/preflight/checks/activation_splits_mirrored.test.js`.
+
+**Client follow-up.** The validator's GET_ADDRESS rule (`protocol/validator/field_rules_basic.js`
+`validateAddressFields`, through `isValidListAddress`) accepts an address of any supported coin on the
+SDK's network tier, so it already admits every payout address the indexer now accepts, and nothing is
+loosened. `checks/trading.js` gains `checkOrderGetAddressCoin`: for a v0 cross-chain ORDER with a full
+GET_ADDRESS (not `^<id>`, not a contract address) where the gate is active by the wall clock, a
+GET_ADDRESS that is not a valid GET_COIN address on this network is an error, `invalid: GET_ADDRESS
+(format)`. Where the gate is unarmed it adds nothing, and with no known chain coin or network it
+discloses the check as unverified. The pre-activation local-chain refusal (a foreign payout address
+below the flag, today's mainnet rule) stays the indexer's to report, as it was before this change.
+Tests: `test/unit/preflight/checks/trading_order_get_address_coin.test.js`.
+
+**Handler changes in the same range outside every mapped row.**
+- **EXECUTE and DEPLOY state writes, `STATE_VALUE_ASTRAL_ESCAPE`** (`execute/run_vm.js`,
+  `execute/guard_effects.js`, new `execute/state_value_text.js`, `deploy/constructor_effects.js`): each
+  stored state value's JSON text writes a character above U+FFFF as its escape pair. Storage-only: no
+  verdict, status or fee moves, and JSON.parse returns the same value. The SDK light client hashes the
+  server's raw stored `state_value` into the contract leaf (`protocol/light_client/proof_checks.js`
+  `verifyContractStateProof`) and never re-serializes it, so it verifies either spelling. No client
+  check reads the gate, so no mirror row is added.
+- **DEPLOY lint, `LINT_REGEX_GROUP_DEPTH`** (`deploy/lint.js`): `resolveLintFlags` passes
+  `enforceLintRegexGroupDepth`, so a deploy holding a regex literal nested past 64 groups is refused from
+  the gate (a time row: unarmed on mainnet, testnet 1794873600, regtest 0). Pre-flight DEPLOY runs no
+  lint (`checks/misc.js` declares VM syntax server-side). The SDK's lint-core copy carries the same bound
+  (`contract/lint-core/regex_group_depth.js`), and its callers (`validateContract` and
+  `contract/utils.js` `validate`) pass no options, so the bound applies on every network whatever the
+  gate, as the nesting and syntax depth bounds already do. It is not advisory on the deploy path: the
+  builder's `preflightContractLint` runs `validateContract` in `block` mode by default and throws
+  `CONTRACT_LINT_FAILED`, so such a deploy is refused client-side on mainnet and on testnet below the
+  gate, where the indexer still accepts it; `{ lint: 'warn' }` or `'off'` lets it through. No mirror row
+  is added, since no client predicate reads the gate.
+- `file.js`, the `file_multipart*` parts and `slash/bounty.js` also change in the range. None is a
+  mapped row and none was reviewed here.
+
+**Direction: TIGHTENS for a cross-chain ORDER whose GET_ADDRESS is not GET_COIN's, where the gate is
+active.** One client check is added. The anchor moves to the committed indexer tree, and the other
+fifteen rows are unchanged.
 
 ### 2026-11-15 - a BATCH probe says why it cannot judge a payment-triggered DISPENSE
 

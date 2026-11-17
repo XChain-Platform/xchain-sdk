@@ -263,7 +263,7 @@ function registerSupplyPrefetchReviewTest() {
         const rows = parseMap(REAL_MAP);
         expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/order/': '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e',
+            'src/actions/order/': '4e13054129b1ac076c96a8e2529135a7e3b7a326472300dc9cec40207422d869',
             'src/actions/swap/': '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8',
         };
         for (const [handler, hash] of Object.entries(expected)) {
@@ -315,7 +315,7 @@ function registerNotNullRowKeyReviewTest() {
         const rows = parseMap(REAL_MAP);
         expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/order/': '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e',
+            'src/actions/order/': '4e13054129b1ac076c96a8e2529135a7e3b7a326472300dc9cec40207422d869',
             'src/actions/swap/': '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8',
             'src/actions/deposit.js': '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f',
             'src/actions/withdraw.js': '99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35',
