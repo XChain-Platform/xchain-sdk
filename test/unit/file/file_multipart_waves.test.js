@@ -9,6 +9,7 @@ const fundingMatch = require('../../../src/file/multipart_funding_match.js');
 const progress = require('../../../src/file/multipart_progress.js');
 const resume = require('../../../src/file/multipart_resume.js');
 const lane = require('../../../src/file/multipart_lane.js');
+const { takeMatch } = require('../../../src/carrier/reconcile_encoded/script_matching.js');
 
 const WORKFLOW = '../../../src/actions/workflows/file_multipart_publish.js';
 
@@ -27,13 +28,13 @@ function standardPlan() {
             totalBytes: parts.reduce((sum, part) => sum + part.rawData.length, 0) } };
 }
 
-function workflowModules(plan) {
+function workflowModules(plan, reconcile = () => true) {
     return Object.assign({}, funding, fundingMatch, progress, resume, lane, {
         planMultipartFile: async () => plan,
         assertMultipartActive: () => true,
         readRecentBlockTimes: async () => Array(11).fill(200),
         pieceCreateTxParams: args => ({ piece: args.data, utxos: [args.utxo] }),
-        reconcileEncoded: () => true,
+        reconcileEncoded: reconcile,
     });
 }
 
@@ -132,7 +133,7 @@ function confirmedPieces(chain, plan) {
 }
 
 async function publish(plan, chain, onChainPieces = [], harnessOpts = {}) {
-    const restore = installModules(workflowModules(plan));
+    const restore = installModules(workflowModules(plan, harnessOpts.reconcile));
     try {
         const workflow = require(WORKFLOW);
         const harness = fakeSdk(plan, chain, harnessOpts);
@@ -195,5 +196,21 @@ describe('publishMultipartFile funding waves', function () {
         assert.strictEqual(run.state.highWater, 8);
         assert.strictEqual(run.state.waveHighWater, 1);
         assert.strictEqual(run.state.confirmationCalls, 151);
+    });
+
+    // reconcileEncoded records each input value as a BigInt and matches a required
+    // spend with ===, so a number-valued leg never matches and wave two is refused.
+    it('pins each later wave to the previous change as a BigInt-valued required spend', async function () {
+        const plan = standardPlan();
+        const chain = createFakeMultipartChain();
+        const intents = [];
+        await publish(plan, chain, [], { reconcile: (psbt, intent) => { intents.push(intent); return true; } });
+        assert.deepStrictEqual(intents.map(intent => intent.requiredSpends.length), [0, 1, 1]);
+        for (const intent of intents.slice(1)) {
+            const [leg] = intent.requiredSpends;
+            assert.strictEqual(typeof leg.value, 'bigint');
+            const spent = [{ script: leg.script, value: 1000000n }];
+            assert(takeMatch(spent, leg.script, leg.value), 'the change input must satisfy the required spend');
+        }
     });
 });
