@@ -26,14 +26,13 @@ const DEFAULT_VM_DIR = process.env.XCHAIN_VM_DIR || path.join(SIBLING_ROOT, 'xch
 const VM_COMMIT = '7dd18d3738b03a6494be27581b442c06fdf7bec4';
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
+// This historical commit pin covers the banned-with implementation closure only.
+// contract_parity.test.js separately compares the complete current lint-core tree.
 const FILES = [
-    'lint-core.js',
     'lint-core/banned_globals.js',
     'lint-core/banned_syntax.js',
     'lint-core/banned_with.js',
-    'lint-core/constants.js',
     'lint-core/contract_analysis.js',
-    'lint-core/nesting_depth.js',
     'lint-core/result_composition.js',
     'lint-core/scope_analysis.js'
 ];
