@@ -37,6 +37,9 @@ function unfinishedFundingWaves(pieces, selected, waveSize) {
 }
 
 async function sendInWindow(items, limit, worker) {
+    if (!Number.isInteger(limit) || limit < 1)
+        throw new TypeError('limit must be an integer of at least 1');
+
     const results = new Array(items.length);
     let next = 0;
     let failure = null;
