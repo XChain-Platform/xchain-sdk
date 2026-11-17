@@ -35,6 +35,10 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
   },
+  "overrides": {
+    "minimatch": "^11.0.9",
+    "glob": "^14.0.6"
+  },
   "scripts": {
     "start": "node cli.js",
     "test": "node --test test/x402_fail_closed.test.js",
