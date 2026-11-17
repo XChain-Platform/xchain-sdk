@@ -28,6 +28,31 @@ function multipartFundingWaves(pieces, waveSize) {
     return waves;
 }
 
+function unfinishedFundingWaves(pieces, selected, waveSize) {
+    const pending = new Set(selected);
+    const waves = multipartFundingWaves(pieces, waveSize);
+    return waves.map(wave => ({ ...wave, total: waves.length,
+        pieces: wave.pieces.filter(piece => pending.has(piece)) }))
+        .filter(wave => wave.pieces.length);
+}
+
+async function sendInWindow(items, limit, worker) {
+    const results = new Array(items.length);
+    let next = 0;
+    let failure = null;
+    async function run() {
+        while (!failure) {
+            const index = next++;
+            if (index >= items.length) return;
+            try { results[index] = await worker(items[index], index); }
+            catch (error) { if (!failure) failure = error; }
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+    if (failure) throw failure;
+    return results;
+}
+
 function multipartWaveCount(totalParts, waveSize) {
     assertNonNegativeFinite(totalParts, 'totalParts');
     assertWaveSize(waveSize);
@@ -78,6 +103,8 @@ function multipartFundingOutputs(values, sourceAddress) {
 module.exports = {
     MULTIPART_WAVE_PIECES,
     multipartFundingWaves,
+    unfinishedFundingWaves,
+    sendInWindow,
     multipartWaveCount,
     multipartTransactionCount,
     standardChunkCount,
