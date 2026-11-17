@@ -28,6 +28,26 @@ function multipartFundingWaves(pieces, waveSize) {
     return waves;
 }
 
+async function sendInWindow(items, limit, worker) {
+    if (!Number.isInteger(limit) || limit < 1)
+        throw new TypeError('limit must be an integer of at least 1');
+
+    const results = new Array(items.length);
+    let next = 0;
+    let failure = null;
+    async function run() {
+        while (!failure) {
+            const index = next++;
+            if (index >= items.length) return;
+            try { results[index] = await worker(items[index], index); }
+            catch (error) { if (!failure) failure = error; }
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+    if (failure) throw failure;
+    return results;
+}
+
 function multipartWaveCount(totalParts, waveSize) {
     assertNonNegativeFinite(totalParts, 'totalParts');
     assertWaveSize(waveSize);
@@ -78,6 +98,7 @@ function multipartFundingOutputs(values, sourceAddress) {
 module.exports = {
     MULTIPART_WAVE_PIECES,
     multipartFundingWaves,
+    sendInWindow,
     multipartWaveCount,
     multipartTransactionCount,
     standardChunkCount,
