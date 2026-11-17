@@ -106,11 +106,22 @@ function validateOriginalBytes(bytes) {
     const original = toBuffer(bytes);
     if (original.length === 0)
         throw rangeError('EMPTY_FILE', 'multipart files must contain at least one byte');
-    if (original.length > MULTIPART_FILE_MAX_BYTES)
+    return original;
+}
+
+function assertMultipartBounds({ originalBytes, storedBytes, totalParts, capacity }) {
+    if (originalBytes > MULTIPART_FILE_MAX_BYTES)
         throw rangeError('ORIGINAL_BYTES_TOO_LARGE',
             `original bytes exceed MULTIPART_FILE_MAX_BYTES (${MULTIPART_FILE_MAX_BYTES})`,
-            { originalBytes: original.length, maxBytes: MULTIPART_FILE_MAX_BYTES });
-    return original;
+            { originalBytes, maxBytes: MULTIPART_FILE_MAX_BYTES });
+    if (storedBytes > MULTIPART_FILE_MAX_BYTES)
+        throw rangeError('STORED_BYTES_TOO_LARGE',
+            `stored bytes exceed MULTIPART_FILE_MAX_BYTES (${MULTIPART_FILE_MAX_BYTES})`,
+            { storedBytes, maxBytes: MULTIPART_FILE_MAX_BYTES });
+    if (totalParts > MULTIPART_FILE_MAX_PARTS)
+        throw rangeError('TOO_MANY_PARTS',
+            `stored bytes require ${totalParts} parts, exceeding MULTIPART_FILE_MAX_PARTS (${MULTIPART_FILE_MAX_PARTS})`,
+            { totalParts, maxParts: MULTIPART_FILE_MAX_PARTS, capacity });
 }
 
 async function storeFileBytes(original, meta, gate) {
@@ -134,21 +145,9 @@ async function storeFileBytes(original, meta, gate) {
     return { compressed, stored, key, keyHash, encryptionMethod };
 }
 
-function validateStoredBytes(stored) {
-    if (stored.length > MULTIPART_FILE_MAX_BYTES)
-        throw rangeError('STORED_BYTES_TOO_LARGE',
-            `stored bytes exceed MULTIPART_FILE_MAX_BYTES (${MULTIPART_FILE_MAX_BYTES})`,
-            { storedBytes: stored.length, maxBytes: MULTIPART_FILE_MAX_BYTES });
-}
-
 function buildParts(stored, carrier) {
     const capacity = partCapacity(carrier);
     const buffers = splitStoredBytes(stored, capacity);
-    if (buffers.length > MULTIPART_FILE_MAX_PARTS)
-        throw rangeError('TOO_MANY_PARTS',
-            `stored bytes require ${buffers.length} parts, exceeding MULTIPART_FILE_MAX_PARTS (${MULTIPART_FILE_MAX_PARTS})`,
-            { totalParts: buffers.length, maxParts: MULTIPART_FILE_MAX_PARTS, capacity });
-
     const fileHash = fileHashOf(buffers);
     const parts = buffers.map((part, partIndex) => ({
         partIndex,
@@ -180,12 +179,17 @@ function buildManifestParams(meta, gate, stored, compressed, encryptionMethod, k
 
 async function planMultipartFile(bytes, meta = {}, options = {}) {
     const original = validateOriginalBytes(bytes);
+    assertMultipartBounds({ originalBytes: original.length });
     const gate = options.gate || null;
     const storedFile = await storeFileBytes(original, meta, gate);
     const { compressed, stored, key, keyHash, encryptionMethod } = storedFile;
-    validateStoredBytes(stored);
+    assertMultipartBounds({ storedBytes: stored.length });
     const partPlan = buildParts(stored, options.carrier);
     const { capacity, fileHash, parts } = partPlan;
+    assertMultipartBounds({
+        totalParts: parts.length,
+        capacity,
+    });
     const manifestParams = buildManifestParams(
         meta, gate, stored, compressed, encryptionMethod, keyHash, partPlan);
 
@@ -211,6 +215,7 @@ async function planMultipartFile(bytes, meta = {}, options = {}) {
 }
 
 module.exports = {
+    assertMultipartBounds,
     fileHashOf,
     planMultipartFile,
 };
