@@ -1,6 +1,7 @@
 'use strict';
 
 const STANDARD_CHUNK_BYTES = 476;
+const MULTIPART_WAVE_PIECES = 100;
 
 function assertNonNegativeFinite(value, name) {
     if (!Number.isFinite(value) || value < 0)
@@ -8,9 +9,33 @@ function assertNonNegativeFinite(value, name) {
     return value;
 }
 
-function multipartTransactionCount(totalParts) {
+function assertWaveSize(waveSize) {
+    if (!Number.isInteger(waveSize) || waveSize < 1 || waveSize > MULTIPART_WAVE_PIECES)
+        throw new TypeError('waveSize must be an integer from 1 to ' + MULTIPART_WAVE_PIECES);
+    return waveSize;
+}
+
+function multipartFundingWaves(pieces, waveSize) {
+    assertWaveSize(waveSize);
+    if (!Array.isArray(pieces)) throw new TypeError('pieces must be an array');
+    const manifestIndex = pieces.findIndex(piece => piece && piece.kind === 'manifest');
+    const ordered = manifestIndex > 0
+        ? [pieces[manifestIndex]].concat(pieces.slice(0, manifestIndex), pieces.slice(manifestIndex + 1))
+        : pieces;
+    const waves = [];
+    for (let from = 0; from < ordered.length; from += waveSize)
+        waves.push({ index: waves.length, pieces: ordered.slice(from, from + waveSize) });
+    return waves;
+}
+
+function multipartWaveCount(totalParts, waveSize) {
     assertNonNegativeFinite(totalParts, 'totalParts');
-    return 1 + (2 * (totalParts + 1));
+    assertWaveSize(waveSize);
+    return Math.ceil((totalParts + 1) / waveSize);
+}
+
+function multipartTransactionCount(totalParts) {
+    return multipartWaveCount(totalParts, MULTIPART_WAVE_PIECES) + (2 * (totalParts + 1));
 }
 
 function standardChunkCount(payloadBytes) {
@@ -51,6 +76,9 @@ function multipartFundingOutputs(values, sourceAddress) {
 }
 
 module.exports = {
+    MULTIPART_WAVE_PIECES,
+    multipartFundingWaves,
+    multipartWaveCount,
     multipartTransactionCount,
     standardChunkCount,
     pieceFundingValue,
