@@ -36,7 +36,7 @@ function registerProtocolTests() {
         assert.strictEqual(MULTIPART_FILE_MAX_BYTES, 12000000);
         assert.deepStrictEqual(FILE_MULTIPART_ACTIVATION_TIME, {
             mainnet: null,
-            testnet: 1796083200,
+            testnet: 1794787200,
             regtest: 0,
         });
     });

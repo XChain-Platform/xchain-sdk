@@ -432,7 +432,7 @@ const MULTIPART_FILE_MAX_PARTS = 32;
 const MULTIPART_FILE_MAX_BYTES = 12000000;
 const FILE_MULTIPART_ACTIVATION_TIME = {
     mainnet: null,
-    testnet: 1796083200,
+    testnet: 1794787200,
     regtest: 0,
 };
 
