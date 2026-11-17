@@ -197,7 +197,9 @@ describe('publishMultipartFile funding waves', function () {
         assert.strictEqual(run.state.waveHighWater, 1);
         assert.strictEqual(run.state.confirmationCalls, 151);
     });
+});
 
+describe('publishMultipartFile wave funding reconcile intent', function () {
     // reconcileEncoded records each input value as a BigInt and matches a required
     // spend with ===, so a number-valued leg never matches and wave two is refused.
     it('pins each later wave to the previous change as a BigInt-valued required spend', async function () {
