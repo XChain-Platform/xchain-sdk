@@ -169,6 +169,10 @@ function addPiece(model, input) {
         insertion: model.nextInsertion++,
     };
     model.pieces.push(piece);
+    if (piece.state === 'mempool') {
+        const count = model.pieces.filter((entry) => entry.state === 'mempool').length;
+        model.mempoolHighWater = Math.max(model.mempoolHighWater, count);
+    }
     if (piece.state === 'confirmed') indexPiece(model, piece);
     return { txid: piece.txid, actionIndex: piece.actionIndex };
 }
@@ -208,7 +212,10 @@ function createExplorer(model, blockTimes, calls) {
 }
 
 function createFakeMultipartChain({ blockTimes = [] } = {}) {
-    const model = { pieces: [], terminals: new Map(), nextActionIndex: 0, nextInsertion: 0 };
+    const model = {
+        pieces: [], terminals: new Map(), nextActionIndex: 0, nextInsertion: 0,
+        mempoolHighWater: 0,
+    };
     const calls = [];
     return {
         calls,
@@ -235,6 +242,12 @@ function createFakeMultipartChain({ blockTimes = [] } = {}) {
         actionIndexOf(txid) {
             const piece = model.pieces.find((entry) => entry.txid === txid);
             return piece && piece.state === 'confirmed' ? piece.actionIndex : null;
+        },
+        mempoolCount() {
+            return model.pieces.filter((piece) => piece.state === 'mempool').length;
+        },
+        mempoolHighWater() {
+            return model.mempoolHighWater;
         },
         piecesFor(source) {
             return model.pieces.filter((piece) => piece.source === source).map((piece) => ({ ...piece }));
