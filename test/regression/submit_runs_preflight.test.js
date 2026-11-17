@@ -52,6 +52,9 @@ function makeSdk(options = {}, gap = true) {
             return Object.assign({ encoding: null }, composed);
         });
     }
+    // Litecoin takes a native-coin fee quote from the explorer before createTx; these
+    // tests are about the halt-class gate, so the quote answers with no output.
+    sinon.stub(sdk, 'nativeFeeOutputs').resolves([]);
     const encoder = sdk.requireEncoder();
     const createTx = sinon.stub(encoder, 'createTx').rejects(new Error('createTx reached'));
     const broadcastTx = sinon.stub(encoder, 'broadcastTx').rejects(new Error('broadcastTx reached'));
