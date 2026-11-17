@@ -459,6 +459,10 @@
     "test/unit/cosigner/musig2_agent_session.test/01_agent_session.test.js": "test/unit/cosigner/musig2/musig2_agent_session.test/01_agent_session.test.js"
   },
   "titles": {
+    "test/unit/security/configuration/dependency_advisories.test.js": {
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins minimatch at or above 10.2.5": "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins minimatch at or above 11.0.9",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every minimatch entry in package-lock.json is at or above 10.2.5": "Security: remediated dependency advisories @regression @tier4 ADV-2: every minimatch entry in package-lock.json is at or above 11.0.9"
+    },
     "test/unit/preflight/checks/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js": {
       "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative native-coin GET_AMOUNT is a format warning": "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative native-coin GET_AMOUNT is a format error",
       "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a native-coin GET_AMOUNT past the coin decimals is a format warning": "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a native-coin GET_AMOUNT past the coin decimals is a format error"

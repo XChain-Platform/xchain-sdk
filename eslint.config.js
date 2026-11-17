@@ -20,7 +20,7 @@
  * unable to load its own lint config. Edit the master and re-vendor; a local
  * edit here is drift, and the next re-vendor silently discards it.
  *
- * Core rules only, no plugins, so this file's whole dependency is eslint ^9.
+ * Core rules only, no plugins, so this file's whole dependency is eslint ^10.
  *
  * THE GATE IS WHAT BINDS, not this. The pre-push structure check depends on
  * neither eslint nor this file; the two agree on the rules, and a green lint
