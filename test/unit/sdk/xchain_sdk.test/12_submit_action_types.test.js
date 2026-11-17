@@ -34,13 +34,13 @@ describe('submitAction option declarations', function () {
     it('declares runtime submit controls and both local caps', function () {
         assertFields(interfaceBody('SubmitActionOpts'), [
             'maxFeeSats', 'maxPhaseFundingSats', 'signer', 'preflight',
-            'skipAddressCompaction', 'strictFreshness',
+            'skipAddressCompaction', 'strictFreshness', 'payFeeInNativeCoin',
         ]);
     });
 
     it('keeps EncoderOptions aligned with every forwarded createTx field', function () {
         assertFields(interfaceBody('EncoderOptions'),
-            CREATE_TX_OPTION_FIELDS.concat(['maxFeeSats', 'maxPhaseFundingSats']));
+            CREATE_TX_OPTION_FIELDS.concat(['maxFeeSats', 'maxPhaseFundingSats', 'payFeeInNativeCoin']));
     });
 
     it('fails its field check when a cap declaration is absent', function () {

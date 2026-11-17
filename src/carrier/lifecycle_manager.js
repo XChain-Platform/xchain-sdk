@@ -51,6 +51,33 @@ const { SDKPreflightError } = require('../utils/errors.js');
 // full pre-flight would, never less. Any other value enforces.
 const NON_ENFORCING = new Set(['off', 'warn', 'report', 'local']);
 
+function sameCustomOutput(a, b) {
+    return a && b && a.address === b.address && String(a.value) === String(b.value);
+}
+
+// Quote against the exact composed bytes and merge the required native-coin fee
+// output before the encoder can build or broadcast anything. Submit opts carry
+// workflow-level overrides; direct callers can put the same override beside the
+// encoder options used by estimateFees.
+async function withNativeFeeOutputs(sdk, actionString, encoderOpts, opts) {
+    if (typeof sdk.nativeFeeOutputs !== 'function') return encoderOpts;
+    const nativeOpts = {
+        source: encoderOpts.sourceAddress || encoderOpts.change || encoderOpts.pubkey,
+    };
+    if (typeof opts.payFeeInNativeCoin === 'boolean')
+        nativeOpts.payFeeInNativeCoin = opts.payFeeInNativeCoin;
+    else if (typeof encoderOpts.payFeeInNativeCoin === 'boolean')
+        nativeOpts.payFeeInNativeCoin = encoderOpts.payFeeInNativeCoin;
+    const nativeOutputs = await sdk.nativeFeeOutputs(actionString, nativeOpts);
+    if (!nativeOutputs.length) return encoderOpts;
+    const customOutputs = Array.isArray(encoderOpts.customOutputs)
+        ? encoderOpts.customOutputs.slice() : [];
+    for (const output of nativeOutputs)
+        if (!customOutputs.some(existing => sameCustomOutput(existing, output)))
+            customOutputs.push(output);
+    return Object.assign({}, encoderOpts, { customOutputs });
+}
+
 function enforcesHaltGate(sdk, preflightOpt) {
     if (preflightOpt === false || NON_ENFORCING.has(preflightOpt)) return false;
     if (preflightOpt !== undefined) return true;
@@ -155,7 +182,7 @@ class LifecycleManager {
     // encoderOpts  - { pubkey, change, utxos, rawData, encoding, fee, feePerKb,
     //                  rbf, dust, unconfirmed, compressedPubKey, customOutputs,
     //                  attachPrevTx, feeQuote, compress, options, sourceAddress,
-    //                  maxFeeSats, maxPhaseFundingSats }
+    //                  maxFeeSats, maxPhaseFundingSats, payFeeInNativeCoin }
     // opts:
     //   wif             - WIF private key for signing (required)
     //   waitForIndexer  - wait for indexer confirmation (default true)
@@ -167,6 +194,7 @@ class LifecycleManager {
     //                     ordinary actions and true for contract actions.
     //   strictFreshness - refuse stale explorer data before encoding or signing
     //   skipAddressCompaction - keep action addresses in their supplied form
+    //   payFeeInNativeCoin - override the connected chain's native-fee default
     //   preflight       - per-call halt-gate mode
     //   signer          - async (psbtHex, { encoding }) custom signer
     //   awaitContract   - gate on contract state or balance before returning:
@@ -208,6 +236,9 @@ class LifecycleManager {
         const transaction = buildTransactionRequest(this, actionData, encoderOpts, resolvedParams, progress);
         const { createResult, txParams } = transaction;
         assertNoHaltClassFields(this.sdk, createResult.actionString, opts.preflight);
+        encoderOpts = await withNativeFeeOutputs(this.sdk, createResult.actionString, encoderOpts, opts);
+        if (encoderOpts.customOutputs !== txParams.customOutputs)
+            txParams.customOutputs = encoderOpts.customOutputs;
         const encoded = await encoder.createTx(txParams);
         const carriedAction = readCarriedAction(encoded, createResult, encoderOpts);
         const reconcileState = reconcileTransaction(this, encoded, createResult, encoderOpts, opts);

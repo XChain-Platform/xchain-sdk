@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Attached required native-coin fee outputs in the shared action submission path, covering direct submits and all workflow helpers.
+
 ## [0.27.0] - 2026-11-01
 
 ### Added

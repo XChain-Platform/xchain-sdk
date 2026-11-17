@@ -222,6 +222,8 @@ export interface EncoderOptions {
     options?: Record<string, any>;
     /** Funding address used for SDK-side UTXO selection */
     sourceAddress?: string;
+    /** Override whether submitAction and estimateFees attach the native-coin protocol fee output */
+    payFeeInNativeCoin?: boolean;
     /**
      * Local miner-fee ceiling for submitAction, estimateFees and message signing.
      * Applied to each transaction separately, not accumulated across an action.
@@ -2726,6 +2728,8 @@ export interface SubmitActionOpts {
     strictStatus?: boolean;
     /** Refuse stale explorer data before encoding or signing */
     strictFreshness?: boolean;
+    /** Workflow-level override for the native-coin protocol fee output */
+    payFeeInNativeCoin?: boolean;
     /** Skip address-resolver compaction of action parameters */
     skipAddressCompaction?: boolean;
     /** Per-call halt gate mode; omitted uses the SDK-wide mode */

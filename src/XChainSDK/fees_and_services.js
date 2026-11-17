@@ -72,7 +72,7 @@ function nativeFeeDisabled(quote) {
     return dest == null || dest === '' || /^X{34}$/.test(String(dest));
 }
 
-// Decide one action's native fee outputs for every signing path, so estimateFees and deployContract cannot drift apart again.
+// Decide one action's native fee outputs for every signing path, so estimateFees and submitAction cannot drift apart again.
 // An explicit payFeeInNativeCoin is strict; a registry-native chain default also tolerates a node with native fees off.
 async function resolveNativeFeeOutputs(sdk, actionData, opts, source) {
     if (!sdk.nativeFeeRequired(opts)) return { quote: null, outputs: [] };

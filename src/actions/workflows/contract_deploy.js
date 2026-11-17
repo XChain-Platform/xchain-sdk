@@ -22,15 +22,6 @@
 const chunkHelper = require('../../contract/chunk_helper.js');
 const Utility = require('../../utils/utility.js');
 
-// Encoder options carrying the native fee output for one DEPLOY, or {} where the
-// chain takes its fee another way. Each DEPLOY pays its own fee, chunk carriers included.
-async function nativeFeeEncoder(owner, session, params, opts) {
-    const sdk = owner.sdk;
-    if (typeof sdk.nativeFeeOutputs !== 'function') return {};
-    const customOutputs = await sdk.nativeFeeOutputs({ action: 'DEPLOY', params }, { ...opts, source: session.address });
-    return customOutputs.length ? { customOutputs } : {};
-}
-
 function prepareDeploy(owner, deployParams, opts) {
     const code = (deployParams.code !== undefined) ? deployParams.code : deployParams.CODE;
     const gasLimit = (deployParams.gasLimit !== undefined) ? deployParams.gasLimit : deployParams.GAS_LIMIT;
@@ -86,7 +77,7 @@ function prepareDeploy(owner, deployParams, opts) {
 async function executeDeploy(owner, session, deployParams, deposits, opts, prepared, p) {
     const { plan, assembleParams } = prepared;
     if (plan.single) {
-        p.deploy = await session.deploy(deployParams, await nativeFeeEncoder(owner, session, deployParams, opts), opts);
+        p.deploy = await session.deploy(deployParams, {}, opts);
         // An inline deploy IS the contract's action, so its own indexed row
         // answers the index and there is nothing to resolve.
         p.contractActionIndex = owner.actionIndexOf(p.deploy.indexed);
@@ -98,11 +89,10 @@ async function executeDeploy(owner, session, deployParams, deposits, opts, prepa
                 codeHash: plan.codeHash, chunkIndex: i,
                 totalChunks: plan.totalChunks, codePart: plan.parts[i]
             };
-            p.chunks.push(await session.deployChunk(chunkParams,
-                await nativeFeeEncoder(owner, session, Utility.withForcedVersion('4', chunkParams), opts), opts));
+            p.chunks.push(await session.deployChunk(chunkParams, {}, opts));
         }
         // Phase 2: assemble (params + size already pre-flighted above).
-        p.deploy = await session.deploy(assembleParams, await nativeFeeEncoder(owner, session, assembleParams, opts), opts);
+        p.deploy = await session.deploy(assembleParams, {}, opts);
 
         // A chunk group deploys at whichever piece COMPLETES it, which need
         // not be the assembler: a reorg can re-pack a correctly sequenced
