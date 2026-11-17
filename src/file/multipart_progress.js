@@ -14,9 +14,11 @@ const MULTIPART_PROGRESS_STEPS = Object.freeze([
     'planned',
     'funding_sent',
     'funding_confirmed',
+    'wave_funded',
     'piece_sent',
     'piece_skipped',
     'manifest_sent',
+    'wave_confirmed',
     'assembly_waiting',
     'complete',
 ]);
