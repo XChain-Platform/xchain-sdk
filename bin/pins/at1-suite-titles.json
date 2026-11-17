@@ -7153,6 +7153,10 @@
       "pre-flight Tier-2 per-action matrix OP_RETURN carrier cap parity with the compose-time gate a 76-byte action string: pre-flight and compose agree (both reject)",
       "pre-flight Tier-2 per-action matrix OP_RETURN carrier cap parity with the compose-time gate a 77-byte action string: pre-flight and compose agree (both reject)"
     ],
+    "dfd1dd0d1956b09e": [
+      "publishMultipartFile funding waves funds 250 STANDARD parts in three confirmed, bounded waves",
+      "publishMultipartFile funding waves resumes after wave one with only original waves two and three"
+    ],
     "e00c86e682cfea08": [
       "comment-insensitive digest changes the digest for edits inside string and template literals",
       "comment-insensitive digest changes the digest when executable code changes",
@@ -8129,8 +8133,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 614,
-      "titleCount": 6462,
+      "fileCount": 615,
+      "titleCount": 6464,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8745,12 +8749,13 @@
         "test/unit/preflight/stale_native_balance_unverified.test.js": "b08573c165a8e31f",
         "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
         "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96",
-        "test/unit/file_multipart.test.js": "008c21e34ee03944"
+        "test/unit/file_multipart.test.js": "008c21e34ee03944",
+        "test/unit/file/file_multipart_waves.test.js": "dfd1dd0d1956b09e"
       }
     },
     "test:all": {
-      "fileCount": 654,
-      "titleCount": 6797,
+      "fileCount": 655,
+      "titleCount": 6799,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -9405,7 +9410,8 @@
         "test/unit/preflight/stale_native_balance_unverified.test.js": "b08573c165a8e31f",
         "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
         "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96",
-        "test/unit/file_multipart.test.js": "008c21e34ee03944"
+        "test/unit/file_multipart.test.js": "008c21e34ee03944",
+        "test/unit/file/file_multipart_waves.test.js": "dfd1dd0d1956b09e"
       }
     },
     "test:boundary": {

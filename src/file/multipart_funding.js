@@ -28,6 +28,14 @@ function multipartFundingWaves(pieces, waveSize) {
     return waves;
 }
 
+function unfinishedFundingWaves(pieces, selected, waveSize) {
+    const pending = new Set(selected);
+    const waves = multipartFundingWaves(pieces, waveSize);
+    return waves.map(wave => ({ ...wave, total: waves.length,
+        pieces: wave.pieces.filter(piece => pending.has(piece)) }))
+        .filter(wave => wave.pieces.length);
+}
+
 async function sendInWindow(items, limit, worker) {
     if (!Number.isInteger(limit) || limit < 1)
         throw new TypeError('limit must be an integer of at least 1');
@@ -98,6 +106,7 @@ function multipartFundingOutputs(values, sourceAddress) {
 module.exports = {
     MULTIPART_WAVE_PIECES,
     multipartFundingWaves,
+    unfinishedFundingWaves,
     sendInWindow,
     multipartWaveCount,
     multipartTransactionCount,

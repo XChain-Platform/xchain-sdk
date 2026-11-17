@@ -24,6 +24,7 @@ const reconcile = require('../../carrier/reconcile_encoded.js');
 const carrierBinding = require('../../carrier/bind_action_carrier.js');
 const { FILE_MULTIPART_ACTIVATION_TIME } = require('../../protocol/constants.js');
 const { sourceDetails } = require('./file_multipart_source.js');
+const { baseCoin, feeRateOf, fundPieces } = require('./file_multipart_wave_funding.js');
 
 const MULTIPART = Object.assign({}, multipartPlan, readiness, funding, pieceRequest,
     fundingMatch, resume, progress, lane, gatedBatch, blockTimes, twoStep,
@@ -51,12 +52,6 @@ async function assertActive(sdk, opts, modules) {
     modules.assertMultipartActive([statusBlockTime(status, explorer.coin)], activation);
     const times = await modules.readRecentBlockTimes(explorer, 11);
     return modules.assertMultipartActive(times, activation);
-}
-
-function baseCoin(sdk, opts) {
-    if (opts.coin) return String(opts.coin).toUpperCase();
-    const coin = String(sdk.requireExplorer().coin || '').toUpperCase();
-    return coin.replace(/^[RT](?=BTC$|LTC$|DOGE$)/, '');
 }
 
 async function manifestDescriptor(sdk, plan, source, opts, modules) {
@@ -125,112 +120,6 @@ function verifyResume(bytes, plan, opts, modules) {
     return digest;
 }
 
-function valueAt(value, descriptor, position) {
-    if (typeof value === 'function') return value(descriptor, position);
-    if (Array.isArray(value)) return value[position];
-    return value;
-}
-
-function pairSizeOf(piece, source, opts, position) {
-    const quote = opts.quote || opts;
-    const sizes = quote.sizes || opts.sizes || quote;
-    if (typeof sizes.pairSizeFor === 'function')
-        return sizes.pairSizeFor({ ...piece, lane: source.lane }, position);
-    const named = source.lane === 'envelope'
-        ? sizes.envelopePairVbytes : sizes.standardPairBytes;
-    const size = valueAt(named === undefined ? sizes.pairSize : named, piece, position);
-    if (!Number.isFinite(size) || size < 0)
-        throw new Error('publishMultipartFile requires a finite multipart pair size quote');
-    return size;
-}
-
-function outputFloorOf(sdk, opts) {
-    const quote = opts.quote || opts;
-    if (Number.isFinite(quote.outputFloor) && quote.outputFloor >= 0) return quote.outputFloor;
-    if (baseCoin(sdk, opts) === 'DOGE') return 1000000;
-    return sdk.wallet.getBitcoinNetwork().dustThreshold;
-}
-
-async function feeRateOf(encoder, opts) {
-    const quote = opts.quote || opts;
-    if (Number.isFinite(quote.rate) && quote.rate > 0) return quote.rate;
-    const fees = await encoder.getFeeTiers();
-    const rate = Number(fees && fees.high);
-    if (!Number.isFinite(rate) || rate <= 0) throw new Error('encoder returned no high fee rate');
-    return rate;
-}
-
-function fundingValues(sdk, pieces, source, rate, opts, modules) {
-    const quote = opts.quote || opts;
-    const supplied = quote.pieceFundingValues || quote.pieceValues || quote.outputs;
-    if (Array.isArray(supplied)) {
-        const values = supplied.map(item => item && typeof item === 'object' ? item.value : item);
-        if (values.length === pieces.length) return values;
-        if (pieces.every(piece => piece.fundingIndex < values.length))
-            return pieces.map(piece => values[piece.fundingIndex]);
-        throw new Error('multipart funding values do not cover every piece being sent');
-    }
-    const outputFloor = outputFloorOf(sdk, opts);
-    // Litecoin's stripped-size floor makes the encoder pad the envelope reveal.
-    const revealPad = baseCoin(sdk, opts) === 'LTC';
-    return pieces.map((piece, index) => modules.pieceFundingValue({
-        lane: source.lane,
-        rate,
-        pairSize: pairSizeOf(piece, source, opts, index),
-        outputFloor,
-        payloadBytes: piece.payloadBytes,
-        revealPad,
-    }));
-}
-
-function fundingOutputsFromPsbt(sdk, psbt) {
-    return sdk.wallet.decomposePsbt(psbt).outputs.map((output, vout) => ({
-        vout,
-        value: output.value,
-        address: output.address,
-        scriptPubKey: output.scriptPubKeyHex,
-    }));
-}
-
-async function waitForFunding(encoder, txid, opts) {
-    if (typeof opts.waitForFunding === 'function') return opts.waitForFunding(txid);
-    const timeout = opts.timeout > 0 ? opts.timeout : 120000;
-    const interval = opts.pollInterval > 0 ? opts.pollInterval : 2000;
-    const deadline = Date.now() + timeout;
-    do {
-        const block = await encoder.getTxBlock(txid);
-        if (block) return block;
-        const remaining = deadline - Date.now();
-        if (remaining > 0) await new Promise(resolve => setTimeout(resolve, Math.min(interval, remaining)));
-    } while (Date.now() < deadline);
-    const error = new Error('Multipart funding transaction was not confirmed in time');
-    error.code = 'FUNDING_CONFIRMATION_TIMEOUT';
-    throw error;
-}
-
-async function fundPieces(sdk, pieces, source, rate, opts, modules, progress) {
-    if (!pieces.length) return null;
-    const encoder = sdk.requireEncoder();
-    const values = fundingValues(sdk, pieces, source, rate, opts, modules);
-    const expected = modules.multipartFundingOutputs(values, source.sourceAddress).customOutputs;
-    // The encoder picks UTXOs from `pubkey`; the address keeps a P2PKH owner's source exact.
-    const encoded = await encoder.createTx({ pubkey: source.sourceAddress || source.pubkey, sourceAddress: source.sourceAddress,
-        change: source.sourceAddress, customOutputs: expected, feePerKb: rate * 1000 });
-    modules.reconcileEncoded(encoded.psbt, { network: sdk.wallet.getBitcoinNetwork(),
-        customOutputs: expected, changeAddresses: source.sourceAddress,
-        callerIdentities: source.pubkey, maxFeeSats: opts.maxFundingFeeSats,
-        label: 'multipart funding', phaseShapes: [], phaseSpends: null });
-    const outputs = fundingOutputsFromPsbt(sdk, encoded.psbt);
-    const utxos = modules.matchFundingOutputs(expected, outputs, null);
-    const signed = sdk.wallet.signPsbt(encoded.psbt, opts.wif);
-    utxos.forEach(utxo => { utxo.txid = signed.txid; });
-    await encoder.broadcastTx(signed.txHex);
-    progress.emit('funding_sent', { txid: signed.txid });
-    const confirmed = await waitForFunding(encoder, signed.txid, opts);
-    progress.emit('funding_confirmed', { txid: signed.txid, block: confirmed });
-    return { txid: signed.txid, signed, confirmed, expectedOutputs: expected, utxos };
-}
-
 function submitOptions(opts) {
     return { wif: opts.wif, waitForIndexer: true, timeout: opts.timeout,
         pollInterval: opts.pollInterval, requireValid: true, preflight: false,
@@ -261,6 +150,20 @@ function actionIndexOf(indexed, kind) {
         && files.find(item => Number(item.action_format) === 1)) || files[0];
     const source = row || (indexed && indexed.action_index !== undefined ? indexed : null);
     return source ? source.action_index : null;
+}
+
+function isBlockConfirmed(indexed) {
+    return !!(indexed && indexed.pending !== true
+        && indexed.block_index !== undefined && indexed.block_index !== null);
+}
+
+async function confirmPiece(sdk, piece, result, opts) {
+    const submittedIndex = actionIndexOf(result.indexed, piece.kind);
+    const indexed = isBlockConfirmed(result.indexed)
+        ? result.indexed : await sdk.waitForAction(result.txid, submitOptions(opts));
+    return { ...piece, result: { ...result, indexed },
+        actionIndex: submittedIndex === null
+            ? actionIndexOf(indexed, piece.kind) : submittedIndex };
 }
 
 async function submitOneCall(sdk, piece, utxo, source, rate, opts, modules) {
@@ -318,14 +221,37 @@ async function sendPiece(sdk, piece, utxo, source, rate, opts, modules) {
 }
 
 async function sendPieces(sdk, pieces, funding, source, rate, opts, modules, progress) {
-    const sent = await Promise.all(pieces.map(async (piece, index) => {
+    const sendWindow = modules.sendInWindow || ((items, limit, worker) => Promise.all(items.map(worker)));
+    return sendWindow(pieces, 8, async (piece, index) => {
         const result = await sendPiece(sdk, piece, funding.utxos[index], source, rate, opts, modules);
-        const actionIndex = actionIndexOf(result.indexed, piece.kind);
+        const confirmed = await confirmPiece(sdk, piece, result, opts);
+        const { actionIndex } = confirmed;
         if (piece.kind === 'manifest') progress.emit('manifest_sent', { actionIndex, txid: result.txid });
         else progress.emit('piece_sent', { partIndex: piece.index, actionIndex, txid: result.txid });
-        return { ...piece, result, actionIndex };
-    }));
-    return sent;
+        return confirmed;
+    });
+}
+
+async function sendWaves(sdk, waves, source, rate, opts, modules, progress) {
+    const fundings = [];
+    const sent = [];
+    let previousFunding = null;
+    for (let position = 0; position < waves.length; position += 1) {
+        const wave = waves[position];
+        if (position && !(previousFunding && previousFunding.change)) {
+            const error = new Error('Confirmed multipart funding change is unavailable for the next wave');
+            error.code = 'MULTIPART_FUNDING_CHANGE_MISSING';
+            throw error;
+        }
+        const funding = await fundPieces(sdk, wave, previousFunding,
+            source, rate, opts, modules, progress);
+        fundings.push(funding);
+        sent.push(...await sendPieces(sdk, wave.pieces, funding,
+            source, rate, opts, modules, progress));
+        progress.emit('wave_confirmed', { wave: wave.index + 1, waves: wave.total });
+        previousFunding = funding;
+    }
+    return { fundings, sent };
 }
 
 function manifestIndex(sent, resumed) {
@@ -351,10 +277,15 @@ async function publishMultipartFile(wif, bytes, meta = {}, opts = {}) {
     const resumed = resumeState(plan, descriptors, callOpts, modules);
     descriptors.filter(piece => piece.kind === 'part' && !resumed.send.includes(piece))
         .forEach(piece => progress.emit('piece_skipped', { partIndex: piece.index }));
-    const rate = resumed.send.length ? await feeRateOf(sdk.requireEncoder(), callOpts) : null;
-    const funding = await fundPieces(sdk, resumed.send, source, rate, callOpts, modules, progress);
-    const sent = funding
-        ? await sendPieces(sdk, resumed.send, funding, source, rate, callOpts, modules, progress) : [];
+    const unfinished = modules.unfinishedFundingWaves || ((pieces, selected) =>
+        [{ index: 0, total: 1, pieces: selected }].filter(wave => wave.pieces.length));
+    const waves = unfinished(
+        descriptors, resumed.send, modules.MULTIPART_WAVE_PIECES);
+    const rate = waves.length ? await feeRateOf(sdk.requireEncoder(), callOpts) : null;
+    const waveResult = waves.length
+        ? await sendWaves(sdk, waves, source, rate, callOpts, modules, progress)
+        : { fundings: [], sent: [] };
+    const sent = waveResult.sent;
     const actionIndex = manifestIndex(sent, resumed);
     progress.emit('assembly_waiting', { actionIndex });
     const assembly = await sdk.waitForFileComplete(actionIndex, callOpts);
@@ -366,7 +297,8 @@ async function publishMultipartFile(wif, bytes, meta = {}, opts = {}) {
     }
     progress.emit('complete', { actionIndex, multipart: assembly.multipart });
     return { actionIndex, assembly: assembly.multipart, originalSha256,
-        plan, source, funding, sent };
+        plan, source, funding: waveResult.fundings[0] || null,
+        fundingWaves: waveResult.fundings, sent };
 }
 
 async function waitForFileComplete(actionIndex, opts = {}) {
