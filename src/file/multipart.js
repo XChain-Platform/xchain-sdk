@@ -64,8 +64,10 @@ function normalizedCarrier(carrier) {
     return String(carrier || 'TAPROOT').toUpperCase() === 'STANDARD' ? 'P2SH' : carrier || 'TAPROOT';
 }
 
-function partCapacity(carrier) {
-    const action = 'FILE|2|' + '0'.repeat(FILE_HASH_BYTES * 2) + '|31';
+// The part header carries its index, so the room left for bytes shrinks by one
+// byte for every digit the widest index adds.
+function partCapacity(carrier, indexDigits = 2) {
+    const action = 'FILE|2|' + '0'.repeat(FILE_HASH_BYTES * 2) + '|' + '9'.repeat(indexDigits);
     const actionLength = Buffer.byteLength(action, 'utf8');
     const ceiling = carrierCeiling(actionLength, normalizedCarrier(carrier));
     const available = ceiling.limit - compiledPushSize(actionLength);
@@ -145,9 +147,22 @@ async function storeFileBytes(original, meta, gate) {
     return { compressed, stored, key, keyHash, encryptionMethod };
 }
 
+// A file of at most 100 parts keeps the two-digit sizing it was always planned
+// with, so a resumed upload re-plans the same parts; a longer file is re-sized
+// until its part count fits the index width the capacity assumed.
+function splitForIndexWidth(stored, carrier) {
+    let digits = 2;
+    for (;;) {
+        const capacity = partCapacity(carrier, digits);
+        const buffers = splitStoredBytes(stored, capacity);
+        const needed = Math.max(2, String(buffers.length - 1).length);
+        if (needed <= digits) return { capacity, buffers };
+        digits = needed;
+    }
+}
+
 function buildParts(stored, carrier) {
-    const capacity = partCapacity(carrier);
-    const buffers = splitStoredBytes(stored, capacity);
+    const { capacity, buffers } = splitForIndexWidth(stored, carrier);
     const fileHash = fileHashOf(buffers);
     const parts = buffers.map((part, partIndex) => ({
         partIndex,

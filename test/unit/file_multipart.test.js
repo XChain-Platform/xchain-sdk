@@ -13,6 +13,7 @@
 const assert = require('assert');
 const crypto = require('crypto');
 const vectors = require('../fixtures/multipart_file.json').vectors;
+const { carrierCeiling, compiledPushSize, envelopePayloadSize } = require('../../src/contract/chunk_helper.js');
 const GatedFileUtils = require('../../src/actions/gated_file.js');
 const CompressionUtils = require('../../src/protocol/compression.js');
 const {
@@ -137,8 +138,30 @@ function registerLimitTests() {
     });
 }
 
+// Every part must fit its own header: FILE|2|hash|index grows a byte when the
+// index reaches 100, which once pushed part 100 to 390,001 bytes on the rail.
+function registerIndexWidthTests() {
+    it('sizes a file past 100 parts against its widest part index', async function () {
+        const plan = await planMultipartFile(crypto.randomBytes(8114 * 101), {}, { carrier: 'STANDARD' });
+        assert.ok(plan.totalParts >= 101, 'the plan must reach three-digit part indexes');
+        assert.ok(plan.partCapacity < 8114, 'a three-digit index leaves less room per part');
+        for (const part of plan.parts) {
+            const actionLength = Buffer.byteLength(`FILE|2|${plan.fileHash}|${part.partIndex}`, 'utf8');
+            const room = carrierCeiling(actionLength, 'P2SH').limit - compiledPushSize(actionLength);
+            assert.ok(envelopePayloadSize(part.bytes.length) <= room, `part ${part.partIndex} overflows its carrier`);
+        }
+    });
+
+    it('keeps the two-digit sizing for a file of at most 100 parts', async function () {
+        const plan = await planMultipartFile(crypto.randomBytes(8113 * 100), {}, { carrier: 'STANDARD' });
+        assert.strictEqual(plan.totalParts, 100);
+        assert.strictEqual(plan.partCapacity, 8114);
+    });
+}
+
 describe('multipart FILE planning', function () {
     registerProtocolTests();
     registerPlanningTests();
     registerLimitTests();
+    registerIndexWidthTests();
 });
