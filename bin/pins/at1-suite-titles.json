@@ -13,6 +13,16 @@
       "ExplorerClient buildParams keyset cursors forwards a before cursor to the wire instead of dropping it",
       "ExplorerClient buildParams keyset cursors forwards an after cursor to the wire instead of dropping it"
     ],
+    "008c21e34ee03944": [
+      "multipart FILE planning accepts fixture-shaped part objects",
+      "multipart FILE planning checks multipart bounds using numbers without allocating cap-sized buffers",
+      "multipart FILE planning compresses before gated encryption and round-trips the original bytes",
+      "multipart FILE planning exports the protocol caps and activation map",
+      "multipart FILE planning plans 10,000,000 zero bytes as 26 equal-capacity envelope parts plus the last",
+      "multipart FILE planning plans a real 40-part Standard file",
+      "multipart FILE planning reproduces every documentation vector digest and FILE_HASH",
+      "multipart FILE planning uses the exact envelope and Standard part capacities"
+    ],
     "009976a3263b836f": [
       "CoSigner (MuSig2 hard-enforcement service) a foreign-prevout denial does NOT consume velocity-window budget",
       "CoSigner (MuSig2 hard-enforcement service) denies a foreign witnessUtxo.script with PREVOUT_NOT_OUR_ACCOUNT, before checkOutputs would otherwise pass it",
@@ -8119,8 +8129,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 613,
-      "titleCount": 6454,
+      "fileCount": 614,
+      "titleCount": 6462,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8734,12 +8744,13 @@
         "test/unit/carrier/reconcile_encoded.test/09_uncomputable_fee_fails_closed.test.js": "1e2de6fb2e101851",
         "test/unit/preflight/stale_native_balance_unverified.test.js": "b08573c165a8e31f",
         "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
-        "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96"
+        "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96",
+        "test/unit/file_multipart.test.js": "008c21e34ee03944"
       }
     },
     "test:all": {
-      "fileCount": 653,
-      "titleCount": 6789,
+      "fileCount": 654,
+      "titleCount": 6797,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -9393,7 +9404,8 @@
         "test/unit/carrier/reconcile_encoded.test/09_uncomputable_fee_fails_closed.test.js": "1e2de6fb2e101851",
         "test/unit/preflight/stale_native_balance_unverified.test.js": "b08573c165a8e31f",
         "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
-        "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96"
+        "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96",
+        "test/unit/file_multipart.test.js": "008c21e34ee03944"
       }
     },
     "test:boundary": {

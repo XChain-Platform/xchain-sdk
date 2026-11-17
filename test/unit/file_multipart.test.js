@@ -15,7 +15,11 @@ const crypto = require('crypto');
 const vectors = require('../fixtures/multipart_file.json').vectors;
 const GatedFileUtils = require('../../src/actions/gated_file.js');
 const CompressionUtils = require('../../src/protocol/compression.js');
-const { fileHashOf, planMultipartFile } = require('../../src/file/multipart.js');
+const {
+    assertMultipartBounds,
+    fileHashOf,
+    planMultipartFile,
+} = require('../../src/file/multipart.js');
 const {
     MULTIPART_FILE_MAX_PARTS,
     MULTIPART_FILE_MAX_BYTES,
@@ -26,14 +30,10 @@ function bytesOf(vector) {
     return vector.parts.map((part) => Buffer.from(part.hex, 'hex'));
 }
 
-function errorCode(promise, code) {
-    return assert.rejects(promise, (error) => error && error.code === code);
-}
-
 function registerProtocolTests() {
     it('exports the protocol caps and activation map', function () {
-        assert.strictEqual(MULTIPART_FILE_MAX_PARTS, 32);
-        assert.strictEqual(MULTIPART_FILE_MAX_BYTES, 12000000);
+        assert.strictEqual(MULTIPART_FILE_MAX_PARTS, 65535);
+        assert.strictEqual(MULTIPART_FILE_MAX_BYTES, 262140000000);
         assert.deepStrictEqual(FILE_MULTIPART_ACTIVATION_TIME, {
             mainnet: null,
             testnet: 1794787200,
@@ -112,36 +112,28 @@ function registerPlanningTests() {
 }
 
 function registerLimitTests() {
-    it('allows stored gated bytes exactly at the indexer TOTAL_BYTES cap', async function () {
-        const original = Buffer.alloc(MULTIPART_FILE_MAX_BYTES - 28);
-        const plan = await planMultipartFile(original, {}, {
-            carrier: 'TAPROOT',
-            gate: { key: Buffer.alloc(32, 7) },
-        });
-        assert.strictEqual(plan.totalBytes, MULTIPART_FILE_MAX_BYTES);
-        assert.strictEqual(plan.parts.length, 31);
+    it('checks multipart bounds using numbers without allocating cap-sized buffers', function () {
+        assert.doesNotThrow(() => assertMultipartBounds({
+            originalBytes: MULTIPART_FILE_MAX_BYTES,
+            storedBytes: MULTIPART_FILE_MAX_BYTES,
+            totalParts: MULTIPART_FILE_MAX_PARTS,
+            capacity: 8114,
+        }));
+        assert.throws(() => assertMultipartBounds({
+            originalBytes: MULTIPART_FILE_MAX_BYTES + 1,
+        }), (error) => error && error.code === 'ORIGINAL_BYTES_TOO_LARGE');
+        assert.throws(() => assertMultipartBounds({
+            storedBytes: MULTIPART_FILE_MAX_BYTES + 1,
+        }), (error) => error && error.code === 'STORED_BYTES_TOO_LARGE');
+        assert.throws(() => assertMultipartBounds({
+            totalParts: MULTIPART_FILE_MAX_PARTS + 1,
+            capacity: 8114,
+        }), (error) => error && error.code === 'TOO_MANY_PARTS');
     });
 
-    it('refuses stored gated bytes one byte above the indexer TOTAL_BYTES cap', async function () {
-        const original = Buffer.alloc(MULTIPART_FILE_MAX_BYTES - 27);
-        await errorCode(planMultipartFile(original, {}, {
-            carrier: 'TAPROOT',
-            gate: { key: Buffer.alloc(32, 7) },
-        }), 'STORED_BYTES_TOO_LARGE');
-    });
-
-    it('refuses original bytes above the original-byte cap before compression', async function () {
-        await errorCode(
-            planMultipartFile(Buffer.alloc(MULTIPART_FILE_MAX_BYTES + 1), {}, { carrier: 'TAPROOT' }),
-            'ORIGINAL_BYTES_TOO_LARGE');
-    });
-
-    it('accepts 32 Standard parts and refuses 33', async function () {
-        const valid = await planMultipartFile(Buffer.alloc(8114 * 32), {}, { carrier: 'P2SH' });
-        assert.strictEqual(valid.parts.length, 32);
-        await errorCode(
-            planMultipartFile(Buffer.alloc(8114 * 32 + 1), {}, { carrier: 'P2SH' }),
-            'TOO_MANY_PARTS');
+    it('plans a real 40-part Standard file', async function () {
+        const plan = await planMultipartFile(Buffer.alloc(8114 * 40), {}, { carrier: 'STANDARD' });
+        assert.strictEqual(plan.parts.length, 40);
     });
 }
 

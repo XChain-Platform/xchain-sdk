@@ -428,8 +428,8 @@ const COMPRESSION_MAX_RATIO = 150;
 // bytes handed in, before any compression attempt.
 const COMPRESSION_MAX_INPUT_BYTES = 16 * 1024 * 1024;
 
-const MULTIPART_FILE_MAX_PARTS = 32;
-const MULTIPART_FILE_MAX_BYTES = 12000000;
+const MULTIPART_FILE_MAX_PARTS = 65535;
+const MULTIPART_FILE_MAX_BYTES = 262140000000;
 const FILE_MULTIPART_ACTIVATION_TIME = {
     mainnet: null,
     testnet: 1794787200,
