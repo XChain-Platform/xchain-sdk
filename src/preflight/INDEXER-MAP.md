@@ -82,7 +82,16 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `a6b8655f2`
+**Pins taken at indexer commit:** `6257fff51`
+
+(Re-anchored 2026-11-18 to `6257fff51`, the committed tip of the indexer review-round branch that
+records per-leg probe verdicts for DESTROY and AIRDROP, refuses an AIRDROP leg amount the ledger
+cannot parse, and stops a DISPENSER create skipping the legacy tracker freshness read. The `send`,
+`destroy`, `dispenser` and `airdrop` pins move; the other twelve rows hash as pinned there. The
+previous anchor `a6b8655f2` is its ancestor and is on origin develop. `6257fff51` stays reachable only
+if the branch lands by fast-forward or as a merge parent; a squash or rebased landing orphans it, and
+the anchor then moves to the landed commit with no pin change. Until that branch lands, SDK CI, which
+grades this map against indexer develop, reports the four moved rows as drifted.)
 
 (Re-anchored 2026-11-16 to `a6b8655f2`, the committed tip of the indexer hand branch that adds
 ORDER_GET_ADDRESS_COIN, STATE_VALUE_ASTRAL_ESCAPE and LINT_REGEX_GROUP_DEPTH. Only the `order` pin
@@ -540,7 +549,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff a6b8655f2..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 6257fff51..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -613,15 +622,15 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `341e27553187341c1539d52c47b2d3ab56f3f7bb22190403bfa95005e3971fa0` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `d506363982ca031980a3695650f7b1b6409e8e597f6a30bfca8bf7f5e00489e6` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `16967859969a63f140a573edad87cd6adf87b0d12ef8b0d35741d29e2dee6766` |
 | `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
 | `checks/issue.js` | `src/actions/issue/` | `259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `8130c1a24aa0e3af97b773fdfdfb6ab6362b28cc5a5a9a55093db47e2736ffef` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `d424db436cd021ddb4e13958b43a122616805ffd7feecf3c4a94b00e9f8ce6cd` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
 | `checks/trading.js` (ORDER) | `src/actions/order/` | `4e13054129b1ac076c96a8e2529135a7e3b7a326472300dc9cec40207422d869` |
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `a70835407b0dc5968a7ce7b307e74bd68fd97cef072bfee0317786ce187c672c` |
 | `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
 | `checks/batch.js` | `src/actions/batch/` | `ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
@@ -654,6 +663,50 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-18 - AIRDROP refuses a leg amount the ledger cannot parse, and DESTROY and AIRDROP keep per-leg probe verdicts
+
+The `send` pin moves from `341e2755` to `d5063639`, the `destroy` pin moves from `f6423fc8` to
+`16967859`, the `dispenser` pin moves from `8130c1a2` to `d424db43` and the `airdrop` pin moves from
+`9b3ade3b` to `a7083540`, hashed from the committed indexer tree at the anchor above by `node bin/preflight_handler_dirs.js <indexer>
+src/actions/<name>/` and read against the previous anchor `a6b8655f2`. The whole mapped diff is one
+review-round landing (`778f7049a`); the origin develop merge in the range touches no mapped row.
+
+- **AIRDROP, `airdrop/index.js`:** `processAirdropLeg` refuses a leg whose AMOUNT `bcparses` rejects
+  as `invalid: AMOUNT (format)`, after every earlier verdict and before the DEBIT `bcmul`. Where
+  AMOUNT_REPRESENTABILITY is unarmed (mainnet) the legacy format rule passes text such as `1.+5`,
+  `1.-5` or `01 .5`, which used to halt the block on the DEBIT math. Ungated.
+- **AIRDROP `airdrop/settle.js`, DESTROY `destroy/settle.js`:** each leg's status is appended to
+  `PROBE_LEG_VERDICTS` through `recordProbeLegVerdict` when `FEE_PROBE` is true, as SEND has since
+  2026-11-01. The key never exists on a decoded transaction, so no on-chain verdict, row or balance moves.
+- **SEND, `send/settle.js`, `send/leg_verdicts.js`:** `recordProbeLegVerdict` moves from `settle.js`
+  into `leg_verdicts.js` and is shared by the three actions. A leg with no DESTINATION now omits the
+  key instead of carrying `undefined`; every SEND leg has one, so SEND rows are unchanged.
+- **DISPENSER, `dispenser/index.js`:** below DISPENSER_FRESHNESS_ACTIVATION, a node whose utxo-tracker
+  client is present but unconfigured now runs the legacy freshness read, whose call throws the tagged
+  unavailable error and halts the block, where it used to skip the read and judge the create not fresh.
+  A node-local fault path: tracker-backed nodes reach the same verdict as before.
+
+**Client follow-up.** AIRDROP moves. Pre-flight already refused a first-leg `1.+5` through the
+validator (`AMOUNT must be numeric`), but on mainnet a later leg of a format-1 or format-2 AIRDROP,
+alone or as a BATCH sub-command, passed both the validator and `checkAirdropAmountFormat`'s legacy
+rule. `checks/airdrop.js` now runs `checkAmountParses` (`checks/amount_format.js`, over
+`numeric.bignumberParses`, the indexer's `bcparses` on the same mathjs 15.2.0) on each leg whose token
+resolves, an AMOUNT_FORMAT_INVALID error that never duplicates a validator refusal of the field. It
+carries `haltClass`, as the 2026-11-02 entries set it, because an indexer without this commit halts on
+the leg, so a network answer of valid never demotes it. Every
+string of up to five characters over `0 1 5 . + - e x b o` and space that the indexer's legacy rule
+passes and mathjs refuses (588 cases over 0 and 8 decimals) is now refused on mainnet and regtest as a single leg,
+a later leg and a BATCH sub-command. DESTROY and SEND need nothing: no admission predicate moves, and
+`applyTier1` reads the network's `status` alone, which for a multi-leg DESTROY or AIRDROP now names
+the first refused leg (standalone through `dry_run_support.js`, in a BATCH through `batch/probe.js`)
+where it named the last leg's, as SEND's has since 2026-11-01. DISPENSER needs nothing: freshness stays
+server-side under DISPENSER_ORIGIN_STANDING. Tests:
+`test/unit/preflight/checks/airdrop_leg_amount_parse.test.js`.
+
+**Direction: TIGHTENS AIRDROP, ungated.** The refused amounts halted the chain before. One client
+check is added; DESTROY, SEND and DISPENSER are NEUTRAL for validity. The anchor moves to the committed
+indexer tree, and the other twelve rows are unchanged.
 
 ### 2026-11-16 - a cross-chain ORDER's GET_ADDRESS is judged against GET_COIN behind ORDER_GET_ADDRESS_COIN
 

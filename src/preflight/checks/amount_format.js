@@ -65,6 +65,12 @@ function tokenDecimals(token) {
     return null;
 }
 
+// The validator may already have refused the same field's text (universal.js).
+function alreadyRefused(ctx, label) {
+    return ctx.findings.some((f) => f.code === FINDING_CODES.AMOUNT_FORMAT_INVALID && f.severity === 'error'
+        && f.data && f.data.field === label && (ctx.commandIndex === null || f.data.commandIndex === ctx.commandIndex));
+}
+
 // Raise AMOUNT_FORMAT_INVALID when `amount` fails the indexer's rule at `decimals`.
 // Returns true when it raised. `label` names the field in the message and data.
 function checkAmountField(ctx, label, amount, decimals, extra) {
@@ -72,10 +78,7 @@ function checkAmountField(ctx, label, amount, decimals, extra) {
     if (amount === '' || amount === null || amount === undefined || Array.isArray(amount)) return false;
     if (decimals === null || decimals === undefined) return false;
     if (amountFormatOk(ctx, decimals, amount)) return false;
-    // The validator may already have refused the same field's text (universal.js).
-    if (ctx.findings.some((f) => f.code === FINDING_CODES.AMOUNT_FORMAT_INVALID && f.severity === 'error'
-        && f.data && f.data.field === label && (ctx.commandIndex === null || f.data.commandIndex === ctx.commandIndex)))
-        return false;
+    if (alreadyRefused(ctx, label)) return false;
     ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
         `${label} ${amount} is not a valid amount at ${decimals} decimals; the indexer rejects this action as `
         + `invalid: ${label} (format).`,
@@ -83,4 +86,24 @@ function checkAmountField(ctx, label, amount, decimals, extra) {
     return true;
 }
 
-module.exports = { representabilityArmed, amountFormatOk, declareRepresentability, tokenDecimals, checkAmountField };
+// Raise AMOUNT_FORMAT_INVALID when `amount` passes the format rule but the ledger math
+// cannot parse it. Where the representability rule is unarmed the legacy text rule passes
+// '1.+5', '1.-5' and '01 .5'; a handler that guards its arithmetic with bcparses refuses
+// such a leg with the format status instead of halting the block. An indexer without that
+// refusal still halts on it, so the finding is halt-class and Tier 1 never demotes it.
+// Returns true when it raised.
+function checkAmountParses(ctx, label, amount, extra) {
+    if (amount === '' || amount === null || amount === undefined || Array.isArray(amount)) return false;
+    if (numeric.bignumberParses(String(amount))) return false;
+    if (alreadyRefused(ctx, label)) return false;
+    const verdict = `invalid: ${label} (format)`;
+    ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
+        `${label} ${amount} is not a number the ledger can parse; the indexer rejects this leg as ${verdict}, `
+        + 'and an indexer without that rule halts on it.',
+        Object.assign({ field: label, amount: String(amount), verdict, haltClass: true }, extra || {}));
+    return true;
+}
+
+module.exports = {
+    representabilityArmed, amountFormatOk, declareRepresentability, tokenDecimals, checkAmountField, checkAmountParses,
+};

@@ -162,7 +162,20 @@ function isValidAmountFormatWhere(decimals, amount, armed) {
     return util.isValidAmountFormat(decimals, amount);
 }
 
+// The indexer's bcparses (src/utility/bcmath.js): whether the raw bignumber helpers accept
+// `num` without throwing. Null reads as 0, as there. It answers a different question from
+// isValidAmountFormat, which passes text such as '1.+5' that mathjs cannot parse.
+function bignumberParses(num) {
+    if (num === null || num === undefined) return true;
+    try {
+        mathjs.bignumber(num);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 module.exports = {
     gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat, isRepresentableAmount, isValidAmountFormatWhere,
-    exceedsUnsignedColumn, keepsPrefixedSpelling,
+    exceedsUnsignedColumn, keepsPrefixedSpelling, bignumberParses,
 };
