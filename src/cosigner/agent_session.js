@@ -397,4 +397,4 @@ class AgentSession extends WalletSession {
     }
 }
 
-module.exports = AgentSession;
+module.exports = Object.assign(AgentSession, { validatePolicy });

@@ -37,10 +37,16 @@ function pairSizeOf(piece, source, opts, position) {
     return size;
 }
 
+// Relay-policy output floor per coin when the quote carries none. Mirrors
+// SOFT_DUST_FLOOR_BY_COIN in the encoder's constants; a parity test holds the two
+// together wherever both checkouts are present.
+const SOFT_DUST_FLOOR_BY_COIN = Object.freeze({ DOGE: 1000000 });
+
 function outputFloorOf(sdk, opts) {
     const quote = opts.quote || opts;
     if (Number.isFinite(quote.outputFloor) && quote.outputFloor >= 0) return quote.outputFloor;
-    if (baseCoin(sdk, opts) === 'DOGE') return 1000000;
+    const soft = SOFT_DUST_FLOOR_BY_COIN[baseCoin(sdk, opts)];
+    if (soft !== undefined) return soft;
     return sdk.wallet.getBitcoinNetwork().dustThreshold;
 }
 
@@ -108,6 +114,12 @@ async function waitForFunding(encoder, txid, opts) {
     throw error;
 }
 
+// The caller's per-transaction fee ceiling covers the funding transaction too;
+// maxFundingFeeSats overrides it for a wave whose many outputs need a higher one.
+function fundingFeeCap(opts) {
+    return opts.maxFundingFeeSats != null ? opts.maxFundingFeeSats : opts.maxFeeSats;
+}
+
 async function fundPieces(sdk, wave, previousFunding, source, rate, opts, modules, progress) {
     const pieces = wave.pieces;
     const previousChange = previousFunding && previousFunding.change;
@@ -123,7 +135,7 @@ async function fundPieces(sdk, wave, previousFunding, source, rate, opts, module
     const encoded = await encoder.createTx(request);
     modules.reconcileEncoded(encoded.psbt, { network: sdk.wallet.getBitcoinNetwork(),
         customOutputs: expected, changeAddresses: source.sourceAddress,
-        callerIdentities: source.pubkey, maxFeeSats: opts.maxFundingFeeSats,
+        callerIdentities: source.pubkey, maxFeeSats: fundingFeeCap(opts),
         // reconcileEncoded reads input values as BigInt and matches a leg with ===.
         requiredSpends: previousChange ? [{ script: Buffer.from(previousChange.scriptPubKey, 'hex'), value: BigInt(previousChange.value) }] : [],
         trustedPrevTxs: previousFunding ? [previousFunding.signed.txHex] : [],
@@ -142,4 +154,4 @@ async function fundPieces(sdk, wave, previousFunding, source, rate, opts, module
     return { txid: signed.txid, signed, confirmed, expectedOutputs: expected, utxos, change };
 }
 
-module.exports = { baseCoin, feeRateOf, fundPieces };
+module.exports = { baseCoin, feeRateOf, fundPieces, outputFloorOf, SOFT_DUST_FLOOR_BY_COIN };

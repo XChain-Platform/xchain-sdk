@@ -21,6 +21,7 @@
 const ContractClient = require('../../contract/client.js');
 
 const { seg } = require('./path_segment.js');
+const { readKeyedRow } = require('./keyed_contract_read.js');
 const { coinTier, hasHttpScheme } = require('../../utils/endpoints.js');
 const { SDKExplorerError } = require('../../utils/errors.js');
 const coins = require('../../coins');
@@ -256,13 +257,13 @@ module.exports = {
 
     async getContractState(contractActionIndex, key) {
         if (key)
-            return this.get('/contract/' + seg(contractActionIndex) + '/state/' + seg(key));
+            return readKeyedRow(this, '/contract/' + seg(contractActionIndex) + '/state/' + seg(key), 'state_key', key);
         return this.get('/contract/' + seg(contractActionIndex) + '/state');
     },
 
     async getContractBalance(contractActionIndex, tick) {
         if (tick)
-            return this.get('/contract/' + seg(contractActionIndex) + '/balance/' + seg(tick));
+            return readKeyedRow(this, '/contract/' + seg(contractActionIndex) + '/balance/' + seg(tick), 'tick', tick);
         return this.get('/contract/' + seg(contractActionIndex) + '/balance');
     },
 
@@ -275,8 +276,10 @@ module.exports = {
     // query-only path 404s. Thread type like the sibling helpers (getContracts,
     // getContractStakes), defaulting to 'contract' (the common: list a contract's
     // executions by its action index).
+    // Action index 0 is a real index, so only an absent query (undefined, null or
+    // an empty string) takes the unfiltered route.
     async getExecutions(query, type = 'contract', opts = {}) {
-        if (query)
+        if (query !== undefined && query !== null && query !== '')
             return this.get('/executions/' + seg(query) + '/' + seg(type), opts);
         return this.get('/executions', opts);
     },

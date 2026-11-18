@@ -85,8 +85,12 @@ module.exports = {
         // WebSocket follows explorer URL/port unless an explicit websocketUrl is given.
         let websocketUrl  = resolved.websocketUrl  || this.options.websocketUrl  || config.env.websocketUrl();
         let websocketPort = resolved.websocketPort || this.options.websocketPort || config.env.websocketPort();
+        // A websocketPort option given alone skips the public host, as the other port options do:
+        // the client drops a port once the URL has a scheme.
+        let wsPortOption  = resolved.websocketPort || this.options.websocketPort;
+        let wsHostDefault = wsPortOption ? (resolved.explorerUrl || config.env.explorerUrl()) : explorerUrl;
         if (network && (websocketUrl || websocketPort || explorerUrl || explorerPort)) {
-            let wsUrl  = websocketUrl  || explorerUrl;
+            let wsUrl  = websocketUrl  || wsHostDefault;
             let wsPort = websocketPort ? parseInt(websocketPort) : (explorerPort ? parseInt(explorerPort) : undefined);
             if (!this.ws || this.ws.baseUrl !== wsUrl || this.ws.port !== wsPort) {
                 if (this.ws) this.ws.disconnect();
@@ -179,8 +183,8 @@ module.exports = {
             }
         }
 
-        // Follow the explorer endpoint with the WebSocket unless a websocket URL or the explorer was pinned
-        if (!this.options.websocketUrl && !this.options.explorerUrl && !this.options.explorerPort && endpoints.explorerUrl) {
+        // Follow the explorer endpoint with the WebSocket unless a websocket URL or port or the explorer was pinned
+        if (!this.options.websocketUrl && !this.options.websocketPort && !this.options.explorerUrl && !this.options.explorerPort && endpoints.explorerUrl) {
             if (this.ws) {
                 if (!this.isDowngrade('websocket', this.ws, endpoints.explorerUrl))
                     this.ws.setBase(endpoints.explorerUrl, endpoints.explorerPort);

@@ -23,6 +23,7 @@ const { SDKActionError } = require('../../utils/errors.js');
 const { pickRevealOptions } = require('../../clients/encoder/create_tx_options.js');
 const { reconcileEncoded } = require('../reconcile_encoded.js');
 const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('../bind_action_carrier.js');
+const { assertRevealInputsBound } = require('../bind_reveal_inputs.js');
 
 // Sign an envelope reveal synchronously so it is ready before the commit broadcast.
 function prepareEnvelope(manager, { encoded, createResult, encoderOpts, wif, progress }) {
@@ -89,7 +90,7 @@ function buildPhase2Request(signed, encoded, encoderOpts, carriedAction) {
 }
 
 // Reconcile, bind and sign phase 2 synchronously before its broadcast begins.
-function preparePhase2(manager, spendResult, reconcileState, createResult, wif, signed) {
+function preparePhase2(manager, spendResult, reconcileState, createResult, wif, signed, encoded) {
     // The reveal must spend every shaped funding output from phase 1, which avoids
     // leaving undecodable carrier value under encoder control.
     reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileState.reconcileIntent, {
@@ -108,6 +109,17 @@ function preparePhase2(manager, spendResult, reconcileState, createResult, wif, 
         label:        'phase-2 reveal',
     });
 
+    // The decoder reads data from every reveal input in order, so the inputs must
+    // be exactly the carrier legs phase 1 verified, with nothing pre-signed.
+    assertRevealInputsBound({
+        psbt:           spendResult.psbt,
+        commitTxHex:    signed.txHex,
+        carrierScripts: encoded.carrierScripts,
+        encoding:       encoded.encoding,
+        network:        manager.reconcileNetwork(),
+        label:          'phase-2 reveal',
+    });
+
     // Non-standard P2SH and P2WSH inputs require the reveal-specific finalizer.
     return manager.sdk.wallet.signRevealPsbt(spendResult.psbt, wif);
 }
@@ -119,7 +131,8 @@ async function prepareChunkReveal(manager, state) {
     if (encoded.encoding !== 'P2SH' && encoded.encoding !== 'P2WSH') return null;
     progress('p2sh_spending', { phase1Txid: signed.txid });
     const spendResult = await encoder.spendP2sh(buildPhase2Request(signed, encoded, encoderOpts, carriedAction));
-    return { spendResult, spendSigned: preparePhase2(manager, spendResult, reconcileState, createResult, wif, signed) };
+    return { spendResult,
+        spendSigned: preparePhase2(manager, spendResult, reconcileState, createResult, wif, signed, encoded) };
 }
 
 // Update phase-2 tracking synchronously after its broadcast has succeeded.

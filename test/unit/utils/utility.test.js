@@ -96,6 +96,27 @@ describe('Utility.isInteger (indexer parity, #2393)', function () {
     });
 });
 
+describe('Utility.isFloat past the int32 range', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new Utility();
+    });
+
+    it('is false for whole numbers of any magnitude', function () {
+        for (const v of [0, 5, 2147483647, 2147483648, 3000000000, 4294967296, -2147483649, 9007199254740991])
+            assert.strictEqual(utils.isFloat(v), false, String(v));
+    });
+
+    it('is true only for a finite number carrying a fraction', function () {
+        for (const v of [1.5, -0.25, 3000000000.5])
+            assert.strictEqual(utils.isFloat(v), true, String(v));
+        for (const v of ['1.5', NaN, Infinity, -Infinity, null, undefined, 10n])
+            assert.strictEqual(utils.isFloat(v), false, String(v));
+    });
+});
+
 // the version-locked helpers built `{ VERSION: '3',...params }`, so the
 // spread landed after the forced value and a caller-supplied VERSION won. Lowercase
 // `version` won too, since normalizeFields upper-snakes both spellings onto one key.

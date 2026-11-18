@@ -37,6 +37,7 @@
 'use strict';
 
 const M = require('../../merkle.js');
+const checkpoint = require('../../checkpoint.js');
 // Identity of a wire index is decided as BigInt, never Number(): the explorer
 // serializes BIGINT columns as decimal strings, and Number() collapses two
 // adjacent indices above 2^53 onto one value, so the binding guards below would
@@ -89,7 +90,8 @@ async function verifyBalance(opts){
     if (opts.atHeight != null && opts.atHeight !== '' && Number(cp.block_index) < Number(opts.atHeight))
         return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_BELOW_ATHEIGHT' }, base);
     const trusted = lowerHex(cp.state_root);
-    if (!trusted) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
+    const rootRefused = rootRefusal(opts, cp, trusted);
+    if (rootRefused) return Object.assign({ verified: false, amount: null, reason: rootRefused }, base);
     if (lowerHex(proof.chain) !== lowerHex(cp.chain) || lowerHex(proof.network) !== lowerHex(cp.network))
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_CHECKPOINT_CHAIN_MISMATCH' }, base);
     // Bind the proof to the ACTUAL query. verifyBalanceProof only checks the proven
@@ -131,6 +133,17 @@ async function resolveBalanceCheckpoint(f, opts, body, proof){
 
 // Return x when it is a non-empty string, otherwise null.
 function nonEmpty(x){ return (typeof x === 'string' && x) ? x : null; }
+
+// Why a served checkpoint's root cannot anchor a proof, or null when it can. Below the
+// commitment flag day the roots sit outside the signed bytes, so a quorum-valid
+// signature says nothing about a root the explorer attached: refuse it. A caller-supplied
+// trusted checkpoint was vetted by the caller (e.g. an anchored cold start), so only the
+// served branch is gated here.
+function rootRefusal(opts, cp, root){
+    if (!root) return 'CHECKPOINT_PRE_COMMITMENT';
+    if (!opts.trustedCheckpoint && !checkpoint.commitmentActive(cp)) return 'ROOTS_NOT_SIGNED';
+    return null;
+}
 
 // verifyLockedBalance({ explorerUrl, coin, address, tick, atHeight?, validators?, trustedCheckpoint?, pinnedResolver?, fetchImpl? })
 //  The XCHAIN_ESC counterpart of verifyBalance, same options and same
@@ -183,7 +196,8 @@ async function verifyLockedBalance(opts){
     if (opts.atHeight != null && opts.atHeight !== '' && Number(cp.block_index) < Number(opts.atHeight))
         return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_BELOW_ATHEIGHT' }, base);
     const trusted = lowerHex(cp.state_root);
-    if (!trusted) return Object.assign({ verified: false, amount: null, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
+    const rootRefused = rootRefusal(opts, cp, trusted);
+    if (rootRefused) return Object.assign({ verified: false, amount: null, reason: rootRefused }, base);
     if (lowerHex(proof.chain) !== lowerHex(cp.chain) || lowerHex(proof.network) !== lowerHex(cp.network))
         return Object.assign({ verified: false, amount: null, reason: 'PROOF_CHECKPOINT_CHAIN_MISMATCH' }, base);
     // Bind the proven key to the CALLER's query in the ESC domain, the escrow
@@ -234,7 +248,8 @@ async function verifyAction(opts){
     if (!sameWireIndex(proof.height, cp.block_index))
         return Object.assign({ verified: false, reason: 'PROOF_HEIGHT_MISMATCH' }, base);
     const trusted = lowerHex(cp.block_merkle_root);
-    if (!trusted) return Object.assign({ verified: false, reason: 'CHECKPOINT_PRE_COMMITMENT' }, base);
+    const rootRefused = rootRefusal(opts, cp, trusted);
+    if (rootRefused) return Object.assign({ verified: false, reason: rootRefused }, base);
     // The ONLY check binding this proof to the action the caller asked about, and
     // verifyActionProof cannot back it up: that verifier recomputes the leaf FROM
     // proof.action_index, so a genuine proof for the neighbouring action recomputes

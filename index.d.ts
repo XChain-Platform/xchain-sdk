@@ -892,7 +892,8 @@ export interface ExplorerStatus {
     chain_lag_blocks?: { [coin: string]: number | null };
     /**
      * The decoder's own health verdict: 'healthy', 'unhealthy', 'reorg-halt-parked', 'reorg-halted',
-     * 'node-stale', 'unconfigured' or 'unreachable'. Typed as string because the explorer passes the decoder's own word through
+     * 'node-stale', 'unconfigured', 'unreachable' or 'rate-limited' (a transient 429 with no earlier good reading).
+     * Typed as string because the explorer passes the decoder's own word through; treat an unlisted value as unknown
      */
     decoder_health?: { [coin: string]: string };
     /** Server-side render time */
@@ -2108,10 +2109,14 @@ export declare class XChainSDK {
     /** Get a list of contracts, optionally filtered by owner address */
     getContracts(query?: string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ContractInfo>>;
 
-    /** Get contract state entries (all keys or a specific key) */
+    /**
+     * Get contract state entries (all keys or a specific key). A keyed read walks the explorer's
+     * pages until the key is found and throws CONTRACT_READ_TRUNCATED when the contract holds more
+     * keys than it will walk without finding it.
+     */
     getContractState(contractActionIndex: number | string, key?: string): Promise<ListEnvelope<ContractStateEntry>>;
 
-    /** Get contract token balances */
+    /** Get contract token balances (all ticks or one tick, walked the same way as getContractState) */
     getContractBalance(contractActionIndex: number | string, tick?: string): Promise<ListEnvelope<ContractBalanceEntry>>;
 
     /** Get one execution by its ACTION_INDEX, inside the list envelope: read `data[0]` */

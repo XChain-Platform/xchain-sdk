@@ -47,6 +47,7 @@ function dependencyStubs(overrides = {}) {
         twoStepRevealParams: (params, hex) => ({ ...params, options: { envelopeCommitHex: hex } }),
         twoStepRecoveryRecord: result => result.envelope,
         reconcileEncoded: () => ({ phaseFunding: [{ txid: 'phase', vout: 0 }] }),
+        twoStepCommitPins: () => ({ inputIndices: [0], phaseSpends: [], requiredSpends: [] }),
         assertEnvelopeCommitBinding: () => ({ script: 'funding' }),
         assertEnvelopeCarrierBinding: () => true,
         validateAssemblyArgs: index => { if (index === null) throw new Error('missing'); },
@@ -239,6 +240,8 @@ describe('publishMultipartFile gated two-step envelope', function () {
         const workflow = require(WORKFLOW);
         const { sdk, calls } = makeSdk({ taproot: true, gated: true });
         sdk.waitForFileComplete = (index, opts) => workflow.waitForFileComplete.call(sdk, index, opts);
+        const baseSign = sdk.wallet.signPsbt; const commitSigns = [];
+        sdk.wallet.signPsbt = (psbt, wif, signOpts) => { if (psbt === 'commit') commitSigns.push(signOpts); return baseSign(psbt, wif); };
         const recoveries = [];
         const result = await workflow.publishMultipartFile.call(sdk, 'wif', Buffer.from('x'), {}, {
             activationTime: 100, sourceType: 'p2pkh', pieceFundingValues: [40, 41, 42],
@@ -254,11 +257,21 @@ describe('publishMultipartFile gated two-step envelope', function () {
         assert(reveals.every(call => call.options.exactInputs === undefined));
         assert.strictEqual(recoveries.length, 3);
         const actionReconciles = reconciles.filter(call => /^multipart envelope/.test(call.intent.label));
-        assert.strictEqual(actionReconciles.length, 6);
+        assert.strictEqual(actionReconciles.length, 9);
         assert(actionReconciles.every(call => call.intent.maxFeeSats === 123));
         assert(actionReconciles.every(call => call.intent.maxPhaseFundingSats === 456));
+        assert.deepStrictEqual(commitSigns, [{ inputIndices: [0] }, { inputIndices: [0] }, { inputIndices: [0] }]);
         assert(calls.waitOptions.every(opts => !('maxFeeSats' in opts) && !('maxPhaseFundingSats' in opts)));
         assert.strictEqual(result.actionIndex, 91);
+    });
+
+    it('refuses an encoder commit that fails its pre-sign reconcile before signing or sending it', async function () {
+        const pre = (psbt, intent) => { if (/pre-sign/.test(intent.label)) throw Object.assign(new Error('cap'), { code: 'FEE_OVER_CAP' }); return { phaseFunding: [] }; };
+        restore = installDependencies(dependencyStubs({ planMultipartFile: async () => plan(true), reconcileEncoded: pre }));
+        const { sdk, calls } = makeSdk({ taproot: true, gated: true }); const signed = [];
+        sdk.wallet.signPsbt = psbt => { signed.push(psbt); return { txHex: 'aa', txid: psbt }; };
+        await assert.rejects(() => publishWith(sdk, require(WORKFLOW), { sourceType: 'p2pkh', pieceFundingValues: [40, 41, 42] }), e => e.code === 'FEE_OVER_CAP');
+        assert(!signed.includes('commit') && !calls.creates.some(call => call.options && call.options.envelopeCommitHex));
     });
 });
 

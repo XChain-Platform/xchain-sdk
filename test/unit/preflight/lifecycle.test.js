@@ -12,6 +12,23 @@ const { Coalescer, isStale, degraded } = require('../../../src/preflight/lifecyc
 const { STALENESS_MS } = require('../../../src/preflight/constants.js');
 const { mockSdk } = require('./helpers/mock.js');
 
+// A mock SDK whose explorer reports dispenser 5 open and every other index
+// closed, after a short delay so concurrent pre-flights overlap.
+function dispenseSdk() {
+    const seen = [];
+    const sdk = mockSdk({ explorerSpec: { getAction: async (idx) => {
+        seen.push(String(idx));
+        await new Promise(resolve => setTimeout(resolve, 10));
+        return { action: 'DISPENSER', action_index: String(idx), give_amount: '1', get_amount: '1',
+            state: { status: String(idx) === '5' ? 'open' : 'closed', give_remaining: '10' } };
+    } } });
+    return { sdk, seen };
+}
+
+function hasNotOpen(report) {
+    return report.findings.some(f => f.code === 'DISPENSER_NOT_OPEN' && f.severity === 'error');
+}
+
 describe('pre-flight lifecycle', function () {
 
     describe('coalescing', function () {
@@ -77,6 +94,37 @@ describe('pre-flight lifecycle', function () {
             await c.run(key, producer);
             await c.run({ ...key, bypass: true }, producer);
             expect(runs).to.equal(2);
+        });
+
+        it('bypass with a pre-aborted signal never starts the producer', async function () {
+            const c = new Coalescer();
+            const ac = new AbortController();
+            let runs = 0;
+            ac.abort();
+            let err;
+            try {
+                await c.run({ chainId: 'btc', actionString: 'S', source: 's', bypass: true,
+                    signal: ac.signal }, () => { runs++; return Promise.resolve('v'); });
+            } catch (e) { err = e; }
+            expect(err && err.message).to.equal('aborted');
+            expect(runs).to.equal(0);
+        });
+
+        it('withSignal observes a later rejection for a pre-aborted signal', async function () {
+            const c = new Coalescer();
+            const ac = new AbortController();
+            const unhandled = [];
+            const onUnhandled = (e) => unhandled.push(e);
+            ac.abort();
+            process.on('unhandledRejection', onUnhandled);
+            try {
+                const late = new Promise((resolve, reject) => setTimeout(() => reject(new Error('boom')), 5));
+                await c.withSignal(late, ac.signal).catch(() => {});
+                await new Promise(resolve => setTimeout(resolve, 30));
+                expect(unhandled).to.deep.equal([]);
+            } finally {
+                process.removeListener('unhandledRejection', onUnhandled);
+            }
         });
 
         it('a caller-supplied signal aborts only that view; shared work survives', async function () {
@@ -212,6 +260,59 @@ describe('pre-flight lifecycle', function () {
             expect(a).to.equal(b);
             expect(calls).to.have.length(1);
         });
+    });
+});
+
+describe('pre-flight lifecycle', function () {
+    describe('coalescing across caller options', function () {
+        it('object-form DISPENSE calls for different indexes run separate producers', async function () {
+            const { sdk, seen } = dispenseSdk();
+            const opts = { source: 's', preflight: 'report' };
+            const [open, closed] = await Promise.all([
+                sdk.preflight({ action: 'DISPENSE', params: { actionIndex: 5 } }, opts),
+                sdk.preflight({ action: 'DISPENSE', params: { actionIndex: 9 } }, opts),
+            ]);
+            expect(seen.sort()).to.deep.equal(['5', '9']);
+            expect(hasNotOpen(open)).to.equal(false);
+            expect(hasNotOpen(closed)).to.equal(true);
+        });
+
+        it('ParsedAction DISPENSE calls with a summary-only actionString run separate producers', async function () {
+            const { sdk, seen } = dispenseSdk();
+            const parsedFor = (idx) => ({ ok: true, action: 'DISPENSE', version: 0,
+                params: { ACTION_INDEX: idx }, actionString: 'DISPENSE|0|',
+                validation: { ok: true, findings: [] } });
+            const opts = { source: 's', preflight: 'report' };
+            const [open, closed] = await Promise.all([
+                sdk.preflight(parsedFor(5), opts),
+                sdk.preflight(parsedFor(9), opts),
+            ]);
+            expect(seen.sort()).to.deep.equal(['5', '9']);
+            expect(hasNotOpen(open)).to.equal(false);
+            expect(hasNotOpen(closed)).to.equal(true);
+        });
+
+        it('object-form DISPENSE units are not treated as carrier payload', async function () {
+            const sdk = mockSdk();
+            const report = await sdk.preflight({ action: 'DISPENSE', params: {
+                actionIndex: 5, units: '9'.repeat(100),
+            } }, { source: 's', preflight: 'local', encoding: 'OP_RETURN' });
+            expect(report.findings.some(f => f.code === 'ENCODING_TOO_LARGE')).to.equal(false);
+        });
+    });
+});
+
+describe('pre-flight lifecycle bypass abort', function () {
+    it('a pre-aborted bypass preflight performs no Tier-1 request', async function () {
+        const { sdk, calls } = countingSdk();
+        const ac = new AbortController();
+        ac.abort();
+        let err;
+        try {
+            await sdk.preflight(A, { source: SRC, bypassCache: true, signal: ac.signal });
+        } catch (e) { err = e; }
+        expect(err && err.message).to.equal('aborted');
+        expect(calls).to.have.length(0);
     });
 });
 

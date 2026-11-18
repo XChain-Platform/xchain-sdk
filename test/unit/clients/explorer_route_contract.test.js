@@ -36,9 +36,14 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
+const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
+const { buildServer } = require('../../../mcp/server.js');
 
 const EXPLORER_ROUTES = path.join(
     __dirname, '../..', '..', '..', 'xchain-explorer', 'src', 'explorer', 'routes', 'api_methods.js');
+const EXPLORER_METHOD_TABLES = path.join(
+    __dirname, '../..', '..', '..', 'xchain-explorer', 'src', 'db', 'method_tables.js');
 const SRC = path.join(__dirname, '../..', '..', 'src');
 const MCP_SERVER = path.join(__dirname, '../..', '..', 'mcp', 'server.js');
 
@@ -129,6 +134,16 @@ function loadRouteTable(ctx) {
     return table;
 }
 
+function loadListLimitMax(ctx) {
+    if (!fs.existsSync(EXPLORER_METHOD_TABLES)) {
+        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') {
+            throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling method_tables.js was not found');
+        }
+        return ctx.skip();
+    }
+    return require(EXPLORER_METHOD_TABLES).listLimitMax;
+}
+
 describe('explorer route contract @regression', function () {
     let table;
 
@@ -161,6 +176,38 @@ describe('explorer route contract @regression', function () {
         assert.deepStrictEqual(violations, [],
             'explorer calls using a query type the route does not accept (these 404 at runtime, ' +
             'and a 404 is read as "this resource does not exist"):\n  ' + violations.join('\n  '));
+    });
+});
+
+describe('explorer list limit contract @regression', function () {
+    let listLimitMax;
+
+    before(function () {
+        listLimitMax = loadListLimitMax(this);
+    });
+
+    it('every paged MCP read advertises its explorer method page limit', async function () {
+        const methodByTool = {
+            search_tokens: 'getTokens',
+            get_holders: 'getHolders',
+            get_balances: 'getBalances',
+            get_history: 'getHistory',
+            get_dispensers: 'getDispensers',
+            get_executions: 'getExecutions',
+            get_attestations: 'getAttestations',
+        };
+        const server = buildServer({ sdkFactory: () => ({}) });
+        const client = new Client({ name: 'limit-contract', version: '0' });
+        const [ct, st] = InMemoryTransport.createLinkedPair();
+        await Promise.all([server.connect(st), client.connect(ct)]);
+        const tools = (await client.listTools()).tools;
+        const paged = tools.filter((tool) => tool.inputSchema.properties.limit);
+
+        assert.deepStrictEqual(paged.map((tool) => tool.name).sort(), Object.keys(methodByTool).sort());
+        for (const tool of paged) {
+            assert.strictEqual(tool.inputSchema.properties.limit.maximum,
+                listLimitMax(methodByTool[tool.name]), tool.name + ' page limit');
+        }
     });
 });
 

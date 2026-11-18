@@ -30,7 +30,12 @@
  * or a BigInt up to 2^64-1 (the wire format's true ceiling). Readers return
  * a Number whenever the value is exactly representable and a BigInt only
  * above 2^53-1, so existing Number-based callers see identical behavior for
- * every value they could already handle. The READ-SIDE copies
+ * every value they could already handle. One reader is the exception:
+ * Transaction.fromBuffer returns a BigInt output value at every size, while
+ * Transaction.fromHex narrows to a Number below 2^53. bitcoinjs-lib 7 parses
+ * nonWitnessUtxo through fromBuffer and sums those values as BigInt, so
+ * narrowing there would mix types; callers that read outs[i].value from
+ * fromBuffer must go through BigInt(). The READ-SIDE copies
  * (xchain-decoder/src/chain/apply_bufferutils_patch.js and
  * xchain-utxo-tracker/src/chain/apply_bufferutils_patch.js)
  * lift the same 2^53 wall for block decode but deliberately implement a

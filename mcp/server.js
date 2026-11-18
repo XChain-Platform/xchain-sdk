@@ -67,6 +67,27 @@ const COIN_NETWORKS = {
     DOGE: 'dogecoin-mainnet', TDOGE: 'dogecoin-testnet', RDOGE: 'dogecoin-regtest',
 };
 
+// AgentSession.validatePolicy, resolved like the other SDK pieces. Optional: an
+// installed SDK that predates the export (or its path) still validates per call.
+let AgentSessionClass = null;
+for (const id of ['@dankest-llc/xchain-sdk/src/cosigner/agent_session.js', '../src/cosigner/agent_session.js']) {
+    try { AgentSessionClass = require(id); break; } catch { /* try the next resolution */ }
+}
+
+// Allowed actions that no amount cap reaches. The evaluator reads
+// maxPerAction[ACTION] by exact own key, with the allowlist upper-cased, and
+// applies maxPerWindow.perTick to every amount-bearing action, so a usable perTick
+// covers all of them and otherwise each action needs its own usable entry.
+function uncappedActions(policy) {
+    if (!Array.isArray(policy.allowedActions)) return [];
+    if (hasEnforceableCap(policy.maxPerWindow && policy.maxPerWindow.perTick)) return [];
+    const table = policy.maxPerAction;
+    const own = (key) => (table && typeof table === 'object' && Object.prototype.hasOwnProperty.call(table, key)
+        ? table[key] : undefined);
+    return [...new Set(policy.allowedActions.map((a) => String(a).toUpperCase()))]
+        .filter((action) => !hasEnforceableCap(own(action)));
+}
+
 const DOCS_BASE = 'https://docs.xchain.io';
 
 // Key ordering is not part of what a submission MEANS, and the caller is a model
@@ -98,10 +119,13 @@ function derivedIdempotencyKey(coin, action, params) {
 
 const coinParam = z.enum(Object.keys(COIN_NETWORKS))
     .describe('Chain + network: BTC/LTC/DOGE mainnet, T prefix = testnet, R prefix = local regtest');
-const pageOpts = {
+const pageOptsUpTo = (max) => ({
     page: z.number().int().min(1).optional().describe('Page number'),
-    limit: z.number().int().min(1).max(500).optional().describe('Rows per page'),
-};
+    limit: z.number().int().min(1).max(max).optional()
+        .describe(`Rows per page, 1-${max} (default ${max}). Compare with total to tell whether more pages remain.`),
+});
+const pageOpts = pageOptsUpTo(100);
+const balancePageOpts = pageOptsUpTo(500);
 
 function buildServer(options = {}) {
     // sdkFactory(network) → XChainSDK-compatible instance. Lazily created and
@@ -114,14 +138,8 @@ function buildServer(options = {}) {
         if (!sdks.has(coin)) sdks.set(coin, sdkFactory(COIN_NETWORKS[coin]));
         return sdks.get(coin);
     };
-    const explorerBaseUrl = (sdk) => {
-        const e = sdk.explorer || {};
-        const base = e.baseUrl || 'localhost';
-        return base.startsWith('http') ? base : 'http://' + base + ':' + (e.port || 8080);
-    };
 
     const server = new McpServer({ name: 'xchain', version: SDK_VERSION });
-
     // Every tool returns the raw JSON the platform returned, as text. Amounts
     // are arbitrary-precision decimal STRINGS; never parse them as floats.
     const ok = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 1) }] });
@@ -132,11 +150,11 @@ function buildServer(options = {}) {
         content: [{ type: 'text', text: JSON.stringify(Object.assign(
             { error: err.message || String(err), code: err.code || err.name || 'ERROR' }, extra || {})) }],
     });
-    const tool = (name, description, schema, handler) => {
+    const tool = (name, description, schema, handler, annotations = { readOnlyHint: true, openWorldHint: true }) => {
         server.registerTool(name, {
             description,
             inputSchema: schema,
-            annotations: { readOnlyHint: true, openWorldHint: true },
+            annotations,
         }, async (args) => {
             try { return ok(await handler(args)); } catch (err) { return fail(err); }
         });
@@ -146,16 +164,13 @@ function buildServer(options = {}) {
     tool('get_status', 'Explorer status and chain configuration for a coin.',
         { coin: coinParam },
         ({ coin }) => sdkFor(coin).getStatus());
-
     tool('get_fee_schedule', 'Protocol fee schedule + current oracle prices (what an action will cost).',
         { coin: coinParam },
         ({ coin }) => sdkFor(coin).getFeeSchedule());
-
     /* ── tokens ─────────────────────────────────────────────────────── */
     tool('get_token', 'Token detail: supply, decimals, issuer, NFT/registry surfaces. `tick` is the token symbol (there is no "asset" field on XChain).',
         { coin: coinParam, tick: z.string().describe('Token tick (symbol)') },
         ({ coin, tick }) => sdkFor(coin).getToken(tick));
-
     // No `nft` lane. The explorer's /tokens route accepts block, address, token and
     // subtoken only, so `type: 'nft'` matched no route and every such search 404'd;
     // a 404 reads as "nothing found", so the tool answered a question it had itself
@@ -164,19 +179,17 @@ function buildServer(options = {}) {
     tool('search_tokens', 'Search tokens. type: token = by tick prefix, subtoken = children of a parent tick, address = tokens issued by an address, block = tokens issued in a block.',
         { coin: coinParam, query: z.string(), type: z.enum(['token', 'subtoken', 'address', 'block']).default('token'), ...pageOpts },
         ({ coin, query, type, page, limit }) => sdkFor(coin).getTokens(query, type, { page, limit }));
-
     tool('get_holders', 'Holders of a token with balances.',
-        { coin: coinParam, tick: z.string(), ...pageOpts },
+        { coin: coinParam, tick: z.string(), ...balancePageOpts },
         ({ coin, tick, page, limit }) => sdkFor(coin).getHolders(tick, { page, limit }));
-
     tool('get_project', 'Project registry roster: the owner-attested list of a project\'s official tokens.',
         { coin: coinParam, tick: z.string().describe('The project token tick') },
         ({ coin, tick }) => sdkFor(coin).getProject(tick));
 
     /* ── addresses / ledger ─────────────────────────────────────────── */
-    tool('get_balances', 'All token balances for an address. Amounts are decimal strings.',
-        { coin: coinParam, address: z.string() },
-        ({ coin, address }) => sdkFor(coin).getBalances(address));
+    tool('get_balances', 'Token balances for an address, paged up to 500 rows. Compare total with the page range to tell whether more pages remain. Amounts are decimal strings.',
+        { coin: coinParam, address: z.string(), ...balancePageOpts },
+        ({ coin, address, page, limit }) => sdkFor(coin).getBalances(address, { page, limit }));
 
     tool('get_address', 'Address summary.',
         { coin: coinParam, address: z.string() },
@@ -258,10 +271,7 @@ function buildServer(options = {}) {
 
     tool('verify_checkpoint', 'Fetch a quorum-signed state checkpoint and verify its Ed25519 signatures CLIENT-SIDE against the validator set the explorer serves in the same response (ignores the explorer\'s verified flag, but does not independently establish who the validators are).',
         { coin: coinParam, block_index: z.number().int().min(0) },
-        ({ coin, block_index }) => {
-            const sdk = sdkFor(coin);
-            return sdk.checkpoint.fetchAndVerifyCheckpoint(explorerBaseUrl(sdk), coin, block_index, fetchImpl || undefined);
-        });
+        ({ coin, block_index }) => sdkFor(coin).verifyCheckpoint(block_index));
 
     /* ── write tools (operator-configured wallet only) ──────────────── */
 
@@ -271,27 +281,19 @@ function buildServer(options = {}) {
     if (wallet && wallet.policy.confirmAbove)
         throw new Error('confirmAbove is not supported in the MCP policy file (no human in this loop): use hard caps instead');
     // The confirmAbove gate above removes the human-in-the-loop approval on the stated
-    // grounds that hard caps replace it, so require that a binding amount ceiling
-    // actually exists. Without this, a policy like { allowedActions: ['SEND'] } is
-    // accepted and every amount gate in policyEvaluator (maxPerAction / perTick) is
-    // skipped, leaving an LLM-driven submit_action able to SEND unbounded amounts to
-    // any destination. This is policyEvaluator's hasAmountLimit test with ONE DELIBERATE
-    // OMISSION: the evaluator also accepts `|| !!policy.confirmAbove`, and this gate must
-    // NOT. confirmAbove is rejected outright a few lines above, because there is no human
-    // in this loop to answer it, so on this rail it can never be a binding ceiling.
-    // Copying the evaluator's third clause here to "fix the divergence" would let a
-    // confirmAbove-only policy satisfy the hard-cap requirement and reopen exactly the
-    // unbounded-spend hole the confirmAbove rejection was traded away to close. The
-    // divergence is the point; 'keeps confirmAbove out of the ceiling predicate' in
-    // test/unit/mcp/mcp.test/01_mcp_server_write_tools.test.js pins it. maxPerWindow.maxActions
-    // is likewise a COUNT cap, not an amount ceiling, and does not satisfy this.
+    // grounds that hard caps replace it, so a binding amount ceiling must exist.
+    // This is policyEvaluator's hasAmountLimit test with ONE DELIBERATE OMISSION: the
+    // evaluator also accepts `|| !!policy.confirmAbove`, and this gate must NOT.
+    // confirmAbove is rejected outright above (no human to answer it), so it can never
+    // be a ceiling here; copying that clause would let a confirmAbove-only policy pass
+    // and reopen the unbounded-spend hole. 'keeps confirmAbove out of the ceiling
+    // predicate' in test/unit/mcp/mcp.test/01_mcp_server_write_tools.test.js pins it.
+    // maxPerWindow.maxActions is a COUNT cap, not an amount ceiling.
     if (wallet) {
         const pol = wallet.policy;
-        // Enforceability, not truthiness: `maxPerAction: {}`, `{ SEND: {} }` and
-        // `maxPerWindow: { perTick: {} }` are truthy objects that resolve no cap for
-        // any lookup, so each one passed this gate while every amount comparison in
-        // policyEvaluator was skipped - an unbounded SEND under a policy the operator
-        // wrote as capped. hasEnforceableCap is the evaluator's own predicate.
+        // Enforceability, not truthiness: `{}`, `{ SEND: {} }` and `perTick: {}` are
+        // truthy tables that resolve no cap for any lookup. hasEnforceableCap is the
+        // evaluator's own predicate.
         const hasAmountCap = hasEnforceableCap(pol.maxPerAction, { twoLevel: true })
             || hasEnforceableCap(pol.maxPerWindow && pol.maxPerWindow.perTick);
         if (!hasAmountCap)
@@ -299,6 +301,16 @@ function buildServer(options = {}) {
                 + '(maxPerAction or maxPerWindow.perTick, holding at least one usable cap entry): '
                 + 'the MCP rail has no human in the loop, '
                 + 'so a policy with no spend ceiling is refused (fail-closed)');
+        const uncapped = uncappedActions(pol);
+        if (uncapped.length)
+            throw new Error('mcp wallet policy leaves allowed action(s) ' + uncapped.join(', ')
+                + ' without a binding amount ceiling: give each an upper-case entry under maxPerAction '
+                + '(keys match exactly, so \'send\' does not cap SEND), or set a usable maxPerWindow.perTick');
+        // The SDK's own structural check (allowedActions, window hours, idempotency
+        // horizon), run now so the listed write tools are ones AgentSession will build
+        // instead of POLICY_INVALID on every call. An SDK without it validates per call.
+        if (AgentSessionClass && typeof AgentSessionClass.validatePolicy === 'function')
+            AgentSessionClass.validatePolicy(pol);
     }
 
     // One AgentSession per coin, lazily created: same key, per-network address,
@@ -312,13 +324,13 @@ function buildServer(options = {}) {
     };
 
     if (wallet) {
-        tool('get_agent_wallet', 'The configured agent wallet: address, balances, and current policy window usage for a coin.',
-            { coin: coinParam },
-            async ({ coin }) => {
+        tool('get_agent_wallet', 'The configured agent wallet: address, one page of balances (up to 500 rows), and current policy window usage. Compare balances.total with the page range to tell whether more pages remain.',
+            { coin: coinParam, ...balancePageOpts },
+            async ({ coin, page, limit }) => {
                 const s = sessionFor(coin);
                 return {
                     address: s.address,
-                    balances: await s.getBalances(),
+                    balances: await s.getBalances({ page, limit }),
                     window_usage: s.computeWindowUsage(),
                 };
             });
@@ -365,7 +377,13 @@ function buildServer(options = {}) {
         });
     }
 
-    tool('compose_action', 'Compose an unsigned transaction for an XChain action: returns the ACTION string and an unsigned PSBT. Nothing is signed or broadcast; the caller signs externally.'
+    // Composing is a write on the encoder: create_tx claims the sender's UTXOs for
+    // several minutes so a second build cannot double-spend them, and returns a
+    // ticket that hands them back. The ticket is passed through and
+    // release_reservation redeems it, so an abandoned compose does not starve the
+    // sender's next build.
+    tool('compose_action', 'Compose an unsigned transaction for an XChain action: returns the ACTION string and an unsigned PSBT. Nothing is signed or broadcast; the caller signs externally. '
+        + 'The encoder RESERVES the sender\'s selected UTXOs for about 5 minutes; if the PSBT will not be signed, pass the returned reservation.id to release_reservation to free them.'
         + (wallet ? ' Defaults to the configured agent wallet\'s pubkey.' : ' Requires pubkey (no wallet is configured).'),
         {
             coin: coinParam,
@@ -380,8 +398,16 @@ function buildServer(options = {}) {
             const actionResult = await sdk.createAction({ action: String(action).toUpperCase(), params });
             const actionString = actionResult && actionResult.actionString !== undefined ? actionResult.actionString : actionResult;
             const tx = await sdk.encodeTx({ pubkey: sender, data: actionString });
-            return { action_string: actionString, psbt: tx.psbt, encoding: tx.encoding, signed: false };
-        });
+            const composed = { action_string: actionString, psbt: tx.psbt, encoding: tx.encoding, signed: false };
+            if (tx.reservation) composed.reservation = tx.reservation;
+            return composed;
+        },
+        { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+
+    tool('release_reservation', 'Free the UTXOs an earlier compose_action reserved, using the reservation.id it returned. Safe to repeat: an unknown, expired or already released id answers found:false. Only the ticket holder can release; never call it for a PSBT that was or will be signed.',
+        { coin: coinParam, reservation_id: z.string().regex(/^[0-9a-f]{32}$/).describe('reservation.id from compose_action') },
+        ({ coin, reservation_id }) => sdkFor(coin).requireEncoder().releaseInputs(reservation_id),
+        { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true });
 
     /* ── documentation resources ────────────────────────────────────── */
     const docResource = (name, uri, url, description) => {

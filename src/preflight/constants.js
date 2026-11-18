@@ -152,7 +152,7 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 const DEFAULT_TIMEOUT_MS   = 4000;  // overall per-preflight budget
 const RECHECK_TIMEOUT_MS   = 2000;  // Approve-time re-check budget (declared, not applied: a re-check runs under DEFAULT_TIMEOUT_MS)
 const STALENESS_MS         = 30000; // report age that forces a re-check
-const ENDPOINT_MEMO_TTL_MS = 2000;  // per-endpoint response memo
+const ENDPOINT_MEMO_TTL_MS = 2000;  // declared, not applied: the endpoint memo lasts one run with no expiry
 
 /*
  * Finding-code registry (spec §4.2). One code per certified Tier-2

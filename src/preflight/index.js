@@ -58,10 +58,15 @@ const VIRTUAL_ACTION_FIELDS = {
 };
 
 function buildVirtual(action, fields) {
+    const params = { ...fields };
+    const dispenserIndex = params.DISPENSER_ACTION_INDEX;
+    if ((dispenserIndex === undefined || dispenserIndex === null || dispenserIndex === '')
+        && params.ACTION_INDEX !== undefined)
+        params.DISPENSER_ACTION_INDEX = params.ACTION_INDEX;
     return {
-        ok: true, action, version: 0, params: { ...fields }, rest: null,
+        ok: true, action, version: 0, params, rest: null,
         commands: null,
-        actionString: action + '|0|' + (fields.DISPENSER_ACTION_INDEX || ''),
+        actionString: action + '|0|' + (params.DISPENSER_ACTION_INDEX ?? ''),
         validation: { ok: true, findings: [] },
     };
 }
@@ -98,8 +103,15 @@ function normalizeInput(actionData, actionsCore) {
                 { detail: parsed.detail });
         return parsed;
     }
-    if (actionData && actionData.ok === true && actionData.action)
+    if (actionData && actionData.ok === true && actionData.action) {
+        // A virtual ParsedAction's actionString is a summary of its params, and
+        // the coalescer keys on that string while the checks read the params,
+        // so the string is rebuilt from the params rather than trusted.
+        const virtualAction = String(actionData.action).toUpperCase();
+        if (VIRTUAL_ACTION_FIELDS[virtualAction])
+            return buildVirtual(virtualAction, actionData.params || {});
         return actionData; // already a ParsedAction
+    }
     if (actionData && actionData.action && VIRTUAL_ACTION_FIELDS[String(actionData.action).toUpperCase()])
         return buildVirtual(String(actionData.action).toUpperCase(), normalizeParamKeys(actionData));
     if (actionData && actionData.action) {

@@ -89,6 +89,28 @@ describe('pre-flight conformance F2 balances paging', function () {
         expect(hasError(r, 'BALANCE_INSUFFICIENT')).to.equal(false);
         expect(seen).to.deep.equal([1, 2]);
     });
+
+    it('F2 a malformed second page leaves the balance unverified', async function () {
+        const page1 = Array.from({ length: 500 }, (_, i) => ({ tick: 'A' + String(i).padStart(4, '0'), amount: '1' }));
+        const spec = {
+            getToken: () => ({ info: { tick: 'ZZZZ', decimals: 0 } }),
+            getBalances: (addr, opts = {}) => (opts.page === 2 ? { total: 501 } : { data: page1, total: 501 }),
+        };
+        const r = await reportFor('SEND|0|ZZZZ|7|' + ADDR, spec);
+        expect(hasError(r, 'BALANCE_INSUFFICIENT')).to.equal(false);
+        expect(r.unverified.map((u) => u.check)).to.include.members(['BALANCE_LOOKUP', 'BALANCE_INSUFFICIENT']);
+    });
+
+    it('F2 a missing second page leaves the balance unverified', async function () {
+        const page1 = Array.from({ length: 500 }, (_, i) => ({ tick: 'A' + String(i).padStart(4, '0'), amount: '1' }));
+        const spec = {
+            getToken: () => ({ info: { tick: 'ZZZZ', decimals: 0 } }),
+            getBalances: (addr, opts = {}) => (opts.page === 2 ? notFound() : { data: page1, total: 501 }),
+        };
+        const r = await reportFor('SEND|0|ZZZZ|7|' + ADDR, spec);
+        expect(hasError(r, 'BALANCE_INSUFFICIENT')).to.equal(false);
+        expect(r.unverified.map((u) => u.check)).to.include.members(['BALANCE_LOOKUP', 'BALANCE_INSUFFICIENT']);
+    });
 });
 
 describe('pre-flight conformance F2 balances paging on an explorer without ?page', function () {

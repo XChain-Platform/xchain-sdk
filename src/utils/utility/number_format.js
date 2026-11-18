@@ -27,7 +27,7 @@ module.exports = {
     },
 
     isFloat(value){
-        return value === +value && value !== (value|0);
+        return typeof value === 'number' && Number.isFinite(value) && !Number.isInteger(value);
     },
 
     isInteger(value){

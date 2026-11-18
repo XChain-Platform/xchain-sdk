@@ -19,6 +19,7 @@ const lane = require('../../file/multipart_lane.js');
 const gatedBatch = require('../../file/multipart_gated_batch.js');
 const blockTimes = require('../../file/multipart_block_times.js');
 const twoStep = require('../../file/multipart_two_step.js');
+const twoStepPins = require('../../file/multipart_two_step_pins.js');
 const assemblyWait = require('../../utils/action_waiter/file_assembly_wait.js');
 const reconcile = require('../../carrier/reconcile_encoded.js');
 const carrierBinding = require('../../carrier/bind_action_carrier.js');
@@ -28,7 +29,7 @@ const { baseCoin, feeRateOf, fundPieces } = require('./file_multipart_wave_fundi
 
 const MULTIPART = Object.assign({}, multipartPlan, readiness, funding, pieceRequest,
     fundingMatch, resume, progress, lane, gatedBatch, blockTimes, twoStep,
-    assemblyWait, reconcile, carrierBinding);
+    twoStepPins, assemblyWait, reconcile, carrierBinding);
 
 function tierOf(sdk) {
     const network = (sdk.options && sdk.options.network) || (sdk.wallet && sdk.wallet.network) || '';
@@ -197,11 +198,25 @@ function reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules, sig
         revealPsbt: reveal.psbt, rawData: piece.rawData, network });
 }
 
+// The commit is signed and handed back to the encoder for the reveal, so it is
+// reconciled and pinned to the piece's funding output before that signature exists.
+function reconcileCommitBeforeSigning(sdk, source, commit, utxo, opts, modules) {
+    const network = sdk.wallet.getBitcoinNetwork();
+    const pins = modules.twoStepCommitPins({ commit, utxo,
+        callerXOnly: source.publicKey.subarray(1, 33), network });
+    modules.reconcileEncoded(commit.psbt, { network, changeAddresses: source.sourceAddress,
+        callerIdentities: source.pubkey, maxFeeSats: opts.maxFeeSats,
+        maxPhaseFundingSats: opts.maxPhaseFundingSats, label: 'multipart envelope commit pre-sign',
+        phaseShapes: ['p2tr'], phaseSpends: pins.phaseSpends, requiredSpends: pins.requiredSpends });
+    return pins.inputIndices;
+}
+
 async function submitTwoStep(sdk, piece, utxo, source, rate, opts, modules) {
     const encoder = sdk.requireEncoder();
     const params = oneCallEncoderOpts(piece, utxo, source, rate, modules);
     const commit = await encoder.createTx(modules.twoStepCommitParams(params));
-    const commitSigned = sdk.wallet.signPsbt(commit.psbt, opts.wif);
+    const inputIndices = reconcileCommitBeforeSigning(sdk, source, commit, utxo, opts, modules);
+    const commitSigned = sdk.wallet.signPsbt(commit.psbt, opts.wif, { inputIndices });
     const reveal = await encoder.createTx(modules.twoStepRevealParams(params, commitSigned.txHex));
     reconcileTwoStep(sdk, piece, source, commit, reveal, opts, modules, commitSigned.txHex);
     const revealSigned = sdk.wallet.signEnvelopeRevealPsbt(reveal.psbt, opts.wif);

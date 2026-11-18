@@ -29,6 +29,7 @@ const { getLogger } = require('../observability/logger.js');
 const { buildExplorer } = require('./action_waiter/explorer_options.js');
 const contractValues = require('./action_waiter/contract_values.js');
 const contractWait = require('./action_waiter/contract_wait.js');
+const { readCost } = require('../clients/explorer/keyed_contract_read.js');
 const {
     readStatus,
     classifyTransactionResult,
@@ -258,7 +259,9 @@ class ActionWaiter {
     // Poll `readOnce` until it reports satisfied, or the window expires.
     //
     // A failed read is not a verdict. The loop always reads once and carries its
-    // last observation or error into the timeout callback.
+    // last observation or error into the timeout callback. A read that spent several
+    // explorer requests (attempt.requests, or error details.requests) stretches the
+    // wait by that factor, so a paged read keeps the same request rate as a single one.
     async pollUntil(opts, readOnce, timeoutError) {
         let timeout      = opts.timeout > 0 ? opts.timeout : 120000;
         let pollInterval = opts.pollInterval > 0 ? opts.pollInterval : 2000;
@@ -267,17 +270,20 @@ class ActionWaiter {
         let lastError    = null;
 
         for (;;) {
+            let spent = 1;
             try {
                 let attempt = await readOnce();
                 if (attempt && attempt.satisfied) return attempt.result;
                 if (attempt && attempt.observed !== undefined) observed = attempt.observed;
+                if (attempt && attempt.requests > 1) spent = attempt.requests;
                 lastError = null;
             } catch (e) {
                 lastError = e;
+                if (e && e.details && e.details.requests > 1) spent = e.details.requests;
             }
             let remaining = deadline - Date.now();
             if (remaining <= 0) throw timeoutError(observed, lastError);
-            await new Promise(r => setTimeout(r, Math.min(pollInterval, remaining)));
+            await new Promise(r => setTimeout(r, Math.min(pollInterval * spent, remaining)));
         }
     }
 
@@ -298,9 +304,11 @@ class ActionWaiter {
         let key      = opts.key;
 
         return this.pollUntil(opts, async () => {
-            let raw   = await explorer.getContractState(contractActionIndex, key);
-            return contractWait.classifyState(ActionWaiter, raw, key, opts,
+            let raw     = await explorer.getContractState(contractActionIndex, key);
+            let attempt = contractWait.classifyState(ActionWaiter, raw, key, opts,
                 contractActionIndex, sameStateValue);
+            attempt.requests = readCost(raw);
+            return attempt;
         }, (observed, lastError) => new SDKActionError('CONTRACT_STATE_TIMEOUT',
             'Contract ' + contractActionIndex + ' state' + (key !== undefined ? ' key ' + key : '') +
             ' did not reach the expected value within ' + (opts.timeout > 0 ? opts.timeout : 120000) + 'ms. ' +
@@ -322,8 +330,10 @@ class ActionWaiter {
 
         return this.pollUntil(opts, async () => {
             let raw      = await explorer.getContractBalance(contractActionIndex, tick);
-            return contractWait.classifyBalance(ActionWaiter, raw, tick, opts,
+            let attempt  = contractWait.classifyBalance(ActionWaiter, raw, tick, opts,
                 contractActionIndex, minimum, compareAmount);
+            attempt.requests = readCost(raw);
+            return attempt;
         }, (observed, lastError) => contractWait.balanceTimeoutError(
             contractActionIndex, tick, opts, minimum, observed, lastError));
     }

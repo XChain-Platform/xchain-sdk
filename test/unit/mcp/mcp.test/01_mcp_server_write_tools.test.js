@@ -84,7 +84,10 @@ function writableStub(network) {
         const seen = new Map();
         return {
             address: 'agentaddr', pubkey: 'agentpub',
-            getBalances: async () => [{ tick: 'TOK', amount: '1' }],
+            getBalances: async (opts) => {
+                base.calls.push(['session.getBalances', opts]);
+                return { data: [{ tick: 'TOK', amount: '1' }], total: 1 };
+            },
             computeWindowUsage: () => ({ count: 0, perTick: {}, hours: 24 }),
             // Mirrors AgentSession.submit(actionData, encoderOpts, submitOpts),
             // INCLUDING its idempotency-key requirement: a stub that ignores the
@@ -155,7 +158,7 @@ describe('MCP server (write tools)', () => {
         expect(build({ allowedActions: ['SEND'], maxPerWindow: { maxActions: 5 } }))
             .to.throw(/binding amount ceiling/);
         // Both real ceilings are accepted, so the gate is not simply refusing everything.
-        expect(build({ allowedActions: ['SEND'], maxPerWindow: { perTick: { TOK: '10' } } })).to.not.throw();
+        expect(build({ allowedActions: ['SEND'], maxPerWindow: { hours: 24, perTick: { TOK: '10' } } })).to.not.throw();
         expect(build(POLICY)).to.not.throw();
     });
 });
@@ -205,6 +208,30 @@ describe('MCP server (write tools)', () => {
         expect(decl[1], 'confirmAbove must never count as a binding ceiling on the MCP rail')
             .to.not.match(/confirmAbove/);
     });
+});
+
+describe('MCP server (write tools)', () => {
+
+    it('get_agent_wallet forwards balance paging within the 500-row route limit', async () => {
+        const created = [];
+        const { client } = await connectedPair({
+            sdkFactory: (network) => { const s = writableStub(network); created.push(s); return s; },
+            wallet: { wif: 'WIF', policy: POLICY },
+        });
+        const res = await client.callTool({
+            name: 'get_agent_wallet', arguments: { coin: 'BTC', page: 2, limit: 500 },
+        });
+        expect(res.isError).not.to.equal(true);
+        expect(created[0].calls.find((call) => call[0] === 'session.getBalances'))
+            .to.deep.equal(['session.getBalances', { page: 2, limit: 500 }]);
+
+        const over = await client.callTool({
+            name: 'get_agent_wallet', arguments: { coin: 'BTC', limit: 501 },
+        });
+        expect(over.isError).to.equal(true);
+        expect(created[0].calls.filter((call) => call[0] === 'session.getBalances')).to.have.lengthOf(1);
+    });
+
 });
 
 describe('MCP server (write tools)', () => {

@@ -284,14 +284,15 @@ function toBuffer(value, label) {
         `${label} must be a Buffer, Uint8Array, or string.`);
 }
 
-// A ratio limit that is not a number would make every ceiling comparison false
-// and silently switch the guard off, so anything unusable (NaN, a non-numeric
-// string, null, an object) falls back to the canonical default instead.
+// A ratio limit that is not a finite number would make every ceiling comparison
+// false and silently switch the guard off, so anything unusable (NaN, an
+// infinite or overflowing value, a non-numeric string, null, an object) falls
+// back to the canonical default instead.
 function resolveMaxRatio(value) {
-    if (typeof value === 'number' && !Number.isNaN(value)) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
     if (typeof value === 'string' && value.trim() !== '') {
         let parsed = Number(value);
-        if (!Number.isNaN(parsed)) return parsed;
+        if (Number.isFinite(parsed)) return parsed;
     }
     return COMPRESSION_MAX_RATIO;
 }
