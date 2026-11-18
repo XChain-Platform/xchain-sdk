@@ -3,8 +3,8 @@
 // Copyright © 2025–2026 Dankest, LLC
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-const { expect, reportFor } = require('./helpers/setup.js');
-const numeric = require('../../../../../src/preflight/numeric.js');
+const { expect, reportFor } = require('./checks.test/helpers/setup.js');
+const numeric = require('../../../../src/preflight/numeric.js');
 
 // Where AMOUNT_REPRESENTABILITY is unarmed (mainnet), the legacy format rule passes leg
 // amounts such as '1.+5' that mathjs cannot parse. The indexer refuses such a leg as
