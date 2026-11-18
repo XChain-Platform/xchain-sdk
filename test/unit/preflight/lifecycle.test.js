@@ -96,6 +96,12 @@ describe('pre-flight lifecycle', function () {
             expect(runs).to.equal(2);
         });
 
+    });
+});
+
+describe('pre-flight lifecycle', function () {
+    describe('coalescing', function () {
+
         it('bypass with a pre-aborted signal never starts the producer', async function () {
             const c = new Coalescer();
             const ac = new AbortController();

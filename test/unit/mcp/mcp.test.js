@@ -124,6 +124,10 @@ describe('MCP server (read-only)', () => {
         expect(body).to.deep.equal({ ok: 'getHistory', network: 'bitcoin-mainnet' });
     });
 
+});
+
+describe('MCP server (read-only)', () => {
+
     it('routes balance page arguments and keeps the omitted form explicit', async () => {
         const paged = await connectedPair();
         await paged.client.callTool({
