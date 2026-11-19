@@ -175,3 +175,48 @@ describe('message send reconciles the encoder PSBT', function () {
         expect(sdk.wallet.signPsbt.called).to.be.false;
     });
 });
+
+describe('message send reconciles the outputs the caller asked the encoder to add', function () {
+    const payTo = () => bitcoin.payments.p2wpkh({
+        pubkey: new WalletUtils(NETWORK).generateKeyPair().publicKey, network: getNetwork(NETWORK)
+    }).output;
+    const addressOf = script => bitcoin.address.fromOutputScript(script, getNetwork(NETWORK));
+    const withExtra = (extra, paid) => fixture((s, txid) => [
+        { script: extra, value: paid }, { script: s, value: 185000 },
+        { script: actionCarrier(txid, REQUESTED), value: 0 }]);
+
+    it('signs a PSBT carrying a customOutputs entry the caller asked for', async function () {
+        const extra = payTo();
+        const f = withExtra(extra, 5000);
+        const { sdk, p } = await run(f, { encoder: { customOutputs: [{ address: addressOf(extra), value: 5000 }] } });
+        await p;
+        expect(sdk.wallet.signPsbt.calledOnce).to.be.true;
+    });
+
+    it('signs a PSBT carrying the output a hub feeQuote asked for', async function () {
+        const extra = payTo();
+        const f = withExtra(extra, 5000);
+        const { sdk, p } = await run(f, { encoder: { feeQuote: { address: addressOf(extra), amount: 5000 } } });
+        await p;
+        expect(sdk.wallet.signPsbt.calledOnce).to.be.true;
+    });
+
+    it('still refuses a customOutputs address paid more than the caller authorized', async function () {
+        const extra = payTo();
+        const f = withExtra(extra, 6000);
+        const { sdk, p } = await run(f, { encoder: { customOutputs: [{ address: addressOf(extra), value: 5000 }] } });
+        const err = await rejection(p);
+        expect(err, 'send should reject an overpaid authorized output').to.exist;
+        expect(err.code).to.equal('OUTPUT_OVER_REQUESTED_VALUE');
+        expect(sdk.wallet.signPsbt.called).to.be.false;
+    });
+
+    it('still refuses a feeQuote output paid to a different address', async function () {
+        const f = withExtra(payTo(), 5000);
+        const { sdk, p } = await run(f, { encoder: { feeQuote: { address: addressOf(payTo()), amount: 5000 } } });
+        const err = await rejection(p);
+        expect(err, 'send should reject an unquoted destination').to.exist;
+        expect(err.code).to.equal('UNRECONCILED_OUTPUT');
+        expect(sdk.wallet.signPsbt.called).to.be.false;
+    });
+});

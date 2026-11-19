@@ -39,15 +39,7 @@ const path = require('path');
 const crypto = require('crypto');
 const acorn = require('acorn');
 
-// | ... | `src/actions/x.js` | `<hash>` |   and, for a directory handler,
-// | ... | `src/actions/x/`   | `<hash>` |
-const ROW_RE = /\|\s*`(src\/actions\/[^`]+)`\s*\|\s*`([0-9a-f]{64})`\s*\|/g;
-
-// A flat row names a file directly under src/actions/. A path deeper than that is refused
-// rather than hashed: pinning src/actions/<name>/index.js alone is exactly the row that
-// lets the parts beside it escape, so it must be written as the directory row instead.
-const FILE_ROW = /^src\/actions\/[\w-]+\.js$/;
-const DIRECTORY_ROW = /^src\/actions\/[\w-]+\/$/;
+const { parseMapRows } = require('./preflight_map_rows.js');
 
 // Source files the loader can require. A README or JSON part is still HASHED (it is in the
 // directory), but only these can call createFeesObject, so only these are read by the walk.
@@ -141,22 +133,6 @@ function digestSource(bytes) {
 function hashSourceFile(fileAbs) {
     return digestSource(fs.readFileSync(fileAbs));
 }
-// Parse the map's table rows, each tagged with the kind of handler it names: 'file',
-// 'directory' or 'malformed'.
-
-// A malformed row is returned rather than dropped so the caller reports it: a row the
-// parser skips silently is a handler nobody checks, while the table still reads complete.
-function parseMapRows(text) {
-    const rows = [];
-    let m;
-    ROW_RE.lastIndex = 0;
-    while ((m = ROW_RE.exec(text)) !== null) {
-        const handler = m[1];
-        const kind = FILE_ROW.test(handler) ? 'file' : DIRECTORY_ROW.test(handler) ? 'directory' : 'malformed';
-        rows.push({ handler, hash: m[2], kind });
-    }
-    return rows;
-}
 
 // List every file recursively as POSIX paths sorted by UTF-8 bytes, keeping directory
 // manifests stable across filesystems.
@@ -240,7 +216,7 @@ function hashMappedRow(indexerRoot, row) {
     const abs = path.join(indexerRoot, row.handler);
     // A malformed row names neither shape, so nothing is hashed for it.
     if (row.kind === 'malformed') {
-        return { problem: `${row.handler}: not a mappable handler path; a row names src/actions/<name>.js or the directory src/actions/<name>/` };
+        return { problem: `${row.handler}: ${row.reason || 'not a mappable handler path; a row names src/actions/<name>.js or the directory src/actions/<name>/'}` };
     }
     if (row.kind === 'file') {
         if (fs.existsSync(abs)) {

@@ -26,6 +26,7 @@ const { expect } = require('chai');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
 const { buildServer, COIN_NETWORKS } = require('../../../mcp/server.js');
+const { sdkMethodsCalledByServer } = require('../../helpers/mcp_sdk_calls.js');
 
 // Minimal XChainSDK stand-in: records calls, returns canned values.
 function stubSdk(network) {
@@ -57,6 +58,7 @@ function stubSdk(network) {
         getExecutions: record('getExecutions'),
         getAttestations: record('getAttestations'),
         getValidators: record('getValidators'),
+        requireEncoder: () => ({ releaseInputs: (id) => { calls.push(['releaseInputs', id]); return Promise.resolve({ reservationId: id, found: false }); } }),
     };
 }
 
@@ -73,6 +75,13 @@ async function connectedPair(options) {
 }
 
 describe('MCP server (read-only)', () => {
+
+    it('the stub SDK has every method the handlers call through sdkFor, so a read handler cannot reach a missing stub', () => {
+        const called = sdkMethodsCalledByServer().filter((name) => name !== 'agentSession');
+        expect(called.length).to.be.greaterThan(20);
+        const stub = stubSdk('bitcoin-regtest');
+        for (const name of called) expect(stub[name], `stubSdk is missing ${name}`).to.be.a('function');
+    });
 
     it('lists the expected tools, all marked read-only', async () => {
         const { client } = await connectedPair();

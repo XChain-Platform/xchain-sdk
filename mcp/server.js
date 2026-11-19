@@ -58,6 +58,14 @@ try {
     ({ hasEnforceableCap } = require('../src/cosigner/policy_evaluator.js'));
 }
 
+// The serialized-boundary halt gate submitAction crosses before the encoder is
+// contacted, resolved like the other SDK pieces. compose_action crosses it too.
+// An SDK release without the static leaves it unrun, never a TypeError per compose.
+let LifecycleManagerClass = null;
+for (const id of ['@dankest-llc/xchain-sdk/src/carrier/lifecycle_manager.js', '../src/carrier/lifecycle_manager.js']) {
+    try { LifecycleManagerClass = require(id); break; } catch { /* try the next resolution */ }
+}
+
 // Explorer-style coin prefixes → SDK network strings. Mainnet/testnet default
 // to the public *.xchain.io hosts (SDK zero-config); R* regtest prefixes get
 // only a localhost explorer, so writes need ENCODER_URL (usual SDK env vars).
@@ -74,18 +82,26 @@ for (const id of ['@dankest-llc/xchain-sdk/src/cosigner/agent_session.js', '../s
     try { AgentSessionClass = require(id); break; } catch { /* try the next resolution */ }
 }
 
-// Allowed actions that no amount cap reaches. The evaluator reads
+// A tick-to-cap table bounds every tick only through its own '*' entry: the evaluator
+// resolves a cap per tick and a tick with no entry and no '*' is uncapped, so a table
+// naming only some ticks leaves every other token the wallet holds unbounded.
+function hasWildcardCap(table) {
+    return !!table && typeof table === 'object' && Object.prototype.hasOwnProperty.call(table, '*')
+        && hasEnforceableCap({ '*': table['*'] });
+}
+
+// Allowed actions that no amount cap reaches for every tick. The evaluator reads
 // maxPerAction[ACTION] by exact own key, with the allowlist upper-cased, and
-// applies maxPerWindow.perTick to every amount-bearing action, so a usable perTick
-// covers all of them and otherwise each action needs its own usable entry.
+// applies maxPerWindow.perTick to every amount-bearing action, so a perTick '*' entry
+// covers all of them and otherwise each action needs its own '*' entry.
 function uncappedActions(policy) {
     if (!Array.isArray(policy.allowedActions)) return [];
-    if (hasEnforceableCap(policy.maxPerWindow && policy.maxPerWindow.perTick)) return [];
+    if (hasWildcardCap(policy.maxPerWindow && policy.maxPerWindow.perTick)) return [];
     const table = policy.maxPerAction;
     const own = (key) => (table && typeof table === 'object' && Object.prototype.hasOwnProperty.call(table, key)
         ? table[key] : undefined);
     return [...new Set(policy.allowedActions.map((a) => String(a).toUpperCase()))]
-        .filter((action) => !hasEnforceableCap(own(action)));
+        .filter((action) => !hasWildcardCap(own(action)));
 }
 
 const DOCS_BASE = 'https://docs.xchain.io';
@@ -304,8 +320,10 @@ function buildServer(options = {}) {
         const uncapped = uncappedActions(pol);
         if (uncapped.length)
             throw new Error('mcp wallet policy leaves allowed action(s) ' + uncapped.join(', ')
-                + ' without a binding amount ceiling: give each an upper-case entry under maxPerAction '
-                + '(keys match exactly, so \'send\' does not cap SEND), or set a usable maxPerWindow.perTick');
+                + ' without a binding amount ceiling for every token: give each an upper-case entry under maxPerAction '
+                + 'holding a \'*\' cap (keys match exactly, so \'send\' does not cap SEND), or set a \'*\' entry in '
+                + 'maxPerWindow.perTick; a tick named without \'*\' leaves every other tick unbounded, and '
+                + '\'*\': \'0\' limits spending to the ticks named beside it');
         // The SDK's own structural check (allowedActions, window hours, idempotency
         // horizon), run now so the listed write tools are ones AgentSession will build
         // instead of POLICY_INVALID on every call. An SDK without it validates per call.
@@ -397,7 +415,15 @@ function buildServer(options = {}) {
             const sdk = sdkFor(coin);
             const actionResult = await sdk.createAction({ action: String(action).toUpperCase(), params });
             const actionString = actionResult && actionResult.actionString !== undefined ? actionResult.actionString : actionResult;
-            const tx = await sdk.encodeTx({ pubkey: sender, data: actionString });
+            // The steps submit_action runs before the encoder is contacted: refuse a
+            // halt-class action, and on a native-fee chain add the quoted fee output the
+            // indexer requires (a refused quote throws before any UTXO is reserved).
+            if (LifecycleManagerClass && typeof LifecycleManagerClass.assertNoHaltClassFields === 'function')
+                LifecycleManagerClass.assertNoHaltClassFields(sdk, actionString);
+            const feeOutputs = typeof sdk.nativeFeeOutputs === 'function'
+                ? await sdk.nativeFeeOutputs(actionString, { source: sender }) : [];
+            const tx = await sdk.encodeTx(Object.assign({ pubkey: sender, data: actionString },
+                feeOutputs.length ? { customOutputs: feeOutputs } : {}));
             const composed = { action_string: actionString, psbt: tx.psbt, encoding: tx.encoding, signed: false };
             if (tx.reservation) composed.reservation = tx.reservation;
             return composed;

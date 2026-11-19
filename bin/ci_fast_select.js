@@ -60,6 +60,7 @@ const CONSENSUS = [
     'bin/check-preflight-drift.js',
     'bin/preflight_handler_dirs.js',
     'bin/preflight_indexer_root.js',
+    'bin/preflight_map_rows.js',
 ];
 const WIDEN = ['test/helpers/', 'test/fixtures/'];
 const CONTROL_FILES = ['package.json', 'package-lock.json'];

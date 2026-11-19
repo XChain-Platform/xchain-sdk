@@ -111,6 +111,18 @@ function pushSubCommandFindings(findings, subs) {
     return cls;
 }
 
+// A shortfall tagged staleMirror was computed from an explorer read the mirror served
+// behind the chain tip, so the funding it misses may postdate that tip. With no network
+// verdict to certify it, it stays visible as a warning rather than a certified error.
+function capStaleMirrorShortfalls(findings) {
+    for (const f of findings) {
+        if (f.severity === 'error' && f.source === 'client' && f.data && f.data.staleMirror === true) {
+            f.severity = 'warning';
+            delete f.overridable;   // warnings carry no override flag (§4.2)
+        }
+    }
+}
+
 /*
  * Apply Tier-1 precedence to the assembled Tier-2 findings.
  *   - Tier-1 valid: authoritative pass. Contradicting Tier-2 ERRORS
@@ -132,6 +144,7 @@ function pushSubCommandFindings(findings, subs) {
  * payment is clean when their own wallet has already committed the funds.
  */
 function applyTier1(findings, tier1) {
+    if (!tier1 || tier1.kind !== 'verdict') capStaleMirrorShortfalls(findings);
     if (!tier1) return findings;
     if (tier1.kind === 'verdict' && tier1.valid === true) {
         applyValidVerdict(findings, tier1);

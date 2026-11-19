@@ -125,4 +125,28 @@ describe('SPV §7.3: followForward binds signer sets to attested snapshot height
         assert.strictEqual(result.reason, 'SNAPSHOT_NOT_ATTESTED@110');
         assert.strictEqual(fetch.saw('/api/proof/validator-set'), false);
     });
+
+    it('accepts the explorer\'s decimal-string snapshot_block and proves the signer set at the buried height', async function () {
+        const proof = validatorSetProof(100);
+        const trusted = checkpointAt(100, 100, proof.state_root);
+        const fetch = spyFetch(checkpointAt(110, '106', 'dd'.repeat(32)), proof);
+        const result = await light.followForward({ explorerUrl: 'https://x', btcCoin: COIN,
+            trustedCheckpoint: trusted, toHeight: 110, fetchImpl: fetch });
+        assert.strictEqual(fetch.saw('/api/proof/validator-set?height=100'), true);
+        assert.strictEqual(result.reason, 'QUORUM_FAILED@110');
+    });
+
+    it('refuses a snapshot_block string that is not a canonical decimal integer', async function () {
+        const proof = validatorSetProof(100);
+        const trusted = checkpointAt(100, 100, proof.state_root);
+        const bad = ['', ' 106', '106 ', '0106', '+106', '-1', '1e2', '106.0', '0x6a', 'abc',
+            '9007199254740993', 106.5, -1, NaN, null, {}];
+        for(const value of bad){
+            const fetch = spyFetch(checkpointAt(110, value, 'dd'.repeat(32)), proof);
+            const result = await light.followForward({ explorerUrl: 'https://x', btcCoin: COIN,
+                trustedCheckpoint: trusted, toHeight: 110, fetchImpl: fetch });
+            assert.strictEqual(result.reason, 'SNAPSHOT_NOT_ATTESTED@110', String(value));
+            assert.strictEqual(fetch.saw('/api/proof/validator-set'), false, String(value));
+        }
+    });
 });

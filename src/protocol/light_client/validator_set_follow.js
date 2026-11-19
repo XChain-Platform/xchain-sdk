@@ -147,11 +147,24 @@ function bindingMismatch(next, trusted){
         && String(next.network).toLowerCase() !== String(trusted.network).toLowerCase();
 }
 
+// The explorer serves every BIGINT index as a decimal string, so a range step's
+// snapshot_block arrives as "106" as often as 106. Accept a safe non-negative integer
+// or its canonical decimal spelling (no sign, whitespace, exponent or leading zeros,
+// which would change the signed canonical's String() bytes); anything else is null.
+// The step itself is left untouched for the signature check.
+function attestedSnapshotHeight(v){
+    if (typeof v === 'number') return Number.isSafeInteger(v) && v >= 0 ? v : null;
+    if (typeof v !== 'string' || !/^(0|[1-9][0-9]*)$/.test(v)) return null;
+    const n = Number(v);
+    return Number.isSafeInteger(n) ? n : null;
+}
+
 // Resolve the only root that can prove a step's signer set. A range response cannot
 // make a future snapshot trustworthy merely by labelling an old-root proof with it.
 function signerSetProofContext(next, trustedRoots){
-    if(typeof next.snapshot_block !== 'number' || !Number.isFinite(next.snapshot_block)) return null;
-    const setBlock = srb.buriedSnapshotBlock(next.snapshot_block, next.network);
+    const declared = attestedSnapshotHeight(next.snapshot_block);
+    if(declared === null) return null;
+    const setBlock = srb.buriedSnapshotBlock(declared, next.network);
     const stateRoot = trustedRoots.get(Number(setBlock));
     return stateRoot ? { setBlock, stateRoot } : null;
 }
@@ -187,7 +200,7 @@ async function followForward(opts){
             // quorum check, since the canonical signs both.
             if (bindingMismatch(next, trusted))
                 return { trusted, adopted, reason: 'CHECKPOINT_BINDING_MISMATCH@' + next.block_index, stoppedAt: next.block_index };
-            if (typeof next.snapshot_block !== 'number' || !Number.isFinite(next.snapshot_block))
+            if (attestedSnapshotHeight(next.snapshot_block) === null)
                 return { trusted, adopted, reason: 'SNAPSHOT_NOT_ATTESTED@' + next.block_index, stoppedAt: next.block_index };
             // Below the commitment flag day a step's roots are unsigned, and adopting one would
             // let the explorer choose the root the NEXT step's signer set is proven against.

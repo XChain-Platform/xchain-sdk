@@ -66,3 +66,16 @@ describe('inline carrier rawData binding', function () {
             .to.throw(/does not carry/);
     });
 });
+
+describe('inline carrier compression tolerance stays on FILE v0', function () {
+    const MANIFEST = 'FILE|1|' + 'ab'.repeat(32) + '|3|900|a.bin|application/octet-stream|T|M';
+    const MANIFEST_COMPRESSED = MANIFEST + '|||||1';
+
+    it('refuses a v1 manifest rewritten to declare COMPRESSION', function () {
+        expect(bind(inlinePsbt(MANIFEST_COMPRESSED), MANIFEST, null)).to.throw(/does not carry/);
+    });
+
+    it('accepts a v1 manifest carried exactly as submitted', function () {
+        expect(bind(inlinePsbt(MANIFEST_COMPRESSED), MANIFEST_COMPRESSED, null)).to.not.throw();
+    });
+});

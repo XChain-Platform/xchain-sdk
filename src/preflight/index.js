@@ -33,6 +33,7 @@
 
 'use strict';
 
+const crypto = require('crypto');
 const { parse } = require('../decoder/parse.js');
 const Utility = require('../utils/utility.js');
 const { SDKFormatError, SDKPreflightError } = require('../utils/errors.js');
@@ -110,7 +111,9 @@ function normalizeInput(actionData, actionsCore) {
         const virtualAction = String(actionData.action).toUpperCase();
         if (VIRTUAL_ACTION_FIELDS[virtualAction])
             return buildVirtual(virtualAction, actionData.params || {});
-        return actionData; // already a ParsedAction
+        // Already a ParsedAction. Returned as the caller's own object, which
+        // runPreflight relies on to key the shared report on its content.
+        return actionData;
     }
     if (actionData && actionData.action && VIRTUAL_ACTION_FIELDS[String(actionData.action).toUpperCase()])
         return buildVirtual(String(actionData.action).toUpperCase(), normalizeParamKeys(actionData));
@@ -184,12 +187,29 @@ function computeVerdict(findings) {
 // Bound the elapsed clock without a bare Date.now sprinkled everywhere.
 function nowMs() { return Date.now(); }
 
+// What the shared-report key names for a normalized input. A ParsedAction the caller
+// built is passed through untouched, so its actionString alone does not say what Tier 2
+// will read from it; a digest of the fields the checks read joins the key, which keeps two
+// objects that share a string but differ in params or validation from sharing a report.
+// Every other input form is derived from its string, which therefore identifies it. Null
+// means the object cannot be serialized, so it is never coalesced.
+function coalesceIdentity(parsed, actionData) {
+    if (parsed !== actionData) return parsed.actionString;
+    let body;
+    try {
+        body = JSON.stringify([parsed.action, parsed.version, parsed.params, parsed.commands, parsed.validation]);
+    } catch (e) { return null; }
+    if (typeof body !== 'string') return null;
+    return String(parsed.actionString) + '#' + crypto.createHash('sha256').update(body).digest('hex');
+}
+
 async function runPreflight(sdk, actionData, opts = {}) {
     const mode = resolveMode(opts.preflight, sdk._preflightMode);
     if (mode === false) return null;
 
     const started = nowMs();
     const parsed = normalizeInput(actionData, sdk.actions);
+    const identity = coalesceIdentity(parsed, actionData);
 
     const chain = opts.chain || opts.chainId || (sdk.config && sdk.config.network) || null;
     const timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
@@ -202,10 +222,10 @@ async function runPreflight(sdk, actionData, opts = {}) {
     const producer = () => produceReport({ sdk, parsed, opts: sharedOpts, mode, timeoutMs, started });
 
     const report = await sdk._preflightCoalescer.run({
-        chainId: chain, actionString: parsed.actionString, source: opts.source,
+        chainId: chain, actionString: identity, source: opts.source,
         localDeltas: opts.localDeltas,
         mode, feeMode: opts.feeMode, encoding: opts.encoding, timeoutMs,
-        signal: opts.signal, bypass: opts.bypassCache === true,
+        signal: opts.signal, bypass: opts.bypassCache === true || identity === null,
     }, producer);
 
     if (mode === 'enforce' && report.verdict === 'fail') {

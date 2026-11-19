@@ -140,8 +140,8 @@ describe('MCP server (tool surface contract)', () => {
     it('refuses at build time the policies AgentSession would refuse on every call', () => {
         const cap = { SEND: { '*': '10' } };
         const refused = [
-            { allowedActions: ['SEND'], maxPerWindow: { perTick: { TOK: '10' } } },
-            { allowedActions: ['SEND'], maxPerWindow: { hours: 0, perTick: { TOK: '10' } } },
+            { allowedActions: ['SEND'], maxPerWindow: { perTick: { TOK: '10', '*': '0' } } },
+            { allowedActions: ['SEND'], maxPerWindow: { hours: 0, perTick: { TOK: '10', '*': '0' } } },
             { maxPerAction: cap },
             { allowedActions: [], maxPerAction: cap },
             { allowedActions: ['SEND'], maxPerAction: cap, idempotencyHours: 0 },
@@ -157,7 +157,7 @@ describe('MCP server (tool surface contract)', () => {
 
     it('validates with the SDK export, so the two checks cannot drift apart', () => {
         expect(AgentSession.validatePolicy).to.be.a('function');
-        const policy = { allowedActions: ['SEND'], maxPerWindow: { perTick: { TOK: '10' } } };
+        const policy = { allowedActions: ['SEND'], maxPerWindow: { perTick: { TOK: '10', '*': '0' } } };
         expect(() => AgentSession.validatePolicy(policy)).to.throw(/hours/);
         expect(build(policy)).to.throw(/hours/);
     });

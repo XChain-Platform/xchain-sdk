@@ -26,6 +26,7 @@ const { expect } = require('chai');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
 const { buildServer, COIN_NETWORKS } = require('../../../../mcp/server.js');
+const { sdkMethodsCalledByServer } = require('../../../helpers/mcp_sdk_calls.js');
 
 // Minimal XChainSDK stand-in: records calls, returns canned values.
 function stubSdk(network) {
@@ -56,6 +57,8 @@ function stubSdk(network) {
         getExecutions: record('getExecutions'),
         getAttestations: record('getAttestations'),
         getValidators: record('getValidators'),
+        verifyCheckpoint: record('verifyCheckpoint'),
+        requireEncoder: () => ({ releaseInputs: (id) => { calls.push(['releaseInputs', id]); return Promise.resolve({ reservationId: id, found: false }); } }),
     };
 }
 
@@ -122,6 +125,13 @@ function writableStub(network) {
 
 describe('MCP server (write tools)', () => {
 
+    it('the writable stub has every method the handlers call through sdkFor', () => {
+        const called = sdkMethodsCalledByServer();
+        expect(called).to.include('agentSession');
+        const stub = writableStub('bitcoin-regtest');
+        for (const name of called) expect(stub[name], `writableStub is missing ${name}`).to.be.a('function');
+    });
+
     it('without wallet config: write tools absent, compose demands a pubkey', async () => {
         const { client } = await connectedPair();
         const names = (await client.listTools()).tools.map((t) => t.name);
@@ -158,7 +168,7 @@ describe('MCP server (write tools)', () => {
         expect(build({ allowedActions: ['SEND'], maxPerWindow: { maxActions: 5 } }))
             .to.throw(/binding amount ceiling/);
         // Both real ceilings are accepted, so the gate is not simply refusing everything.
-        expect(build({ allowedActions: ['SEND'], maxPerWindow: { hours: 24, perTick: { TOK: '10' } } })).to.not.throw();
+        expect(build({ allowedActions: ['SEND'], maxPerWindow: { hours: 24, perTick: { TOK: '10', '*': '0' } } })).to.not.throw();
         expect(build(POLICY)).to.not.throw();
     });
 });
@@ -183,8 +193,8 @@ describe('MCP server (write tools)', () => {
         // reads own properties only, so it would resolve no cap from one (G1).
         expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: Object.create({ TOK: '5' }) } }))
             .to.throw(/binding amount ceiling/);
-        // A populated table on either clause still builds.
-        expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '5' } } })).to.not.throw();
+        // A table with a wildcard entry on either clause still builds.
+        expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '5', '*': '0' } } })).to.not.throw();
         expect(build({ allowedActions: ['SEND'], maxPerWindow: { hours: 24, perTick: { '*': '5' } } })).to.not.throw();
     });
 

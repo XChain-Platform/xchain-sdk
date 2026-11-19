@@ -200,21 +200,17 @@ class CompressionUtils {
     }
 
     /**
-     * Read the raw COMPRESSION field from a FILE action string, or '' when the
-     * action is not a FILE v0, is truncated, or omits the field.
+     * Read the raw COMPRESSION field from a FILE action string (version 0, or a
+     * version 1 multipart manifest, bare or inside a BATCH), or '' when the
+     * action is not such a FILE, is truncated, or omits the field.
      *
      * @param {string} actionString
      * @returns {string} the field verbatim (NOT normalized), or ''.
      */
     compressionFieldOf(actionString) {
-        if (typeof actionString !== 'string' || actionString.length === 0) return '';
-        let parts = actionString.split('|');
-        // FILE|0|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION
-        //  0    1   2    3     4     5       6            7            8            9             10
-        if (parts.length <= COMPRESSION_FIELD_INDEX) return '';
-        if (String(parts[0]).toUpperCase() !== 'FILE') return '';
-        if (String(parts[1]) !== '0') return '';
-        return String(parts[COMPRESSION_FIELD_INDEX]);
+        let layout = fileFieldLayout(actionString);
+        if (layout === null || layout.parts.length <= layout.compression) return '';
+        return String(layout.parts[layout.compression]);
     }
 
     /**
@@ -231,12 +227,9 @@ class CompressionUtils {
      * @returns {boolean}
      */
     isGatedAction(actionString) {
-        if (typeof actionString !== 'string' || actionString.length === 0) return false;
-        let parts = actionString.split('|');
-        if (parts.length <= GATE_TICKER_FIELD_INDEX) return false;
-        if (String(parts[0]).toUpperCase() !== 'FILE') return false;
-        if (String(parts[1]) !== '0') return false;
-        return String(parts[GATE_TICKER_FIELD_INDEX]).length > 0;
+        let layout = fileFieldLayout(actionString);
+        if (layout === null || layout.parts.length <= layout.gate) return false;
+        return String(layout.parts[layout.gate]).length > 0;
     }
 
     /**
@@ -275,6 +268,35 @@ class CompressionUtils {
 // FILE v0 field indices in the FULL action string (ACTION token included).
 const GATE_TICKER_FIELD_INDEX = 6;
 const COMPRESSION_FIELD_INDEX = 10;
+// FILE v1 multipart manifest: the same two fields at later positions.
+// FILE|1|FILE_HASH|TOTAL_PARTS|TOTAL_BYTES|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION
+const MANIFEST_GATE_TICKER_FIELD_INDEX = 9;
+const MANIFEST_COMPRESSION_FIELD_INDEX = 13;
+
+// A FILE may ride inside a BATCH, and the serve path reads the transaction-level
+// action string, so the first FILE sub-command is the one the gates describe.
+// Splitting on ';' then '|' is how consensus reads a BATCH. With no FILE inside,
+// the string is returned untouched and reads as not-a-FILE.
+function unwrapFileCommand(actionString) {
+    let parts = actionString.split('|');
+    if (String(parts[0]).toUpperCase() !== 'BATCH') return actionString;
+    for (let command of parts.slice(2).join('|').split(';'))
+        if (String(command.split('|')[0]).toUpperCase() === 'FILE') return command;
+    return actionString;
+}
+
+// The split FILE command and the field positions its version uses, or null for
+// anything that is not a FILE v0 or v1 string. Read-side only: the write side
+// (withCompressionField) stays v0-only.
+function fileFieldLayout(actionString) {
+    if (typeof actionString !== 'string' || actionString.length === 0) return null;
+    let parts = unwrapFileCommand(actionString).split('|');
+    if (String(parts[0]).toUpperCase() !== 'FILE') return null;
+    let version = String(parts[1]);
+    if (version === '0') return { parts, gate: GATE_TICKER_FIELD_INDEX, compression: COMPRESSION_FIELD_INDEX };
+    if (version === '1') return { parts, gate: MANIFEST_GATE_TICKER_FIELD_INDEX, compression: MANIFEST_COMPRESSION_FIELD_INDEX };
+    return null;
+}
 
 function toBuffer(value, label) {
     if (Buffer.isBuffer(value)) return value;
@@ -362,4 +384,6 @@ module.exports = Object.assign(CompressionUtils, {
     COMPRESSION_MAX_INPUT_BYTES,
     GATE_TICKER_FIELD_INDEX,
     COMPRESSION_FIELD_INDEX,
+    MANIFEST_GATE_TICKER_FIELD_INDEX,
+    MANIFEST_COMPRESSION_FIELD_INDEX,
 });

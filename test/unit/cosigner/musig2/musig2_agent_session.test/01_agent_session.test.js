@@ -167,6 +167,66 @@ describe('MuSig2AgentSession', function () {
     });
 });
 
+describe('MuSig2AgentSession kill switch default path', function () {
+    let home, savedHome;
+
+    beforeEach(function () {
+        savedHome = process.env.HOME;
+        home = fs.mkdtempSync(path.join(tmpDir, 'home-'));
+        fs.mkdirSync(path.join(home, '.xchain'));
+        process.env.HOME = home;
+    });
+
+    afterEach(function () {
+        process.env.HOME = savedHome;
+    });
+
+    function sessionFor(s, extraOpts) {
+        const co = new CoSigner({ secretKey: s.coSk, publicKeys: s.keys, tweaks: s.acct.tweaks,
+            policy: { allowedActions: new Set(['SEND']) } });
+        return new MuSig2AgentSession(makeSdk(s, { broadcasts: [], encodeCalls: 0 }), 'WIF',
+            { allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '100' } } },
+            Object.assign({ stateFile, coSigner: { transport: inProcessTransport(co), publicKeys: s.keys } }, extraOpts));
+    }
+
+    it('halts on a file named for the aggregate address the session reports', function () {
+        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
+        const session = sessionFor(s);
+        expect(session.haltReason()).to.equal(null);
+        fs.writeFileSync(path.join(home, '.xchain', `agent-halt-${s.acct.address}`), '');
+        expect(session.haltReason()).to.contain(`agent-halt-${s.acct.address}`);
+    });
+
+    it('still halts on a file named for the agent p2pkh address', function () {
+        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
+        const session = sessionFor(s);
+        fs.writeFileSync(path.join(home, '.xchain', 'agent-halt-agentP2PKHaddr'), '');
+        expect(session.haltReason()).to.contain('agent-halt-agentP2PKHaddr');
+    });
+
+    it('checks only the explicit path when the operator names one', function () {
+        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
+        const explicit = path.join(home, 'my-halt');
+        const session = sessionFor(s, { killSwitchFile: explicit });
+        fs.writeFileSync(path.join(home, '.xchain', `agent-halt-${s.acct.address}`), '');
+        fs.writeFileSync(path.join(home, '.xchain', 'agent-halt-agentP2PKHaddr'), '');
+        expect(session.haltReason()).to.equal(null);
+        fs.writeFileSync(explicit, '');
+        expect(session.haltReason()).to.contain(explicit);
+    });
+
+    it('refuses a send before any broadcast once the aggregate-address file exists', async function () {
+        const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);
+        const session = sessionFor(s);
+        fs.writeFileSync(path.join(home, '.xchain', `agent-halt-${s.acct.address}`), '');
+        let err;
+        try { await session.send({ tick: 'TOK', amount: '5', destination: DEST }, {}, { idempotencyKey: 'k1' }); }
+        catch (e) { err = e; }
+        expect(err, 'a halted session must refuse').to.exist;
+        expect(err.code).to.equal('POLICY_HALTED');
+    });
+});
+
 describe('MuSig2AgentSession', function () {
     it('fails closed when the agent key is not in the signer set', function () {
         const s = buildAccountAndPsbt(`SEND|0|TOK|5|${DEST}|m`);

@@ -20,6 +20,7 @@
  ********************************************************************/
 
 const ActionWaiter = require('../utils/action_waiter.js');
+const { nativeFeeQuoteSource } = require('./native_fee_source.js');
 const { installMethods } = require('../utils/install_methods.js');
 const { assertMainnetLaunched } = require('../protocol/mainnet_launch.js');
 const {
@@ -62,7 +63,7 @@ function sameCustomOutput(a, b) {
 async function withNativeFeeOutputs(sdk, actionString, encoderOpts, opts) {
     if (typeof sdk.nativeFeeOutputs !== 'function') return encoderOpts;
     const nativeOpts = {
-        source: encoderOpts.sourceAddress || encoderOpts.change || encoderOpts.pubkey,
+        source: nativeFeeQuoteSource(encoderOpts),
     };
     if (typeof opts.payFeeInNativeCoin === 'boolean')
         nativeOpts.payFeeInNativeCoin = opts.payFeeInNativeCoin;
