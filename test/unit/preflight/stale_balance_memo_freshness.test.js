@@ -38,70 +38,75 @@ function tokenFreshnessSdk({ rows, listingFreshness, tokenFreshness }) {
     return { sdk, balanceReads: () => balanceReads };
 }
 
-describe('pre-flight memoized balance freshness', function () {
-    it('keeps a stale empty listing unverified after a fresh token read', async function () {
-        const built = tokenFreshnessSdk({
-            rows: [], listingFreshness: STALE, tokenFreshness: () => FRESH,
-        });
-        const ctx = contextFor(built.sdk);
-
-        expect(await ctx.balance(H, 'A')).to.equal(null);
-        expect(await ctx.balance(H, 'B')).to.equal(null);
-        expect(built.balanceReads()).to.equal(1);
-        expect(ctx.unverified.some((u) => u.check === 'BALANCE_LOOKUP' && /B row/.test(u.reason))).to.equal(true);
+async function keepsStaleEmptyListingUnverified() {
+    const built = tokenFreshnessSdk({
+        rows: [], listingFreshness: STALE, tokenFreshness: () => FRESH,
     });
+    const ctx = contextFor(built.sdk);
 
-    it('keeps a cached positive row marked stale for the second tick', async function () {
-        const built = tokenFreshnessSdk({
-            rows: [{ tick: 'A', quantity: '5' }, { tick: 'B', quantity: '0.5' }],
-            listingFreshness: STALE,
-            tokenFreshness: () => FRESH,
-        });
-        const ctx = contextFor(built.sdk);
+    expect(await ctx.balance(H, 'A')).to.equal(null);
+    expect(await ctx.balance(H, 'B')).to.equal(null);
+    expect(built.balanceReads()).to.equal(1);
+    expect(ctx.unverified.some((u) => u.check === 'BALANCE_LOOKUP' && /B row/.test(u.reason))).to.equal(true);
+}
 
-        expect(await ctx.balance(H, 'A')).to.equal('5');
-        expect(await ctx.balance(H, 'B')).to.equal('0.5');
-        const finding = ctx.addFinding('BALANCE_INSUFFICIENT', 'error', 'shortfall', { tick: 'B' });
-        expect(finding.data.staleMirror).to.equal(true);
-        expect(ctx.unverified.some((u) => u.check === 'BALANCE_LOOKUP' && /B balance/.test(u.reason))).to.equal(true);
+async function keepsCachedPositiveRowStale() {
+    const built = tokenFreshnessSdk({
+        rows: [{ tick: 'A', quantity: '5' }, { tick: 'B', quantity: '0.5' }],
+        listingFreshness: STALE,
+        tokenFreshness: () => FRESH,
     });
+    const ctx = contextFor(built.sdk);
 
-    it('does not make a fresh cached listing stale after a stale token read', async function () {
-        const built = tokenFreshnessSdk({
-            rows: [], listingFreshness: FRESH,
-            tokenFreshness: (tick) => tick === 'B' ? STALE : FRESH,
-        });
-        const ctx = contextFor(built.sdk);
+    expect(await ctx.balance(H, 'A')).to.equal('5');
+    expect(await ctx.balance(H, 'B')).to.equal('0.5');
+    const finding = ctx.addFinding('BALANCE_INSUFFICIENT', 'error', 'shortfall', { tick: 'B' });
+    expect(finding.data.staleMirror).to.equal(true);
+    expect(ctx.unverified.some((u) => u.check === 'BALANCE_LOOKUP' && /B balance/.test(u.reason))).to.equal(true);
+}
 
-        expect(await ctx.balance(H, 'A')).to.equal('0');
-        expect(await ctx.balance(H, 'B')).to.equal('0');
-        expect(ctx.unverified.filter((u) => u.check === 'BALANCE_LOOKUP')).to.deep.equal([]);
+async function keepsFreshListingFresh() {
+    const built = tokenFreshnessSdk({
+        rows: [], listingFreshness: FRESH,
+        tokenFreshness: (tick) => tick === 'B' ? STALE : FRESH,
     });
+    const ctx = contextFor(built.sdk);
 
-    it('keeps a memoized stale native balance tied to its address read', async function () {
-        let last = null;
-        let addressReads = 0;
-        const sdk = mockSdk({
-            preflight: 'report',
-            explorerSpec: {
-                getToken: (tick) => {
-                    last = FRESH;
-                    return { info: { tick: String(tick) }, decimals: 8 };
-                },
+    expect(await ctx.balance(H, 'A')).to.equal('0');
+    expect(await ctx.balance(H, 'B')).to.equal('0');
+    expect(ctx.unverified.filter((u) => u.check === 'BALANCE_LOOKUP')).to.deep.equal([]);
+}
+
+async function keepsMemoizedNativeBalanceStale() {
+    let last = null;
+    let addressReads = 0;
+    const sdk = mockSdk({
+        preflight: 'report',
+        explorerSpec: {
+            getToken: (tick) => {
+                last = FRESH;
+                return { info: { tick: String(tick) }, decimals: 8 };
             },
-        });
-        sdk.explorer.coin = 'BTC';
-        sdk.explorer.freshness = () => last;
-        sdk.getAddress = async () => {
-            addressReads++;
-            last = STALE;
-            return { balances: { confirmed: '0' } };
-        };
-        const ctx = contextFor(sdk);
-
-        expect(await ctx.balance(H, 'BTC')).to.equal(null);
-        await ctx.token('X');
-        expect(await ctx.balance(H, 'BTC')).to.equal(null);
-        expect(addressReads).to.equal(1);
+        },
     });
+    sdk.explorer.coin = 'BTC';
+    sdk.explorer.freshness = () => last;
+    sdk.getAddress = async () => {
+        addressReads++;
+        last = STALE;
+        return { balances: { confirmed: '0' } };
+    };
+    const ctx = contextFor(sdk);
+
+    expect(await ctx.balance(H, 'BTC')).to.equal(null);
+    await ctx.token('X');
+    expect(await ctx.balance(H, 'BTC')).to.equal(null);
+    expect(addressReads).to.equal(1);
+}
+
+describe('pre-flight memoized balance freshness', function () {
+    it('keeps a stale empty listing unverified after a fresh token read', keepsStaleEmptyListingUnverified);
+    it('keeps a cached positive row marked stale for the second tick', keepsCachedPositiveRowStale);
+    it('does not make a fresh cached listing stale after a stale token read', keepsFreshListingFresh);
+    it('keeps a memoized stale native balance tied to its address read', keepsMemoizedNativeBalanceStale);
 });

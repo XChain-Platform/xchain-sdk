@@ -25,65 +25,69 @@ function transactionHash(psbt) {
     return Buffer.from(tx.getId(), 'hex').reverse();
 }
 
+async function refusesUnchargedReveal() {
+    const acct = makeAccount();
+    const { script, commit } = commitFor(acct);
+    const store = freshStore();
+    try {
+        const co = makeCoSigner(acct, {
+            windowStore: store,
+            policy: { allowedActions: new Set(['FILE']), maxPerWindow: { hours: 24, maxActions: 1 } },
+        });
+        for (let i = 0; i < 3; i++) {
+            let denied = null;
+            try {
+                await runRound(acct, co, buildRevealPsbt(acct, commit), script);
+            } catch (e) { denied = e; }
+            expect(denied).to.not.equal(null);
+            expect(String(denied.message)).to.match(/ENVELOPE_COMMIT_NOT_AUTHORIZED/);
+        }
+        expect(store.snapshot().count).to.equal(0);
+    } finally {
+        store.release();
+    }
+}
+
+async function allowsChargedRevealRetries() {
+    const acct = makeAccount();
+    const { script, commit } = commitFor(acct);
+    const store = freshStore();
+    try {
+        const co = makeCoSigner(acct, {
+            windowStore: store,
+            policy: { allowedActions: new Set(['FILE']), maxPerWindow: { hours: 24, maxActions: 1 } },
+        });
+        const commitPsbt = buildCommitPsbt(acct, commit);
+        const reveal = buildRevealPsbt(acct, commit, { hash: transactionHash(commitPsbt) });
+
+        await runRound(acct, co, commitPsbt, script);
+        await runRound(acct, co, reveal, script);
+        await runRound(acct, co, reveal, script);
+        expect(store.snapshot().count).to.equal(1);
+    } finally {
+        store.release();
+    }
+}
+
+async function keepsUnchargedCancelAvailable() {
+    const acct = makeAccount();
+    const { script, commit } = commitFor(acct);
+    const store = freshStore();
+    try {
+        const co = makeCoSigner(acct, {
+            windowStore: store,
+            policy: { allowedActions: new Set(['FILE']), maxPerWindow: { hours: 24, maxActions: 1 } },
+        });
+
+        await runRound(acct, co, buildCancelPsbt(acct, commit), script);
+        expect(store.snapshot().count).to.equal(0);
+    } finally {
+        store.release();
+    }
+}
+
 describe('co-signer: uncharged envelope reveal budget', function () {
-    it('refuses an uncharged reveal even when the window has spare capacity', async function () {
-        const acct = makeAccount();
-        const { script, commit } = commitFor(acct);
-        const store = freshStore();
-        try {
-            const co = makeCoSigner(acct, {
-                windowStore: store,
-                policy: { allowedActions: new Set(['FILE']), maxPerWindow: { hours: 24, maxActions: 1 } },
-            });
-            for (let i = 0; i < 3; i++) {
-                let denied = null;
-                try {
-                    await runRound(acct, co, buildRevealPsbt(acct, commit), script);
-                } catch (e) { denied = e; }
-                expect(denied).to.not.equal(null);
-                expect(String(denied.message)).to.match(/ENVELOPE_COMMIT_NOT_AUTHORIZED/);
-            }
-            expect(store.snapshot().count).to.equal(0);
-        } finally {
-            store.release();
-        }
-    });
-
-    it('allows retries for a reveal whose commit still has one live charge', async function () {
-        const acct = makeAccount();
-        const { script, commit } = commitFor(acct);
-        const store = freshStore();
-        try {
-            const co = makeCoSigner(acct, {
-                windowStore: store,
-                policy: { allowedActions: new Set(['FILE']), maxPerWindow: { hours: 24, maxActions: 1 } },
-            });
-            const commitPsbt = buildCommitPsbt(acct, commit);
-            const reveal = buildRevealPsbt(acct, commit, { hash: transactionHash(commitPsbt) });
-
-            await runRound(acct, co, commitPsbt, script);
-            await runRound(acct, co, reveal, script);
-            await runRound(acct, co, reveal, script);
-            expect(store.snapshot().count).to.equal(1);
-        } finally {
-            store.release();
-        }
-    });
-
-    it('keeps an uncharged cancel available as a recovery path', async function () {
-        const acct = makeAccount();
-        const { script, commit } = commitFor(acct);
-        const store = freshStore();
-        try {
-            const co = makeCoSigner(acct, {
-                windowStore: store,
-                policy: { allowedActions: new Set(['FILE']), maxPerWindow: { hours: 24, maxActions: 1 } },
-            });
-
-            await runRound(acct, co, buildCancelPsbt(acct, commit), script);
-            expect(store.snapshot().count).to.equal(0);
-        } finally {
-            store.release();
-        }
-    });
+    it('refuses an uncharged reveal even when the window has spare capacity', refusesUnchargedReveal);
+    it('allows retries for a reveal whose commit still has one live charge', allowsChargedRevealRetries);
+    it('keeps an uncharged cancel available as a recovery path', keepsUnchargedCancelAvailable);
 });
