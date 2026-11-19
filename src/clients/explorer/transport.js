@@ -226,7 +226,7 @@ module.exports = {
     // the paths that must not build on it. Given a body this client returned,
     // it answers with the marker of the response that carried that body, which
     // a later response cannot replace; any other argument reads the last marker.
-    freshness(body) {
+    freshness(body = null) {
         const own = body && typeof body === 'object' ? bodyFreshness.get(body) : null;
         const record = own || this._freshness;
         return record ? Object.assign({}, record) : null;
