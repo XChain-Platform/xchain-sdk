@@ -125,6 +125,16 @@ function openWebSocket(client, url) {
 }
 
 
+// Read the reconnect backoff options, defaulting each one on its own.
+function retrySettings(retry = {}) {
+    return {
+        maxReconnectAttempts: retry.maxRetries || 10,
+        baseDelay: retry.baseDelay || 1000,
+        maxDelay: retry.maxDelay || 30000,
+        backoffFactor: retry.backoffFactor || 2,
+    };
+}
+
 class WebSocketClient {
 
     constructor(options = {}) {
@@ -137,11 +147,7 @@ class WebSocketClient {
         this._pool    = options.pool || null;
 
         // Reconnection config
-        let retry = options.retry || {};
-        this.maxReconnectAttempts = retry.maxRetries    || 10;
-        this.baseDelay           = retry.baseDelay      || 1000;
-        this.maxDelay            = retry.maxDelay        || 30000;
-        this.backoffFactor       = retry.backoffFactor   || 2;
+        Object.assign(this, retrySettings(options.retry || {}));
 
         // State
         this.ws                 = null;
