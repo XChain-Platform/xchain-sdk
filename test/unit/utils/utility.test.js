@@ -62,6 +62,24 @@ describe('Utility.isValidAmountFormat (indexer parity)', function () {
         assert.strictEqual(utils.isValidAmountFormat(2, '1.123'), false);
     });
 
+    it('refuses an amount wider than the 250-character column, as the indexer does', function () {
+        const atLimit = '0'.repeat(249) + '1';
+        const overLimit = '0'.repeat(250) + '1';
+        assert.strictEqual(utils.isValidAmountFormat(8, atLimit), true);
+        assert.strictEqual(utils.isValidAmountFormat(8, overLimit), false);
+        // A third positional, the indexer's blockTime, never switches the width rule off.
+        assert.strictEqual(utils.isValidAmountFormat(8, overLimit, 1700000000), false);
+        assert.strictEqual(utils.isValidAmountFormat(8, overLimit, true), false);
+    });
+
+    it('keeps the merge-leg shape rule off the public Utility surface', function () {
+        const numberFormat = require('../../../src/utils/utility/number_format.js');
+        const overLimit = '0'.repeat(250) + '1';
+        assert.strictEqual('isValidAmountMergeFormat' in utils, false);
+        assert.strictEqual(numberFormat.isValidAmountMergeFormat.call(utils, 8, overLimit), true);
+        assert.strictEqual(numberFormat.isValidAmountMergeFormat.call(utils, 2, '1.123'), false);
+    });
+
     // Multi-dot reject: destructuring the split dropped every segment past the
     // second, so "1.2.3" read as int="1"/sats="2" and cleared the divisible branch.
     it('rejects multi-dot amounts (parity with the indexer guard)', function () {

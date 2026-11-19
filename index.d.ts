@@ -1785,6 +1785,13 @@ export declare class ContractClient {
  *  XChainSDK class
  */
 
+export interface DecoderApi {
+    [key: string]: any;
+    rawDataMatches(pushes: unknown[], rawData: string | Buffer | null | undefined, rawDataCompressed?: boolean): boolean;
+}
+
+export const decoder: DecoderApi;
+
 export declare class XChainSDK {
 
     /** Package version string */
@@ -1795,6 +1802,8 @@ export declare class XChainSDK {
     readonly options: SDKOptions;
     /** Low-level encoder service client, when an encoder endpoint is configured. */
     encoder: EncoderClient | null;
+    /** Browser-safe action and PSBT decoding helpers. */
+    readonly decoder: DecoderApi;
 
     constructor(options?: SDKOptions);
 
@@ -2424,7 +2433,7 @@ export declare class XChainSDK {
     /** Subscribe to updates for a dispenser (by its action index). */
     onDispenser(actionIndex: number | string, callback: (msg: any) => void): () => void;
 
-    /** Subscribe to one betting market by its feed action index: BET (branch on data.action_format), BET_EXPIRED, BET_CLOSED and the initial SNAPSHOT. */
+    /** Subscribe to one betting market by its feed action index: BET (branch on data.action_format), BET_EDIT, BET_EXPIRED, BET_CLOSED and the initial SNAPSHOT. */
     onBetFeed(feedActionIndex: number | string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to one cross-chain call by its 64-hex call_id: XCALL_COMPLETED, XCALL_EXPIRED and the initial SNAPSHOT. The id is lower-cased before it is sent, because the explorer normalizes case at subscribe time. */

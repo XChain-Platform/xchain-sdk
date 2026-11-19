@@ -116,7 +116,7 @@ const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 const DELIMITER_EXEMPT_FIELDS = new Set([
     'COMMAND',                                                          // BATCH sub-action carrier
     'TICK', 'GIVE_TICK', 'GET_TICK', 'DIVIDEND_TICK', 'CALLBACK_TICK',  // own tick-name validation
-    'GATE_TICKER',                                                      // own |;./ check
+    'GATE_TICKER',                                                      // own |;/ and dot-segment check
     'CONSTRUCTOR_PARAMS', 'PARAMS',                                     // own per-element check
     'NAME', 'DESCRIPTION',                                              // own FILE/ISSUE/LIST text rules
 ]);

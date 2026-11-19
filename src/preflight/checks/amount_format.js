@@ -43,6 +43,11 @@ function amountFormatOk(ctx, decimals, amount) {
     return numeric.isValidAmountFormatWhere(decimals, amount, representabilityArmed(ctx) === true);
 }
 
+// The indexer's raw-leg verdict before SEND or DESTROY consolidation.
+function amountMergeFormatOk(ctx, decimals, amount) {
+    return numeric.isValidAmountMergeFormatWhere(decimals, amount, representabilityArmed(ctx) === true);
+}
+
 // Declare the rule wherever it is not applied, naming where it stands on this plane.
 function declareRepresentability(ctx) {
     if (representabilityArmed(ctx) === true) return;
@@ -105,5 +110,6 @@ function checkAmountParses(ctx, label, amount, extra) {
 }
 
 module.exports = {
-    representabilityArmed, amountFormatOk, declareRepresentability, tokenDecimals, checkAmountField, checkAmountParses,
+    representabilityArmed, amountFormatOk, amountMergeFormatOk, declareRepresentability,
+    tokenDecimals, checkAmountField, checkAmountParses,
 };

@@ -119,7 +119,7 @@ describe('light.verifyAction binds the proof to the caller query above 2^53', fu
     it('control: the proof verifies for the index it is actually FOR', async function () {
         const { proof, blockMerkleRoot } = buildNeighbourProof();
         const { cp, fetchImpl } = servedBy(proof, blockMerkleRoot);
-        const r = await light.verifyAction({ explorerUrl: 'https://x', coin: 'BTC',
+        const r = await light.verifyAction({ explorerUrl: '', coin: 'RBTC',
             actionIndex: N_1, trustedCheckpoint: cp, fetchImpl });
         assert.strictEqual(r.verified, true, r.reason);
     });
@@ -130,7 +130,7 @@ describe('light.verifyAction binds the proof to the caller query above 2^53', fu
         // proof's own action_index, so it confirmed the WRONG action happily.
         const { proof, blockMerkleRoot } = buildNeighbourProof();
         const { cp, fetchImpl } = servedBy(proof, blockMerkleRoot);
-        const r = await light.verifyAction({ explorerUrl: 'https://x', coin: 'BTC',
+        const r = await light.verifyAction({ explorerUrl: '', coin: 'RBTC',
             actionIndex: N, trustedCheckpoint: cp, fetchImpl });
         assert.strictEqual(r.verified, false);
         assert.strictEqual(r.reason, 'ACTION_INDEX_MISMATCH');
@@ -143,7 +143,7 @@ describe('light.verifyAction binds the proof to the caller query above 2^53', fu
                      block_merkle_root: blockMerkleRoot };
         const fetchImpl = async () => ({ ok: true, status: 200,
                                          json: async () => ({ proof, checkpoint: cp }) });
-        const r = await light.verifyAction({ explorerUrl: 'https://x', coin: 'BTC',
+        const r = await light.verifyAction({ explorerUrl: '', coin: 'RBTC',
             actionIndex: N_1, trustedCheckpoint: cp, fetchImpl });
         assert.strictEqual(r.verified, false);
         assert.strictEqual(r.reason, 'PROOF_HEIGHT_MISMATCH');

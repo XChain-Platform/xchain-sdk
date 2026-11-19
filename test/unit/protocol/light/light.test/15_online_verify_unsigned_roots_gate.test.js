@@ -95,6 +95,7 @@ function fetchOf(needle, body) {
 // mainnet sits below its commitment flag day at this snapshot; regtest is active from 0.
 const BELOW = { network: 'mainnet', block_index: 900010, snapshot_block: 900005 };
 const ACTIVE = { network: 'regtest', block_index: 110, snapshot_block: 106 };
+const coinFor = (fixture) => fixture.network === 'mainnet' ? 'BTC' : COIN;
 
 describe('online verifiers refuse the roots of a checkpoint below the commitment flag day', function () {
     const s = signer();
@@ -108,7 +109,7 @@ describe('online verifiers refuse the roots of a checkpoint below the commitment
     it('verifyBalance returns ROOTS_NOT_SIGNED for a signed rootless checkpoint carrying explorer-chosen roots', async function () {
         const bal = balanceProof(BELOW.network, BELOW.block_index);
         const cp = signedCp(s, Object.assign({ state_root: bal.stateRoot, block_merkle_root: 'bb'.repeat(32) }, BELOW));
-        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A, tick: TICK,
+        const r = await light.verifyBalance({ explorerUrl: '', coin: coinFor(BELOW), address: ADDR_A, tick: TICK,
             validators, fetchImpl: fetchOf('/api/proof/balance/', { proof: bal.proof, checkpoint: cp }) });
         assert.strictEqual(r.reason, 'ROOTS_NOT_SIGNED');
         assert.strictEqual(r.verified, false);
@@ -118,7 +119,7 @@ describe('online verifiers refuse the roots of a checkpoint below the commitment
     it('verifyBalance still verifies the same proof once the checkpoint is above the flag day', async function () {
         const bal = balanceProof(ACTIVE.network, ACTIVE.block_index);
         const cp = signedCp(s, Object.assign({ state_root: bal.stateRoot, block_merkle_root: 'bb'.repeat(32) }, ACTIVE));
-        const r = await light.verifyBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A, tick: TICK,
+        const r = await light.verifyBalance({ explorerUrl: '', coin: coinFor(ACTIVE), address: ADDR_A, tick: TICK,
             validators, fetchImpl: fetchOf('/api/proof/balance/', { proof: bal.proof, checkpoint: cp }) });
         assert.strictEqual(r.verified, true, r.reason);
         assert.strictEqual(r.amount, M.canonicalAmount('42'));
@@ -127,7 +128,7 @@ describe('online verifiers refuse the roots of a checkpoint below the commitment
     it('verifyAction returns ROOTS_NOT_SIGNED for a signed rootless checkpoint carrying an explorer-chosen block root', async function () {
         const act = actionProof(BELOW.network, BELOW.block_index);
         const cp = signedCp(s, Object.assign({ state_root: 'dd'.repeat(32), block_merkle_root: act.blockMerkleRoot }, BELOW));
-        const r = await light.verifyAction({ explorerUrl: 'https://x', coin: COIN, actionIndex: 11,
+        const r = await light.verifyAction({ explorerUrl: '', coin: coinFor(BELOW), actionIndex: 11,
             validators, fetchImpl: fetchOf('/api/proof/action/', { proof: act.proof, checkpoint: cp }) });
         assert.strictEqual(r.reason, 'ROOTS_NOT_SIGNED');
         assert.strictEqual(r.verified, false);
@@ -136,7 +137,7 @@ describe('online verifiers refuse the roots of a checkpoint below the commitment
     it('verifyAction still verifies the same proof once the checkpoint is above the flag day', async function () {
         const act = actionProof(ACTIVE.network, ACTIVE.block_index);
         const cp = signedCp(s, Object.assign({ state_root: 'dd'.repeat(32), block_merkle_root: act.blockMerkleRoot }, ACTIVE));
-        const r = await light.verifyAction({ explorerUrl: 'https://x', coin: COIN, actionIndex: 11,
+        const r = await light.verifyAction({ explorerUrl: '', coin: coinFor(ACTIVE), actionIndex: 11,
             validators, fetchImpl: fetchOf('/api/proof/action/', { proof: act.proof, checkpoint: cp }) });
         assert.strictEqual(r.verified, true, r.reason);
     });
@@ -145,7 +146,7 @@ describe('online verifiers refuse the roots of a checkpoint below the commitment
         const ask = async (at) => {
             const proof = { chain: CHAIN, network: at.network, height: at.block_index, address: ADDR_A, tick: TICK };
             const cp = signedCp(s, Object.assign({ state_root: 'ee'.repeat(32), block_merkle_root: 'bb'.repeat(32) }, at));
-            return light.verifyLockedBalance({ explorerUrl: 'https://x', coin: COIN, address: ADDR_A, tick: TICK,
+            return light.verifyLockedBalance({ explorerUrl: '', coin: coinFor(at), address: ADDR_A, tick: TICK,
                 validators, fetchImpl: fetchOf('/api/proof/locked-balance/', { proof, checkpoint: cp }) });
         };
         const below = await ask(BELOW);

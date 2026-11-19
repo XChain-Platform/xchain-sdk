@@ -89,12 +89,20 @@ function codeHashOf(code) {
     return crypto.createHash('sha256').update(Buffer.from(String(code), 'utf8')).digest('hex');
 }
 
-// Normalize constructorParams (array | string | undefined) into a pipe-joined string
-// for the single-shot size estimate (mirrors how the wire serializes the rest field).
+// Normalize constructorParams exactly as the action composer does. Only undefined
+// is absent; null is a supplied scalar and serializes as the text "null".
+function normalizeConstructorParams(constructorParams) {
+    if (constructorParams === undefined) return undefined;
+    const values = Array.isArray(constructorParams) ? constructorParams : [constructorParams];
+    return values.map((value) => String(value));
+}
+
+// Normalize constructorParams into a pipe-joined string for the single-shot size
+// estimate, including the composer's trimming of trailing empty rest fields.
 function ctorString(constructorParams) {
-    if (constructorParams === undefined || constructorParams === null) return '';
-    let arr = Array.isArray(constructorParams) ? constructorParams : [constructorParams];
-    const fields = arr.map(p => String(p));
+    const normalized = normalizeConstructorParams(constructorParams);
+    if (normalized === undefined) return '';
+    const fields = normalized.slice();
     while (fields.length && fields[fields.length - 1] === '') fields.pop();
     return fields.join('|');
 }
@@ -184,6 +192,7 @@ function planDeploy(code, opts = {}) {
 }
 
 module.exports = {
+    normalizeConstructorParams,
     codeHashOf,
     fitsSingleDeploy,
     splitCode,

@@ -24,7 +24,7 @@ const { getNetwork }    = require('../protocol/networks.js');
 const { SDKValidationError, SDKContractError } = require('../utils/errors.js');
 const Config            = require('../config.js');
 const { fillMarketCoinFields } = require('./market_coin_fields.js');
-const { compiledPushSize, carrierCeiling } = require('../contract/chunk_helper.js');
+const { compiledPushSize, carrierCeiling, normalizeConstructorParams } = require('../contract/chunk_helper.js');
 
 // Encoding byte limits for pre-flight validation. Only P2SH is read from this
 // table today (the oversize suggestion below); the OP_RETURN gate is
@@ -80,10 +80,7 @@ function normalizeActionFields(context, actionName, params) {
             fields.PARAMS = fields.PARAMS.map(p => String(p));
     }
     if (actionName === 'DEPLOY' && fields.CONSTRUCTOR_PARAMS !== undefined) {
-        if (!Array.isArray(fields.CONSTRUCTOR_PARAMS))
-            fields.CONSTRUCTOR_PARAMS = [String(fields.CONSTRUCTOR_PARAMS)];
-        else
-            fields.CONSTRUCTOR_PARAMS = fields.CONSTRUCTOR_PARAMS.map(p => String(p));
+        fields.CONSTRUCTOR_PARAMS = normalizeConstructorParams(fields.CONSTRUCTOR_PARAMS);
     }
 
     // [3d] LIST: ITEM is a rest-field; coerce to an array of strings so a

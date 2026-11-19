@@ -21,6 +21,7 @@
 
 const chunkHelper = require('../../contract/chunk_helper.js');
 const Utility = require('../../utils/utility.js');
+const { buildExplorer } = require('../../utils/action_waiter/explorer_options.js');
 
 function prepareDeploy(owner, deployParams, opts) {
     const code = (deployParams.code !== undefined) ? deployParams.code : deployParams.CODE;
@@ -252,6 +253,8 @@ module.exports = {
     // opts:
     //   timeout      - ms to poll before giving up (default 120000)
     //   pollInterval - ms between reads (default 2000, the ActionWaiter's own)
+    //   explorer     - per-call explorer client used by the submission waits
+    //   explorerUrl / explorerPort - per-call explorer endpoint options
     //
     // Returns the deployed contract's action_index, verbatim as the explorer
     // reports it (the same string-or-number shape actionIndexOf hands back).
@@ -268,12 +271,14 @@ module.exports = {
         let deadline     = Date.now() + timeout;
         let observed     = null;
         let lastError    = null;
+        const explorer   = buildExplorer(this.sdk, opts);
+        const detailOpts = explorer ? { explorer } : {};
 
         for (;;) {
             let detail = null;
             let read   = false;
             try {
-                detail = await this.actionDetailOf(assemblerActionIndex);
+                detail = await this.actionDetailOf(assemblerActionIndex, detailOpts);
                 lastError = null;
                 read = true;
             } catch (e) {
@@ -308,8 +313,11 @@ module.exports = {
     // envelope it arrives in: the route wraps the row as { data }, the explorer's
     // own getAction answers a single-element array, and some responses nest the
     // row under `action`. Mirrors the unwrap the e2e drills already use.
-    async actionDetailOf(actionIndex) {
-        let body = await this.sdk.getAction(actionIndex);
+    async actionDetailOf(actionIndex, opts = {}) {
+        const explorer = buildExplorer(this.sdk, opts);
+        let body = explorer
+            ? await explorer.getAction(actionIndex)
+            : await this.sdk.getAction(actionIndex);
         if (!body) return null;
         let d = (body.data !== undefined && body.data !== null) ? body.data : body;
         if (Array.isArray(d)) d = d.length ? d[0] : null;

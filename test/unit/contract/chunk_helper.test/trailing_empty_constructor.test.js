@@ -17,6 +17,14 @@ function compiledSize(source, constructorParams, gasLimit = 100000) {
     return Buffer.byteLength(composed.actionString, 'utf8') + chunkHelper.OP_RETURN_PUSH_OVERHEAD;
 }
 
+function compiledStakeableSize(source, constructorParams) {
+    const composed = sdk.actions.composeActionString({ action: 'DEPLOY', params: {
+        CODE: source, GAS_LIMIT: 100000, CONSTRUCTOR_PARAMS: constructorParams, COOLDOWN_BLOCKS: 10
+    } });
+    expect(composed.version).to.equal(1);
+    return Buffer.byteLength(composed.actionString, 'utf8') + chunkHelper.OP_RETURN_PUSH_OVERHEAD;
+}
+
 function frontier(opts) {
     let low = 1, high = 7000, largest = 0;
     while (low <= high) {
@@ -47,5 +55,20 @@ describe('chunkHelper trailing empty constructor fields', function () {
         const largest = frontier(opts);
         expect(compiledSize('x'.repeat(largest), opts.constructorParams)).to.be.at.most(chunkHelper.MAX_ACTION_DATA_LENGTH);
         expect(compiledSize('x'.repeat(largest + 1), opts.constructorParams)).to.be.above(chunkHelper.MAX_ACTION_DATA_LENGTH);
+    });
+
+    it('counts a bare null at the same v0 frontier as the composer', function () {
+        const opts = { gasLimit: 100000, constructorParams: null };
+        const largest = frontier(opts);
+        expect(compiledSize('x'.repeat(largest), null)).to.be.at.most(chunkHelper.MAX_ACTION_DATA_LENGTH);
+        expect(compiledSize('x'.repeat(largest + 1), null)).to.be.above(chunkHelper.MAX_ACTION_DATA_LENGTH);
+        expect(chunkHelper.planDeploy('x'.repeat(6129), opts).single).to.equal(false);
+    });
+
+    it('counts a bare null at the same v1 frontier as the composer', function () {
+        const opts = { gasLimit: 100000, constructorParams: null, cooldownBlocks: 10 };
+        const largest = frontier(opts);
+        expect(compiledStakeableSize('x'.repeat(largest), null)).to.be.at.most(chunkHelper.MAX_ACTION_DATA_LENGTH);
+        expect(compiledStakeableSize('x'.repeat(largest + 1), null)).to.be.above(chunkHelper.MAX_ACTION_DATA_LENGTH);
     });
 });

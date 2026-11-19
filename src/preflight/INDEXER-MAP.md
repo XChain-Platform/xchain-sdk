@@ -682,6 +682,29 @@ agrees with it.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-11-19 - the client mirrors the 250-character amount width on stored amounts and lone SEND and DESTROY legs
+
+No pin moves: this is a client follow-up to the 2026-10-23 entry, whose refusal sits in
+`utility/validation/amount_validation.js`, outside every mapped row's hash. The SDK's two-argument
+`Utility.isValidAmountFormat` now refuses a string or number wider than 250 code points ahead of
+its shape rule, as the indexer's does, so `amountFormatOk` and `checkAmountField` raise
+AMOUNT_FORMAT_INVALID for an overlong MINT, AIRDROP, DIVIDEND, ORDER, SWAP, dispenser or ISSUE
+supply amount on every network. The shape rule alone stays reachable as the non-enumerable
+`number_format.js` `isValidAmountMergeFormat`, which is not installed on `Utility.prototype`, and
+pre-flight reaches it through `numeric.isValidAmountMergeFormatWhere` and `amountMergeFormatOk`.
+
+- **SEND and DESTROY, `checks/send.js`:** `checkLegAmountFormat` judges each raw leg with the merge
+  rule, as `send/legs.js` and `destroy/legs.js` do, and then counts the legs that merge on each key
+  (`DESTINATION|TICK` for SEND, `TICK|MEMO` for DESTROY, raw wire spellings). A key holding two or
+  more legs is summed by `bcadd` into a number object, which the indexer's width refusal does not
+  read, so it stays clear. A leg alone on its key reaches `send/validate.js` or `destroy/validate.js`
+  as its raw text, and a width over 250 now raises a non-overridable AMOUNT_FORMAT_INVALID error
+  naming `invalid: AMOUNT (format)`. This replaces the 2026-10-23 entry's "lone leg stays a
+  server-side refusal": the mirror needs the merge keys only, never the `bcadd` text.
+- STAKE, DEPOSIT and WITHDRAW keep their own width check in `checks/misc.js` and raise it once.
+
+**Direction: WIDENS client refusal to match consensus; no activation row and no consensus change.**
+
 ### 2026-11-19 - an authenticated BATCH dry-run reports a skipped COINPAY sub-command as unjudged
 
 The `batch` pin moves from `cb526c2f` to `1c42ba29`, hashed from the committed indexer review-round

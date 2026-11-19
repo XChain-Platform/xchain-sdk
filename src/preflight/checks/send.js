@@ -80,7 +80,10 @@ const { ALLOWED_COINS } = require('../../coins/index.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
 const { planeFromCoin } = require('./issue.js');
 const { tokenField } = require('./mint.js');
-const { amountFormatOk, declareRepresentability } = require('./amount_format.js');
+const { amountMergeFormatOk, declareRepresentability } = require('./amount_format.js');
+
+// Amount columns are VARCHAR(250), counted in code points as the indexer counts them.
+const AMOUNT_MAX_CHARS = 250;
 
 // Net multi-leg TICK/AMOUNT pairs into per-tick totals. SEND v1
 // repeats AMOUNT under one TICK; v2/v3 repeat TICK too.
@@ -143,6 +146,7 @@ async function checkLegAmountFormat(ctx, verb) {
     const ticks = [].concat(ctx.params.TICK || []);
     const amounts = [].concat(ctx.params.AMOUNT || []);
     const n = Math.max(ticks.length, amounts.length);
+    const merging = [];
     ctx.markRun(FINDING_CODES.AMOUNT_FORMAT_INVALID);
     for (let i = 0; i < n; i++) {
         const tick = String(ticks[Math.min(i, ticks.length - 1)] || '');
@@ -156,13 +160,44 @@ async function checkLegAmountFormat(ctx, verb) {
         if (token === null) continue; // nonexistent tick: TOKEN_NOT_FOUND owns this leg
         const decimals = tokenField(token, ['supply.decimals', 'info.decimals', 'decimals', 'DECIMALS']);
         if (decimals === null || decimals === undefined || decimals === '') continue;
-        if (!amountFormatOk(ctx, decimals, amount)) {
+        if (!amountMergeFormatOk(ctx, decimals, amount)) {
             ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
                 `${verb} leg amount ${amount} for ${tick} is not a valid amount at ${decimals} decimals; `
                 + 'above the leg-amount-consolidation activation (armed on every network since genesis) '
                 + 'the indexer holds this leg out of the merge and rejects it on its own.',
                 { tick, amount, decimals });
+            continue;
         }
+        merging.push({ tick, amount, key: legMergeKey(ctx, verb, i, tick) });
+    }
+    checkLoneLegWidth(ctx, verb, merging);
+}
+
+// The indexer's merge key for leg i: DESTINATION|TICK for SEND (send/legs.js) and
+// TICK|MEMO for DESTROY (destroy/legs.js), on the raw wire spellings. MEMO is one
+// value for the whole action unless the format repeats it per leg.
+function legMergeKey(ctx, verb, i, tick) {
+    const at = (value) => (Array.isArray(value) ? value[i] : value);
+    if (verb === 'Destroy') return tick + '|' + String(at(ctx.params.MEMO));
+    return String(at(ctx.params.DESTINATION)) + '|' + tick;
+}
+
+// Width after consolidation: legs sharing a merge key are summed by bcadd into a
+// number object, which the indexer's width refusal does not read, while a leg alone
+// on its key reaches send/validate.js or destroy/validate.js as its raw text and is
+// refused there when wider than the 250-character amount column. Every leg of one
+// key names the same tick, so each sibling here was judged with the same decimals.
+function checkLoneLegWidth(ctx, verb, merging) {
+    const perKey = new Map();
+    for (const leg of merging) perKey.set(leg.key, (perKey.get(leg.key) || 0) + 1);
+    for (const { tick, amount, key } of merging) {
+        const width = Array.from(amount).length;
+        if (perKey.get(key) !== 1 || width <= AMOUNT_MAX_CHARS) continue;
+        ctx.addFinding(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'error',
+            `${verb} leg amount for ${tick} is ${width} characters, wider than the ${AMOUNT_MAX_CHARS}-character `
+            + 'amount column; no other leg shares its merge key, so the indexer judges its raw text and '
+            + 'rejects this leg as invalid: AMOUNT (format).',
+            { tick, width, limit: AMOUNT_MAX_CHARS });
     }
 }
 

@@ -68,3 +68,18 @@ describe('pre-flight numeric semantics', function () {
         expect(numeric.isValidAmountFormat(8, '-1')).to.equal(false);
     });
 });
+
+describe('pre-flight numeric amount width split', function () {
+    it('splits stored amounts from intermediate merge legs at 250 characters', function () {
+        const atLimit = '0'.repeat(249) + '1';
+        const overLimit = '0'.repeat(250) + '1';
+        expect(numeric.isValidAmountFormat(8, overLimit)).to.equal(false);
+        expect(numeric.isValidAmountMergeFormat(8, overLimit)).to.equal(true);
+        expect(numeric.isValidAmountFormatWhere(8, atLimit, false)).to.equal(true);
+        expect(numeric.isValidAmountFormatWhere(8, overLimit, false)).to.equal(false);
+        expect(numeric.isValidAmountFormatWhere(8, overLimit, true)).to.equal(false);
+        expect(numeric.isValidAmountMergeFormatWhere(8, overLimit, false)).to.equal(true);
+        expect(numeric.isValidAmountMergeFormatWhere(8, overLimit, true)).to.equal(true);
+        expect(numeric.isValidAmountMergeFormatWhere(2, '1.234', false)).to.equal(false);
+    });
+});

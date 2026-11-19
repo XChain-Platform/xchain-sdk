@@ -43,9 +43,19 @@ const checkpoint = require('../../checkpoint.js');
 // adjacent indices above 2^53 onto one value, so the binding guards below would
 // match the neighbouring action or height they exist to reject.
 const { sameWireIndex } = require('../../utils/wire_index.js');
+const { parseCoinCode } = require('../../utils/endpoints.js');
 const { resolveFetch, baseUrl, fetchJson, fetchProofReply, lowerHex } = require('./fetch_helpers.js');
 const { verifyBalanceProof, verifyLockedBalanceProof, verifyActionProof } = require('./proof_checks.js');
 const { resolveQuorum } = require('./quorum_resolution.js');
+
+function checkpointCoinRefusal(coin, cp){
+    const parsed = parseCoinCode(coin);
+    if (!parsed) return 'UNKNOWN_COIN';
+    if (lowerHex(cp && cp.chain) !== lowerHex(parsed.coin) ||
+        lowerHex(cp && cp.network) !== lowerHex(parsed.network))
+        return 'CHECKPOINT_COIN_MISMATCH';
+    return null;
+}
 
 // ── Public network API ────────────────────────────────────────────────────────
 
@@ -126,8 +136,12 @@ async function resolveBalanceCheckpoint(f, opts, body, proof){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await resolveQuorum(f, opts, cp);
     }
+    const refused = checkpointCoinRefusal(opts.coin, cp);
+    if (refused)
+        return { error: { verified: false, amount: null, reason: refused,
+                          height: Number(cp.block_index), checkpoint: cp, quorum: null, weighted: null } };
+    if (!opts.trustedCheckpoint) q = await resolveQuorum(f, opts, cp);
     return { cp, q };
 }
 
@@ -185,8 +199,12 @@ async function verifyLockedBalance(opts){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await resolveQuorum(f, opts, cp);
     }
+    const coinRefused = checkpointCoinRefusal(opts.coin, cp);
+    if (coinRefused)
+        return { verified: false, amount: null, reason: coinRefused,
+                 height: Number(cp.block_index), checkpoint: cp, quorum: null, weighted: null };
+    if (!opts.trustedCheckpoint) q = await resolveQuorum(f, opts, cp);
     // Height reported from the quorum-signed checkpoint, never the response label,
     // for the reason verifyBalance gives.
     const base = { height: Number(cp.block_index), checkpoint: cp, quorum: q.quorum, weighted: q.weighted };
@@ -236,8 +254,14 @@ async function verifyAction(opts){
     } else {
         if (!body.checkpoint) throw new Error('LightClient: no checkpoint in response');
         cp = body.checkpoint;
-        q = await resolveQuorum(f, opts, cp);
     }
+    const coinRefused = checkpointCoinRefusal(opts.coin, cp);
+    if (coinRefused)
+        return { verified: false, reason: coinRefused, height: Number(cp.block_index),
+                 action: proof.action, action_index: Number(proof.action_index),
+                 tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
+                 checkpoint: cp, quorum: null, weighted: null };
+    if (!opts.trustedCheckpoint) q = await resolveQuorum(f, opts, cp);
     // Height comes from the quorum-signed checkpoint, not the response label (see verifyBalance).
     const base = { height: Number(cp.block_index), action: proof.action, action_index: Number(proof.action_index),
                    tx_index: (proof.tx_index == null) ? null : Number(proof.tx_index),
@@ -250,6 +274,9 @@ async function verifyAction(opts){
     const trusted = lowerHex(cp.block_merkle_root);
     const rootRefused = rootRefusal(opts, cp, trusted);
     if (rootRefused) return Object.assign({ verified: false, reason: rootRefused }, base);
+    if ((proof.chain !== undefined || proof.network !== undefined) &&
+        (lowerHex(proof.chain) !== lowerHex(cp.chain) || lowerHex(proof.network) !== lowerHex(cp.network)))
+        return Object.assign({ verified: false, reason: 'PROOF_CHECKPOINT_CHAIN_MISMATCH' }, base);
     // The ONLY check binding this proof to the action the caller asked about, and
     // verifyActionProof cannot back it up: that verifier recomputes the leaf FROM
     // proof.action_index, so a genuine proof for the neighbouring action recomputes

@@ -27,6 +27,7 @@
 
 const mathjs = require('mathjs');
 const Utility = require('../utils/utility.js');
+const numberFormat = require('../utils/utility/number_format.js');
 const { AMOUNT_MAX_INTEGER_DIGITS } = require('./activation.js');
 
 const util = new Utility();
@@ -120,17 +121,17 @@ function mulFloor(a, b, decimals) {
     return mathjs.format(floored, { notation: 'fixed' });
 }
 
-// Wire-amount format validity per the tick's decimals: the vendored
-// consensus rule (negative, over-precision, non-numeric all refuse).
-//
-// THE TWO-ARGUMENT (LEGACY) RULE. The indexer's isValidAmountFormat takes an
-// optional third argument, the including block's consensus timestamp, and a
-// call that supplies it also applies the AMOUNT-REPRESENTABILITY rule below.
-// src/utils/utility.js stays on the legacy rule because the indexer's
-// 15-sdk-parity suite pins that two-argument behaviour; pre-flight applies the
-// gate on top of it through isValidAmountFormatWhere.
+// Stored wire-amount format validity per the tick's decimals, including the
+// indexer's 250-character column-width refusal.
 function isValidAmountFormat(decimals, amount) {
     return util.isValidAmountFormat(decimals, amount);
+}
+
+// The indexer's isValidAmountMergeFormat: the same shape rule without the width
+// refusal, which it applies to a raw SEND or DESTROY leg before legs sharing a key
+// are summed. The body is the one Utility.isValidAmountFormat runs after its width check.
+function isValidAmountMergeFormat(decimals, amount) {
+    return numberFormat.isValidAmountMergeFormat.call(util, decimals, amount);
 }
 
 // The indexer's PLAIN_DECIMAL: digits, optionally one '.' and at least one more
@@ -162,6 +163,14 @@ function isValidAmountFormatWhere(decimals, amount, armed) {
     return util.isValidAmountFormat(decimals, amount);
 }
 
+// The same split for a raw SEND or DESTROY leg: representability where armed, then the
+// shape rule with no width refusal.
+function isValidAmountMergeFormatWhere(decimals, amount, armed) {
+    if (armed === true && !isRepresentableAmount(decimals, amount === null || amount === undefined ? null : String(amount)))
+        return false;
+    return isValidAmountMergeFormat(decimals, amount);
+}
+
 // The indexer's bcparses (src/utility/bcmath.js): whether the raw bignumber helpers accept
 // `num` without throwing. Null reads as 0, as there. It answers a different question from
 // isValidAmountFormat, which passes text such as '1.+5' that mathjs cannot parse.
@@ -176,6 +185,7 @@ function bignumberParses(num) {
 }
 
 module.exports = {
-    gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat, isRepresentableAmount, isValidAmountFormatWhere,
+    gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat, isValidAmountMergeFormat,
+    isRepresentableAmount, isValidAmountFormatWhere, isValidAmountMergeFormatWhere,
     exceedsUnsignedColumn, keepsPrefixedSpelling, bignumberParses,
 };
