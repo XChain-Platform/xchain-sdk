@@ -25,7 +25,7 @@ const { SDKExplorerError } = require('../utils/errors.js');
 const { installMethods } = require('../utils/install_methods.js');
 const { dropCatchUp, replayedAlready } = require('./websocket/catch_up.js');
 const { resetOut } = require('./websocket/pacing.js');
-const { hasHttpScheme, hasWsScheme } = require('../utils/endpoints.js');
+const { hasHttpScheme, hasWsScheme, isSecureUrl } = require('../utils/endpoints.js');
 
 function websocketUrl(client) {
     // A full ws(s) URL is used as given, with any trailing slash stripped and no port added.
@@ -102,10 +102,20 @@ function attachSocketListeners(client, url, resolve, reject) {
     });
 }
 
+// The host's injected connection agent for this URL's scheme, or undefined. Chosen at
+// dial time because setBase() can move the client between a ws:// and a wss:// host. The
+// other scheme's agent is never a fallback: an http.Agent cannot carry a TLS dial.
+function agentForUrl(pool, url) {
+    if (!pool) return undefined;
+    return (isSecureUrl(url) ? pool.httpsAgent : pool.httpAgent) || undefined;
+}
+
 function openWebSocket(client, url) {
     return new Promise((resolve, reject) => {
         try {
-            client.ws = new WebSocket(url);
+            // No options argument without an agent, so the browser shim sees the one-argument call.
+            const agent = agentForUrl(client._pool, url);
+            client.ws = agent ? new WebSocket(url, { agent }) : new WebSocket(url);
         } catch (e) {
             reject(new SDKExplorerError('WS_CONNECTION_FAILED', 'WebSocket connection failed: ' + e.message, { url }));
             return;
@@ -123,6 +133,8 @@ class WebSocketClient {
         this.protocol = options.websocketProtocol || 'ws';
         this.coin     = this.deriveCoinPrefix(options.network);
         this.hooks    = options.hooks || {};
+        // The host's injected httpAgent / httpsAgent (for example a SOCKS proxy), used for every dial.
+        this._pool    = options.pool || null;
 
         // Reconnection config
         let retry = options.retry || {};

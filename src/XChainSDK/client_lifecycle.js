@@ -100,6 +100,7 @@ module.exports = {
                     websocketPort: wsPort,
                     hooks:         hooks,
                     retry:         retry,
+                    pool:          pool,
                     readyHook:     readyHook
                 });
             }
@@ -189,7 +190,7 @@ module.exports = {
                 if (!this.isDowngrade('websocket', this.ws, endpoints.explorerUrl))
                     this.ws.setBase(endpoints.explorerUrl, endpoints.explorerPort);
             } else if (network) {
-                this.ws = new WebSocketClient({ network, websocketUrl: endpoints.explorerUrl, websocketPort: endpoints.explorerPort, hooks, retry, readyHook });
+                this.ws = new WebSocketClient({ network, websocketUrl: endpoints.explorerUrl, websocketPort: endpoints.explorerPort, hooks, retry, pool, readyHook });
             }
         }
     },
