@@ -8,8 +8,9 @@ silently drift out of ground-truth, so the drift gate
 job on both repos) fails when any mapped indexer handler's SHA-256
 of normalized source changes without a matching update here. JavaScript
 comments are removed and line-end whitespace is trimmed before hashing;
-empty source lines are ignored and multiline source keeps one terminal line
-ending, while quoted string and template contents remain byte-exact.
+an inline comment that separates two tokens preserves that boundary, empty
+source lines are ignored, and multiline source keeps one terminal line ending,
+while quoted string and template contents remain byte-exact.
 
 To resolve a drift-gate failure: re-read the changed handler, update the
 client check (or confirm no client-visible logic changed), then refresh

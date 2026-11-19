@@ -110,7 +110,8 @@ function validateDescriptionField(validator, action, field, value, allFields, er
 // Applies one contiguous field-rule group while preserving finding order.
 function validateDecimalsField(validator, action, field, value, allFields, errors) {
     if (field === 'DECIMALS') {
-        if (!Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > MAX_DECIMALS)
+        if (!validator.util.isNumeric(value) || !Number.isInteger(Number(value)) ||
+            Number(value) < 0 || Number(value) > MAX_DECIMALS)
             errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DECIMALS must be an integer between 0 and ' + MAX_DECIMALS, { field, value, constraint: { min: 0, max: MAX_DECIMALS, type: 'integer' } }));
     }
 }

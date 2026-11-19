@@ -200,8 +200,7 @@ module.exports = {
     // Handing the reveal a snapshot with its commit's own entry removed makes it
     // judged exactly as the commit was, with every gate still in force, instead of
     // charged twice. Null when the commit is one this daemon never recorded
-    // (externally funded, or already aged out), so that reveal keeps the full
-    // projection and the caller fails closed.
+    // (externally funded, or already aged out); the caller refuses that reveal.
     snapshotExcludingTxid(txid) {
         if (typeof txid !== 'string' || txid.length === 0) return null;
         const live = this.pruned().entries;

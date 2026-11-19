@@ -51,16 +51,35 @@ const { bn, gte, isPosNum, parseActionString } = require('./amounts.js');
 const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 const MAX_LOOKUP_PAGES   = 50;
 
-// Read every page of an explorer list read, stopping on a short page, on the reported
-// total, or at the page cap, so a holder past the first page is not missed.
-async function fetchAllRows(read, limit) {
+// Read every page of an explorer list read. unitOf selects the paging unit when
+// an endpoint reports and limits distinct actions but returns every action leg.
+async function fetchAllRows(read, limit, unitOf) {
     const rows = [];
+    const seenKeys = new Set();
+    let seenUnits = 0;
     for (let page = 1; page <= MAX_LOOKUP_PAGES; page++) {
         const res   = await read({ limit, page });
         const batch = (res && Array.isArray(res.data)) ? res.data : [];
         rows.push(...batch);
+        let batchUnits = batch.length;
+        if (unitOf) {
+            const batchKeys = new Set();
+            batchUnits = 0;
+            for (const row of batch) {
+                const key = unitOf(row);
+                if (key === null || key === undefined) {
+                    batchUnits += 1;
+                    seenUnits += 1;
+                } else {
+                    if (!batchKeys.has(key)) { batchKeys.add(key); batchUnits += 1; }
+                    if (!seenKeys.has(key)) { seenKeys.add(key); seenUnits += 1; }
+                }
+            }
+        } else {
+            seenUnits = rows.length;
+        }
         const total = res && Number(res.total);
-        if (batch.length < limit || (Number.isFinite(total) && rows.length >= total)) break;
+        if (batchUnits < limit || (Number.isFinite(total) && seenUnits >= total)) break;
     }
     return rows;
 }
@@ -264,7 +283,11 @@ module.exports = {
 
         const tail = this._depositLocks.get(payer) || Promise.resolve();
         const run = tail.then(async () => {
-            const rows = await fetchAllRows((o) => this.explorer.getSends(this.deposit.depositAddress, 'destination', o), 100);
+            const rows = await fetchAllRows(
+                (o) => this.explorer.getSends(this.deposit.depositAddress, 'destination', o),
+                100,
+                (row) => row.action_index,
+            );
             let deposited = bn(0);
             for (const row of rows)
                 if (row.source === payer

@@ -36,7 +36,8 @@ function websocketUrl(client) {
     // explorerUrl when websocketUrl wasn't set). In that case strip any
     // trailing slash and swap http→ws / https→wss for the WebSocket scheme.
     if (hasHttpScheme(client.baseUrl)) {
-        let wsBase = client.baseUrl.replace(/^http/, 'ws').replace(/\/+$/, '');
+        let wsBase = client.baseUrl.replace(/^http(s?):\/\//i, (match, secure) =>
+            'ws' + (secure ? 's' : '') + '://').replace(/\/+$/, '');
         return wsBase + '/' + client.coin + '/api/websocket';
     }
     return client.protocol + '://' + client.baseUrl + ':' + client.port + '/' + client.coin + '/api/websocket';

@@ -75,8 +75,8 @@ module.exports = {
         //
         //     An envelope is TWO transactions carrying ONE action, so it is
         //     charged once, at the commit: that is the transaction that spends
-        //     account value, and the reveal only spends the commit output the
-        //     window already paid for. Charging both would silently halve every
+        //     account value, and a reveal is signed only while that commit's
+        //     charge remains live. Charging both would silently halve every
         //     budget for envelope-carried actions while looking correct. A
         //     CANCEL is charged nothing for the same reason and one more: it
         //     returns funds to the account, and making recovery cost budget

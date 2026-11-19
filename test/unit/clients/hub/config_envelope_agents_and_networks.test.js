@@ -29,6 +29,7 @@ describe('config_envelope agentOptsFor', () => {
         assert.strictEqual(opts.httpsAgent, httpsAgent);
         assert.strictEqual(opts.proxy, false);
         assert.ok(!('httpAgent' in opts));
+        assert.strictEqual(agentOptsFor('HTTPS://hub.test', { httpsAgent, httpAgent }).httpsAgent, httpsAgent);
     });
 
     it('passes the http agent by reference for http urls', () => {

@@ -176,12 +176,18 @@ function evaluateRequest(self, psbt, env) {
     //    the window: the reveal is judged on exactly the usage its commit was,
     //    with every other gate (allowedActions, per-action cap, destinations,
     //    confirmAbove) untouched. It applies ONLY where the store holds a live
-    //    entry for the commit outpoint this reveal spends, so a commit this
-    //    daemon never charged keeps the full projection and fails closed.
+    //    entry for the commit transaction this reveal spends. A reveal with no
+    //    live entry is refused: it was either funded outside this daemon or its
+    //    authorization has aged out of the rolling window.
     let windowUsage = self.windowStore ? self.windowStore.snapshot() : undefined;
     if (self.windowStore && env && env.role === 'reveal') {
-        const adjusted = self.windowStore.snapshotExcludingTxid(revealCommitTxid(psbt));
-        if (adjusted) windowUsage = adjusted;
+        const commitTxid = revealCommitTxid(psbt);
+        const adjusted = self.windowStore.snapshotExcludingTxid(commitTxid);
+        if (!adjusted) return { denial: self.deny('ENVELOPE_COMMIT_NOT_AUTHORIZED', {
+            commitTxid,
+            detail: 'the rolling window has no live authorization for this reveal commit',
+        }) };
+        windowUsage = adjusted;
     }
     let verdict = { ok: true, evaluation: {} };
     if (!env || env.role !== 'cancel') {

@@ -84,4 +84,48 @@ describe('x402 balance lookups page past the first page', () => {
         assert.strictEqual(res.remaining, '119');
         fs.rmSync(dir, { recursive: true, force: true });
     });
+
+    it('deposit pages by distinct actions while retaining every leg', async () => {
+        const os = require('os'), fs = require('fs'), path = require('path');
+        const dir = path.join(os.tmpdir(), 'x402-dep-' + process.pid + '-' + Date.now());
+        fs.mkdirSync(dir, { recursive: false });
+        const calls = [];
+        const ctx = Object.assign({}, methods, {
+            requireSignature: false,
+            _depositLocks: new Map(),
+            deposit: { depositAddress: 'D', tick: 'GAS', pricePerCall: '1', ledgerDir: dir },
+            explorer: { getSends: async (q, t, o) => {
+                calls.push(o.page);
+                const first = (o.page - 1) * o.limit, end = Math.min(o.page * o.limit, 150);
+                const data = [];
+                for (let action_index = first; action_index < end; action_index++)
+                    data.push({ action_index, source: 'P', tick: 'GAS', amount: '1', status: 'valid' },
+                        { action_index, source: 'P', tick: 'GAS', amount: '1', status: 'valid' });
+                return { data, total: 150 };
+            } },
+        });
+        const res = await ctx.verifyDeposit({ payer: 'P' });
+        assert.strictEqual(res.ok, true);
+        assert.strictEqual(res.remaining, '299');
+        assert.deepStrictEqual(calls, [1, 2]);
+    });
+
+    it('deposit recognizes a short page in action units', async () => {
+        const os = require('os'), fs = require('fs'), path = require('path');
+        const dir = path.join(os.tmpdir(), 'x402-short-' + process.pid + '-' + Date.now());
+        fs.mkdirSync(dir, { recursive: false });
+        const calls = [];
+        const data = [];
+        for (let action_index = 0; action_index < 60; action_index++)
+            data.push({ action_index, source: 'P', tick: 'GAS', amount: '1' },
+                { action_index, source: 'P', tick: 'GAS', amount: '1' });
+        const ctx = Object.assign({}, methods, {
+            requireSignature: false, _depositLocks: new Map(),
+            deposit: { depositAddress: 'D', tick: 'GAS', pricePerCall: '1', ledgerDir: dir },
+            explorer: { getSends: async (q, t, o) => { calls.push(o.page); return { data }; } },
+        });
+        const res = await ctx.verifyDeposit({ payer: 'P' });
+        assert.strictEqual(res.ok, true);
+        assert.deepStrictEqual(calls, [1]);
+    });
 });

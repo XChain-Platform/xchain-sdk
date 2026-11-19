@@ -27,6 +27,11 @@ const { getSupportedNetworks } = require('../../protocol/networks.js');
 // (Coin prefix mapping lives in endpoints.coinPrefix, single source of truth,
 //  shared with the public-default resolution.)
 
+// Marker each response body arrived with, keyed by the body object itself, so a
+// reader that holds a body can learn how fresh THAT response was even after a
+// later response has replaced the client-wide record.
+const bodyFreshness = new WeakMap();
+
 module.exports = {
     // (Re)build the axios client + keep-alive agent for the current target.
     // Picks an https agent for https bases (axios ignores httpAgent on https),
@@ -202,13 +207,15 @@ module.exports = {
         if (marker === undefined && !inBody) return;
         let stale = inBody ? inBody.stale === true : String(marker).toLowerCase() === 'stale';
         let num   = (v) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
-        this._freshness = {
+        const record = {
             stale,
             tipBlock:      inBody && inBody.tip_block !== undefined ? num(inBody.tip_block) : num(headers['xchain-tip-block']),
             tipAgeSeconds: inBody && inBody.tip_age_seconds !== undefined ? num(inBody.tip_age_seconds) : num(headers['xchain-tip-age-s']),
             replicaHalted: inBody && typeof inBody.replica_halted === 'boolean' ? inBody.replica_halted : null,
             observedAt:    Date.now()
         };
+        this._freshness = record;
+        if (body && typeof body === 'object') bodyFreshness.set(body, record);
     },
 
     // The last freshness marker this client saw, or null before any marked
@@ -216,9 +223,13 @@ module.exports = {
     // observedAt }. Read this after a balance or history call to tell
     // served-and-current from served-and-behind; sdk.freshness() is the same
     // record, and sdk.assertFresh() turns a stale one into a typed error for
-    // the paths that must not build on it.
-    freshness() {
-        return this._freshness ? Object.assign({}, this._freshness) : null;
+    // the paths that must not build on it. Given a body this client returned,
+    // it answers with the marker of the response that carried that body, which
+    // a later response cannot replace; any other argument reads the last marker.
+    freshness(body) {
+        const own = body && typeof body === 'object' ? bodyFreshness.get(body) : null;
+        const record = own || this._freshness;
+        return record ? Object.assign({}, record) : null;
     },
 
     handleError(err, url) {

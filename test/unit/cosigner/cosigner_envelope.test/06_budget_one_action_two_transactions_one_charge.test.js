@@ -31,6 +31,15 @@ function freshStore() {
     return { store, p };
 }
 
+function transactionHash(psbt) {
+    const tx = new bitcoin.Transaction();
+    tx.version = psbt.version;
+    tx.locktime = psbt.locktime;
+    for (const input of psbt.txInputs) tx.addInput(input.hash, input.index, input.sequence);
+    for (const output of psbt.txOutputs) tx.addOutput(output.script, output.value);
+    return Buffer.from(tx.getId(), 'hex').reverse();
+}
+
 describe('co-signer: Taproot envelope composition', function () {
 
     describe('budget: one action, two transactions, one charge', function () {
@@ -45,10 +54,12 @@ describe('co-signer: Taproot envelope composition', function () {
                 });
                 expect(store.snapshot().count).to.equal(0);
 
-                await runRound(acct, co, buildCommitPsbt(acct, commit), script);
+                const commitPsbt = buildCommitPsbt(acct, commit);
+                await runRound(acct, co, commitPsbt, script);
                 expect(store.snapshot().count).to.equal(1);
 
-                await runRound(acct, co, buildRevealPsbt(acct, commit), script);
+                await runRound(acct, co,
+                    buildRevealPsbt(acct, commit, { hash: transactionHash(commitPsbt) }), script);
                 expect(store.snapshot().count).to.equal(1);
 
                 await runRound(acct, co, buildCancelPsbt(acct, commit), script);
@@ -82,12 +93,7 @@ describe('co-signer: Taproot envelope composition', function () {
                 // The reveal must spend the COMMIT's own outpoint, as it does on
                 // chain: that link is what the window store is asked about.
                 const commitPsbt = buildCommitPsbt(acct, commit);
-                const ctx = new bitcoin.Transaction();
-                ctx.version  = commitPsbt.version;
-                ctx.locktime = commitPsbt.locktime;
-                for (const ti of commitPsbt.txInputs)  ctx.addInput(ti.hash, ti.index, ti.sequence);
-                for (const to of commitPsbt.txOutputs) ctx.addOutput(to.script, to.value);
-                const commitHash = Buffer.from(ctx.getId(), 'hex').reverse();
+                const commitHash = transactionHash(commitPsbt);
 
                 await runRound(acct, co, commitPsbt, script);
                 expect(store.snapshot().count).to.equal(1);
@@ -130,7 +136,7 @@ describe('co-signer: Taproot envelope composition', function () {
                     await runRound(acct, co, buildRevealPsbt(acct, commit), script);
                 } catch (e) { denied = e; }
                 expect(denied, 'the reveal must still be refused').to.not.equal(null);
-                expect(String(denied.message)).to.match(/POLICY_WINDOW_COUNT_EXCEEDED/);
+                expect(String(denied.message)).to.match(/ENVELOPE_COMMIT_NOT_AUTHORIZED/);
             } finally {
                 store.release();
                 try { fs.unlinkSync(p); } catch (e) { /* best effort */ }

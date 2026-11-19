@@ -94,7 +94,9 @@ function codeHashOf(code) {
 function ctorString(constructorParams) {
     if (constructorParams === undefined || constructorParams === null) return '';
     let arr = Array.isArray(constructorParams) ? constructorParams : [constructorParams];
-    return arr.map(p => String(p)).join('|');
+    const fields = arr.map(p => String(p));
+    while (fields.length && fields[fields.length - 1] === '') fields.pop();
+    return fields.join('|');
 }
 
 // A field the caller actually supplied, as the wire would carry it. undefined,
@@ -119,8 +121,8 @@ function tailField(value) {
 // FormatSelector.serialize drops it (it pops trailing empties before joining), so
 // the estimate cannot over-count either and push an otherwise-inline deploy into a
 // chunked (multi-transaction, multi-fee) plan. That covers a trailing empty
-// SLASH_DESTINATION on v1 and, on v0, an absent CONSTRUCTOR_PARAMS: emitting its
-// separator anyway over-counted by one byte, which is enough to chunk a source
+// SLASH_DESTINATION on v1 and, on v0, absent or trailing-empty CONSTRUCTOR_PARAMS:
+// emitting their separators over-counts bytes, which is enough to chunk a source
 // whose real compiled push lands exactly on MAX_ACTION_DATA_LENGTH.
 function deployOverhead(opts) {
     const gas      = String(opts.gasLimit || 0);
