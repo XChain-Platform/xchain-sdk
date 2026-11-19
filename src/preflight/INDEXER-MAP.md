@@ -85,6 +85,13 @@ commit, not a re-pin back.
 
 **Pins taken at indexer commit:** `33fbabce2`
 
+(Not re-anchored 2026-11-19. The `batch` pin alone moves to `1c42ba29`, the hash of indexer
+`a11e0d7be`, a commit of the next review-round branch that sits ahead of this anchor and is not yet
+on origin develop; the other fifteen rows hash as pinned at both commits. The anchor stays on
+`33fbabce2` because it is on origin develop and stays reachable however that branch lands, and the
+review range from it still covers the moved `batch/index.js`. Until the branch lands, SDK CI, which
+grades this map against indexer develop, reports `batch` as drifted.)
+
 (Re-anchored 2026-11-18 to `33fbabce2`, the committed tip of the indexer review-round branch that
 bills every controller-guard gas debit through `billGuardGas` and keys the BATCH probe collectors on
 `DRY_RUN`. The `send`, `destroy`, `mint`, `dispenser`, `order`, `swap`, `airdrop`, `dividend`,
@@ -643,7 +650,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace` |
 | `checks/dividend.js` | `src/actions/dividend/` | `6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c` |
-| `checks/batch.js` | `src/actions/batch/` | `cb526c2fb49d91d358457fcd3d1f7f311d81a42f86ac4e1513b9270accf6ace7` |
+| `checks/batch.js` | `src/actions/batch/` | `1c42ba29d46e2d5f6ef9689c90336c8fea2d68f841abf1063f79878b7b1b11d2` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `2d8585841185d9948b841eb078f55c843ea6df0801206c6778005a51bf4bcf31` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `cb8b7bf31b80689ec2c7c53139082b7123f2c9af97becfbb64eb0cf3eb3671af` |
 | `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
@@ -674,6 +681,32 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-19 - an authenticated BATCH dry-run reports a skipped COINPAY sub-command as unjudged
+
+The `batch` pin moves from `cb526c2f` to `1c42ba29`, hashed from the committed indexer review-round
+branch at `a11e0d7be` by `node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` and read
+against the anchor `33fbabce2`. Of the seven parts only `index.js` moves; `fees.js`, `limits.js`,
+`mint_cap.js`, `probe.js`, `sub_command.js` and `validate.js` hash as before. The other commits in the
+range touch no mapped row.
+
+- **BATCH, `batch/index.js`:** the per-sub-command STATUS delete in the dispatch loop fired only when
+  `FEE_PROBE` is true. It now also fires when the probe collectors are seeded (`collect`, which
+  `seedProbeCollectors` sets from `DRY_RUN`) and the sub-command is COINPAY, because COINPAY's
+  intentional skip paths write no status and the sub-verdict row inherited the previous
+  sub-command's verdict. Both public surfaces (feequote and preflight) pass `feeProbe: true`, so on
+  them the delete already fired for every sub-command and nothing moves. On a decoded transaction
+  `DRY_RUN` is never set, so `collect` is false and the inherited-status behaviour is unchanged. Only
+  the regtest-only `feequotedryrun` differs: its `subCommands` row for a skipped COINPAY now carries
+  status null instead of its predecessor's verdict, and the BATCH's own STATUS is still restored
+  after the loop.
+
+**Client side:** no admission predicate, error text, amount rule or fee rule moves. `applyTier1`
+reads the `status` and `subCommands` of the feequote and preflight surfaces, whose answers are
+unchanged; `feequotedryrun` is not a surface the pre-flight calls (see `index/tier1_findings.js`).
+NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL for validity.** One row re-pins and the anchor stays.
 
 ### 2026-11-18 - guard gas is billed through one helper and BATCH probe collectors key on DRY_RUN
 
