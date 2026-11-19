@@ -44,7 +44,7 @@ function dispenserPinChainEnd() {
 function airdropFeeTallyReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/airdrop/').hash)
-        .to.equal('a70835407b0dc5968a7ce7b307e74bd68fd97cef072bfee0317786ce187c672c');
+        .to.equal('188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace');
     const heading = '### 2026-10-18 - AIRDROP_NATIVE_FEE_TALLY gate is added';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: TIGHTENING at the gate height only.**');
@@ -53,7 +53,7 @@ function airdropFeeTallyReview() {
 function sendHandoffRetirementReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/send/').hash)
-        .to.equal('d506363982ca031980a3695650f7b1b6409e8e597f6a30bfca8bf7f5e00489e6');
+        .to.equal('3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8');
     const heading = '### 2026-10-18 - GATED_HANDOFF_REF gate is retired';
     expect(text).to.include(heading);
     expect(entryOf(text, heading)).to.include('**Direction: NEUTRAL.**');
@@ -63,7 +63,7 @@ function sendHandoffRetirementReview() {
 function batchSnapshotReviews() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821');
+        .to.equal('cb526c2fb49d91d358457fcd3d1f7f311d81a42f86ac4e1513b9270accf6ace7');
     const reviews = [
         ['### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot', '`7e138a16` to `e7d7825d`'],
         ['### 2026-10-20 - a BATCH\'s own status is restored off the probe path too', '`e7d7825d` to `9f1e45a3`']
@@ -83,9 +83,9 @@ function gasBalanceReadReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`ee30f903` to `0cbeede9`', 'd506363982ca031980a3695650f7b1b6409e8e597f6a30bfca8bf7f5e00489e6'],
-        ['destroy', '`597c2728` to `b172b6cc`', '16967859969a63f140a573edad87cd6adf87b0d12ef8b0d35741d29e2dee6766'],
-        ['mint', '`f69fdb91` to `998c2d88`', '998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48']
+        ['send', '`ee30f903` to `0cbeede9`', '3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8'],
+        ['destroy', '`597c2728` to `b172b6cc`', 'a52180e45cacbbb02ee302391bbff6c95eecdee68d6e62b8da97bc25eeb9b348'],
+        ['mint', '`f69fdb91` to `998c2d88`', '8321748e950c0ee3e0b2fdd3a73105e920c6f37714912d97847024841a918e53']
     ];
     const heading = '### 2026-10-20 - SEND, DESTROY and MINT read only the gas token\'s balance';
     expect(text).to.include(heading);
@@ -105,9 +105,9 @@ function october23GatesReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     expect(rows.find((r) => r.handler === 'src/actions/airdrop/').hash)
-        .to.equal('a70835407b0dc5968a7ce7b307e74bd68fd97cef072bfee0317786ce187c672c');
+        .to.equal('188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace');
     expect(rows.find((r) => r.handler === 'src/actions/dividend/').hash)
-        .to.equal('7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065');
+        .to.equal('6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c');
     expect(rows.find((r) => r.handler.startsWith('src/actions/order_match')), 'no ORDER_MATCH row').to.equal(undefined);
     const expected = [
         ['### 2026-10-23 - AIRDROP_ZERO_LEGS_OMITTED gate is wired into the AIRDROP settlement',
@@ -133,9 +133,9 @@ function notNullAmountWidthReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const moves = [
-        ['send', '`6bd08ac4` to `82c77168`', 'd506363982ca031980a3695650f7b1b6409e8e597f6a30bfca8bf7f5e00489e6'],
-        ['destroy', '`56a05750` to `f6423fc8`', '16967859969a63f140a573edad87cd6adf87b0d12ef8b0d35741d29e2dee6766'],
-        ['stake', '`eef1360e` to `b38ea784`', 'b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc'],
+        ['send', '`6bd08ac4` to `82c77168`', '3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8'],
+        ['destroy', '`56a05750` to `f6423fc8`', 'a52180e45cacbbb02ee302391bbff6c95eecdee68d6e62b8da97bc25eeb9b348'],
+        ['stake', '`eef1360e` to `b38ea784`', '791da27d6f8a49fc3498344b8a6bc4044bf9bdf4ff5811d88c9503077845e025'],
     ];
     const heading = '### 2026-10-23 - SEND, DESTROY and STAKE refuse amounts their NOT NULL row columns cannot store';
     expect(text).to.include(heading);
@@ -177,8 +177,8 @@ function sameTokenOfferReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const expected = {
-        'src/actions/order/': '4e13054129b1ac076c96a8e2529135a7e3b7a326472300dc9cec40207422d869',
-        'src/actions/swap/': '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8',
+        'src/actions/order/': 'faa64e31b2a882a6f337db72069b5b5bb8e0ef253f8a15916d5c1626b5d1088b',
+        'src/actions/swap/': '93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e',
     };
     for (const [handler, hash] of Object.entries(expected))
         expect(rows.find((row) => row.handler === handler).hash, handler).to.equal(hash);
@@ -218,9 +218,9 @@ function prefixedIntegerReview() {
     const rows = parseMap(REAL_MAP);
     const moves = [
         ['issue', '`37ac3260` to `48e96f75`', null],
-        ['dispenser', '`3c0163d6` to `8130c1a2`', 'd424db436cd021ddb4e13958b43a122616805ffd7feecf3c4a94b00e9f8ce6cd'],
-        ['order', '`294bc04f` to `86b0a7c3`', '4e13054129b1ac076c96a8e2529135a7e3b7a326472300dc9cec40207422d869'],
-        ['swap', '`1f77aa82` to `2ee469e1`', '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8'],
+        ['dispenser', '`3c0163d6` to `8130c1a2`', '65209162a134ea9d067ccff5e0ed5127bdc3397ec72ff9efde2ef7cb86542a3a'],
+        ['order', '`294bc04f` to `86b0a7c3`', 'faa64e31b2a882a6f337db72069b5b5bb8e0ef253f8a15916d5c1626b5d1088b'],
+        ['swap', '`1f77aa82` to `2ee469e1`', '93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e'],
         ['bet', '`1afee772` to `d1d5a599`', 'd1d5a599a1f9031c54d4c5f163b78007eb983090f406e241a0a7480e730eb8ad'],
     ];
     const heading = '### 2026-11-02 - ISSUE, DISPENSER, ORDER, SWAP and BET refuse hexadecimal, binary and octal '
@@ -256,7 +256,7 @@ function batchLegFoldReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     expect(rows.find((r) => r.handler === 'src/actions/send/').hash)
-        .to.equal('d506363982ca031980a3695650f7b1b6409e8e597f6a30bfca8bf7f5e00489e6');
+        .to.equal('3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8');
     const heading = '### 2026-11-14 - a BATCH probe answers a multi-leg SEND sub-command with its first refused leg';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
@@ -271,7 +271,7 @@ function batchLegFoldReview() {
 function batchDispenseNoteReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821');
+        .to.equal('cb526c2fb49d91d358457fcd3d1f7f311d81a42f86ac4e1513b9270accf6ace7');
     const heading = '### 2026-11-15 - a BATCH probe says why it cannot judge a payment-triggered DISPENSE';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
@@ -285,7 +285,7 @@ function batchDispenseNoteReview() {
 function orderGetAddressCoinReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/order/').hash)
-        .to.equal('4e13054129b1ac076c96a8e2529135a7e3b7a326472300dc9cec40207422d869');
+        .to.equal('faa64e31b2a882a6f337db72069b5b5bb8e0ef253f8a15916d5c1626b5d1088b');
     const heading = '### 2026-11-16 - a cross-chain ORDER\'s GET_ADDRESS is judged against GET_COIN behind '
         + 'ORDER_GET_ADDRESS_COIN';
     expect(text).to.include(heading);
@@ -304,10 +304,10 @@ function airdropLegParseReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
     const pins = {
-        'src/actions/send/': 'd506363982ca031980a3695650f7b1b6409e8e597f6a30bfca8bf7f5e00489e6',
-        'src/actions/destroy/': '16967859969a63f140a573edad87cd6adf87b0d12ef8b0d35741d29e2dee6766',
-        'src/actions/dispenser/': 'd424db436cd021ddb4e13958b43a122616805ffd7feecf3c4a94b00e9f8ce6cd',
-        'src/actions/airdrop/': 'a70835407b0dc5968a7ce7b307e74bd68fd97cef072bfee0317786ce187c672c',
+        'src/actions/send/': '3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8',
+        'src/actions/destroy/': 'a52180e45cacbbb02ee302391bbff6c95eecdee68d6e62b8da97bc25eeb9b348',
+        'src/actions/dispenser/': '65209162a134ea9d067ccff5e0ed5127bdc3397ec72ff9efde2ef7cb86542a3a',
+        'src/actions/airdrop/': '188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace',
     };
     for (const [handler, hash] of Object.entries(pins))
         expect(rows.find((r) => r.handler === handler).hash, handler).to.equal(hash);
@@ -317,13 +317,45 @@ function airdropLegParseReview() {
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     expect(entry).to.include('The `send` pin moves from `341e2755` to `d5063639`');
     expect(entry).to.include('the `airdrop` pin moves from `9b3ade3b` to `a7083540`');
-    expect(text).to.include('**Pins taken at indexer commit:** `6257fff51`');
     expect(text).to.include('(Re-anchored 2026-11-18 to `6257fff51`');
     expect(entry).to.include('checkAmountParses');
     expect(entry).to.include('**Direction: TIGHTENS AIRDROP, ungated.**');
 }
 
+// Every guard-gas settle path calls one billing helper and BATCH probe collectors key on
+// DRY_RUN, so twelve rows re-pin with no client check moving.
+function guardGasBillingReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const rows = parseMap(REAL_MAP);
+    const pins = {
+        'src/actions/send/': '3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8',
+        'src/actions/destroy/': 'a52180e45cacbbb02ee302391bbff6c95eecdee68d6e62b8da97bc25eeb9b348',
+        'src/actions/mint/': '8321748e950c0ee3e0b2fdd3a73105e920c6f37714912d97847024841a918e53',
+        'src/actions/dispenser/': '65209162a134ea9d067ccff5e0ed5127bdc3397ec72ff9efde2ef7cb86542a3a',
+        'src/actions/order/': 'faa64e31b2a882a6f337db72069b5b5bb8e0ef253f8a15916d5c1626b5d1088b',
+        'src/actions/swap/': '93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e',
+        'src/actions/airdrop/': '188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace',
+        'src/actions/dividend/': '6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c',
+        'src/actions/batch/': 'cb526c2fb49d91d358457fcd3d1f7f311d81a42f86ac4e1513b9270accf6ace7',
+        'src/actions/deposit.js': '2d8585841185d9948b841eb078f55c843ea6df0801206c6778005a51bf4bcf31',
+        'src/actions/withdraw.js': 'cb8b7bf31b80689ec2c7c53139082b7123f2c9af97becfbb64eb0cf3eb3671af',
+        'src/actions/stake/': '791da27d6f8a49fc3498344b8a6bc4044bf9bdf4ff5811d88c9503077845e025',
+    };
+    for (const [handler, hash] of Object.entries(pins))
+        expect(rows.find((r) => r.handler === handler).hash, handler).to.equal(hash);
+    const heading = '### 2026-11-18 - guard gas is billed through one helper and BATCH probe collectors key on DRY_RUN';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    expect(entry).to.include('the `batch` pin moves from `ca3e05eb` to `cb526c2f`');
+    expect(entry).to.include('billGuardGas');
+    expect(text).to.include('**Pins taken at indexer commit:** `33fbabce2`');
+    expect(text).to.include('(Re-anchored 2026-11-18 to `33fbabce2`');
+    expect(entry).to.include('NO CLIENT CHECK MOVES');
+    expect(entry).to.include('**Direction: NEUTRAL for validity.**');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
+    it('pins and records the guard gas billing helper and BATCH dry-run collector review', guardGasBillingReview);
     it('pins and records the AIRDROP leg amount parse refusal review', airdropLegParseReview);
     it('pins and records the ORDER GET_ADDRESS coin gate review', orderGetAddressCoinReview);
     it('pins and records the BATCH probe DISPENSE unjudged note review', batchDispenseNoteReview);

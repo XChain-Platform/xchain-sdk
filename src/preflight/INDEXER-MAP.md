@@ -82,7 +82,17 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `6257fff51`
+**Pins taken at indexer commit:** `33fbabce2`
+
+(Re-anchored 2026-11-18 to `33fbabce2`, the committed tip of the indexer review-round branch that
+bills every controller-guard gas debit through `billGuardGas` and keys the BATCH probe collectors on
+`DRY_RUN`. The `send`, `destroy`, `mint`, `dispenser`, `order`, `swap`, `airdrop`, `dividend`,
+`batch`, `deposit.js`, `withdraw.js` and `stake` pins move; the other four rows hash as pinned there.
+The previous anchor `6257fff51` is its ancestor, and `33fbabce2` sits one commit ahead of origin
+develop `1e4a03de1`, so it stays reachable only if the branch lands by fast-forward or as a merge
+parent; a squash or rebased landing orphans it, and the anchor then moves to the landed commit with no
+pin change. Until that branch lands, SDK CI, which grades this map against indexer develop, reports
+the twelve moved rows as drifted.)
 
 (Re-anchored 2026-11-18 to `6257fff51`, the committed tip of the indexer review-round branch that
 records per-leg probe verdicts for DESTROY and AIRDROP, refuses an AIRDROP leg amount the ledger
@@ -549,7 +559,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 6257fff51..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 33fbabce2..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -622,21 +632,21 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `d506363982ca031980a3695650f7b1b6409e8e597f6a30bfca8bf7f5e00489e6` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `16967859969a63f140a573edad87cd6adf87b0d12ef8b0d35741d29e2dee6766` |
-| `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `a52180e45cacbbb02ee302391bbff6c95eecdee68d6e62b8da97bc25eeb9b348` |
+| `checks/mint.js` | `src/actions/mint/` | `8321748e950c0ee3e0b2fdd3a73105e920c6f37714912d97847024841a918e53` |
 | `checks/issue.js` | `src/actions/issue/` | `259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `d424db436cd021ddb4e13958b43a122616805ffd7feecf3c4a94b00e9f8ce6cd` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `65209162a134ea9d067ccff5e0ed5127bdc3397ec72ff9efde2ef7cb86542a3a` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `4e13054129b1ac076c96a8e2529135a7e3b7a326472300dc9cec40207422d869` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `a70835407b0dc5968a7ce7b307e74bd68fd97cef072bfee0317786ce187c672c` |
-| `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
-| `checks/batch.js` | `src/actions/batch/` | `ca3e05eb91d07a767c6af98a4bf11f576acc5c91743bb67a59a49d7dc1ce9821` |
-| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
-| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `faa64e31b2a882a6f337db72069b5b5bb8e0ef253f8a15916d5c1626b5d1088b` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace` |
+| `checks/dividend.js` | `src/actions/dividend/` | `6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c` |
+| `checks/batch.js` | `src/actions/batch/` | `cb526c2fb49d91d358457fcd3d1f7f311d81a42f86ac4e1513b9270accf6ace7` |
+| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `2d8585841185d9948b841eb078f55c843ea6df0801206c6778005a51bf4bcf31` |
+| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `cb8b7bf31b80689ec2c7c53139082b7123f2c9af97becfbb64eb0cf3eb3671af` |
 | `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
-| `checks/misc.js` (STAKE) | `src/actions/stake/` | `b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc` |
+| `checks/misc.js` (STAKE) | `src/actions/stake/` | `791da27d6f8a49fc3498344b8a6bc4044bf9bdf4ff5811d88c9503077845e025` |
 | `universal.js` (BET halt field, feed FEE width, prefixed integers) | `src/actions/bet/` | `d1d5a599a1f9031c54d4c5f163b78007eb983090f406e241a0a7480e730eb8ad` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
@@ -663,6 +673,50 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-18 - guard gas is billed through one helper and BATCH probe collectors key on DRY_RUN
+
+The `send` pin moves from `d5063639` to `3e4d1e27`, the `destroy` pin moves from `16967859` to
+`a52180e4`, the `mint` pin moves from `998c2d88` to `8321748e`, the `dispenser` pin moves from
+`d424db43` to `65209162`, the `order` pin moves from `4e130541` to `faa64e31`, the `swap` pin moves
+from `2ee469e1` to `93af1143`, the `airdrop` pin moves from `a7083540` to `188c409e`, the `dividend`
+pin moves from `7d66516b` to `6f309158`, the `batch` pin moves from `ca3e05eb` to `cb526c2f`, the
+`deposit.js` pin moves from `3e1dd191` to `2d858584`, the `withdraw.js` pin moves from `99cae8fa` to
+`cb8b7bf3` and the `stake` pin moves from `b38ea784` to `791da27d`, hashed from the committed indexer
+tree at the anchor above by `node bin/preflight_handler_dirs.js <indexer> src/actions/<name>` and read
+against the previous anchor `6257fff51`. The whole mapped diff is one review-round landing
+(`33fbabce2`); the CI pin commit in the range touches no mapped row. Outside the map, the same commit
+adds `resetGuardGasTotals`, `billGuardGas` and `guardGasTotal` to `src/utility/controller_guard.js`
+and a `guardGasFee` disclosure to the dry-run result.
+
+- **Guard gas, every settle path:** `send/settle.js`, `destroy/settle.js`, `mint/settle.js`,
+  `dispenser/settle.js`, `order/settle.js`, `swap/settle.js`, `airdrop/settle.js`,
+  `dividend/settle.js`, `deposit.js`, `withdraw.js` and `stake/contract_stake.js` replace
+  `debits.push([gasTick, guardFee, source])` with `this.util.billGuardGas(debits, gasTick, guardFee,
+  source, data)` (`handler.util` in ORDER and SWAP). The arguments are the ones the push used, and the
+  helper pushes that same row first; only when `data['DRY_RUN']` is true does it also add the fee to a
+  per-source total the dry-run result reads as `guardGasFee`. `DRY_RUN` is set only from the synthetic
+  dry-run transaction, so every decoded transaction's debits, balances and verdicts are unchanged.
+- **SEND, `send/leg_verdicts.js`:** `recordProbeLegVerdict` records a leg when `DRY_RUN` is true
+  instead of `FEE_PROBE`. DESTROY and AIRDROP share the recorder, so their leg lists follow the
+  same flag. Both public surfaces (feequote and preflight) set both flags, so their leg lists are
+  unchanged; the regtest-only `feequotedryrun` now carries them too.
+- **BATCH, `batch/index.js`, `batch/probe.js`:** the three probe-only gates of the dispatch loop now
+  read three flags. The VM-forbidden sub-action skip reads `GUARD_INERT`, the per-sub-command STATUS
+  delete keeps `FEE_PROBE`, and the sub-verdict collectors and the `_primaryVerdict` snapshot read
+  `DRY_RUN` (the refusal row is recorded only when collecting). Both public surfaces pass `guardInert:
+  true` and `feeProbe: true` unconditionally, so on them all three gates fire exactly as before. On a
+  decoded transaction all three flags are false, as before. Only `feequotedryrun`, which sets neither
+  `guardInert` nor `feeProbe`, behaves differently: it now reports `subCommands` and `legs`, and the
+  BATCH's own verdict there is no longer taken over by a sub-command's match snapshot.
+
+**Client side:** no admission predicate, error text, amount rule or fee rule moves in any mapped
+handler. `applyTier1` reads the network `status` of the feequote and preflight surfaces, whose
+verdicts are unchanged; `feequotedryrun` is not a surface the pre-flight calls (see
+`index/tier1_findings.js`), and no `checks/` module reads `guardGasFee`. NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL for validity.** Twelve rows re-pin, the anchor moves to the committed indexer
+tree, and the other four rows are unchanged.
 
 ### 2026-11-18 - AIRDROP refuses a leg amount the ledger cannot parse, and DESTROY and AIRDROP keep per-leg probe verdicts
 
