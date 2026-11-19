@@ -50,8 +50,7 @@ const compose = (client, args) => client.callTool({
     arguments: Object.assign({ coin: 'RLTC', action: 'send', params: { tick: 'TOK', amount: '5' }, pubkey: 'senderaddr' }, args || {}),
 });
 
-describe('MCP compose_action runs the submit-path checks before the encoder', () => {
-
+function registerNativeFeeTests() {
     it('sizes the native fee output for the sender and hands it to the encoder', async () => {
         const FEE = [{ address: 'feeaddr', value: 1234 }];
         const made = [];
@@ -100,7 +99,9 @@ describe('MCP compose_action runs the submit-path checks before the encoder', ()
         expect(res.isError).to.equal(true);
         expect(made[0].calls.some((c) => c[0] === 'encodeTx')).to.equal(false);
     });
+}
 
+function registerHaltGateTests() {
     it('refuses a halt-class action before the encoder is contacted', async () => {
         const HALT = 'DISPENSER|0||JDOG|1|||RBTC||1|||||0x10|||';
         const made = [];
@@ -132,4 +133,9 @@ describe('MCP compose_action runs the submit-path checks before the encoder', ()
             expect(made[0].calls.some((c) => c[0] === 'encodeTx')).to.equal(true);
         } finally { LifecycleManager.assertNoHaltClassFields = gate; }
     });
+}
+
+describe('MCP compose_action runs the submit-path checks before the encoder', () => {
+    registerNativeFeeTests();
+    registerHaltGateTests();
 });

@@ -39,9 +39,7 @@ const GATE = { gateTicker: 'MYTOKEN', encryptionMethod: 1, keyHash: 'c'.repeat(6
 const manifest = overrides => sdk.actions.createAction({
     action: 'FILE', params: Object.assign({}, MANIFEST, overrides) }).actionString;
 
-describe('CompressionUtils: FILE v1 manifest and BATCH-wrapped FILE readers', function () {
-    const compression = new CompressionUtils();
-
+function registerManifestReaderTests(compression) {
     it('reads COMPRESSION from a serializer-built v1 manifest', function () {
         const action = manifest({});
         assert.strictEqual(action.split('|')[13], '1');
@@ -75,7 +73,9 @@ describe('CompressionUtils: FILE v1 manifest and BATCH-wrapped FILE readers', fu
         assert.strictEqual(compression.isGatedAction(action), false);
         assert.strictEqual(compression.compressionFieldOf(action), '');
     });
+}
 
+function registerBatchAndWriterTests(compression) {
     it('reads a FILE inside a BATCH, for v0 and v1', function () {
         const v0 = 'FILE|0|a.txt|text/plain|T|M|MYTOKEN|1|' + 'a'.repeat(64) + '|100|1';
         for (const file of [v0, manifest(GATE)]) {
@@ -104,4 +104,10 @@ describe('CompressionUtils: FILE v1 manifest and BATCH-wrapped FILE readers', fu
                 err => err instanceof SDKCompressionError && err.code === 'NOT_A_FILE_ACTION');
         }
     });
+}
+
+describe('CompressionUtils: FILE v1 manifest and BATCH-wrapped FILE readers', function () {
+    const compression = new CompressionUtils();
+    registerManifestReaderTests(compression);
+    registerBatchAndWriterTests(compression);
 });
