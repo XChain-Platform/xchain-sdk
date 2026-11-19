@@ -13,7 +13,7 @@
 'use strict';
 
 const assert = require('assert');
-const light = require('../../../../../src/protocol/light_client.js');
+const light = require('../../../../../../src/protocol/light_client.js');
 
 const checkpoint = {
     chain: 'LTC', network: 'testnet', block_index: 10,
