@@ -17,8 +17,11 @@ const feeMethods = require('../../../../src/XChainSDK/fees_and_services.js');
 const coins = require('../../../../src/coins');
 const { FAKE_WIF, makeSdk } = require('./helpers/lifecycle_manager.js');
 
-const ACTION = { action: 'ISSUE', params: { tick: 'NEWTICK', description: 'x' } };
-const ACTION_STRING = 'ISSUE|NEWTICK|x';
+const ACTION = {
+    action: 'EXECUTE',
+    params: { contractActionIndex: 6441, method: 'spin', params: ['10000000'] },
+};
+const ACTION_STRING = 'EXECUTE|0|6441|spin|10000000';
 const FEE_DESTINATION = coins.getCoinConfig('LTC', 'mainnet').addresses.FEE_DESTINATION;
 const FEE_OUTPUT = { address: FEE_DESTINATION, value: 123456 };
 const GOOD_QUOTE = {
@@ -31,7 +34,7 @@ function sdkForQuote(quote, createTx) {
         explorer: { coin: 'LTC' },
         actions: {
             createAction: sinon.spy(() => ({
-                actionString: ACTION_STRING, action: 'ISSUE', version: 0,
+                actionString: ACTION_STRING, action: 'EXECUTE', version: 0,
             })),
         },
         nativeFeeRequired: feeMethods.nativeFeeRequired,
@@ -52,7 +55,7 @@ async function stoppedSubmit(sdk, encoderOpts = {}, submitOpts = {}) {
 describe('LifecycleManager submitAction(): native-coin fee output', function () {
     afterEach(() => sinon.restore());
 
-    it('adds the required output by default on a registry-native chain', async function () {
+    it('passes an EXECUTE quote above the base fee through unchanged', async function () {
         let request;
         const sdk = sdkForQuote(GOOD_QUOTE, async (params) => {
             request = params;
@@ -65,6 +68,41 @@ describe('LifecycleManager submitAction(): native-coin fee output', function () 
         assert.strictEqual(sdk.quoteNativeFee.firstCall.args[0], ACTION_STRING);
         assert.strictEqual(sdk.quoteNativeFee.firstCall.args[1].source, 'source-address');
     });
+
+    it('refuses an EXECUTE quote with no authoritative amount before encoding', async function () {
+        const createTx = sinon.spy(async () => { throw new Error('encoder must not run'); });
+        const sdk = sdkForQuote({ supported: true, valid: true, feeDestination: FEE_DESTINATION }, createTx);
+        const broadcast = sinon.spy(sdk.requireEncoder(), 'broadcastTx');
+
+        await assert.rejects(
+            new LifecycleManager(sdk).submitAction(ACTION,
+                { pubkey: 'sender', change: 'source-address' },
+                { wif: FAKE_WIF, waitForIndexer: false }),
+            error => error && error.code === 'NATIVE_FEE_INVALID');
+
+        assert.strictEqual(createTx.callCount, 0);
+        assert.strictEqual(broadcast.callCount, 0);
+    });
+
+    it('refuses an EXECUTE when its authoritative quote request fails', async function () {
+        const createTx = sinon.spy(async () => { throw new Error('encoder must not run'); });
+        const sdk = sdkForQuote(GOOD_QUOTE, createTx);
+        sdk.quoteNativeFee = sinon.spy(async () => { throw new Error('fee quote unavailable'); });
+        const broadcast = sinon.spy(sdk.requireEncoder(), 'broadcastTx');
+
+        await assert.rejects(
+            new LifecycleManager(sdk).submitAction(ACTION,
+                { pubkey: 'sender', change: 'source-address' },
+                { wif: FAKE_WIF, waitForIndexer: false }),
+            /fee quote unavailable/);
+
+        assert.strictEqual(createTx.callCount, 0);
+        assert.strictEqual(broadcast.callCount, 0);
+    });
+});
+
+describe('LifecycleManager submitAction(): native-coin fee output', function () {
+    afterEach(() => sinon.restore());
 
     it('does not duplicate an output supplied by the documented workaround', async function () {
         let request;
