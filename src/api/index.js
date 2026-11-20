@@ -48,7 +48,7 @@ const { getLogger } = require('../observability/logger.js');
 const log = getLogger('xchain-sdk:api');
 
 // Parse in .env config data
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // Parse in the environmental variables
 const SDK_API_PORT = Config.env.sdkApiPort() || 3005;

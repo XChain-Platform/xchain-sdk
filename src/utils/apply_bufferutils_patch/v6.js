@@ -17,13 +17,19 @@
  *
  ********************************************************************/
 
-const bufferutils = require('bitcoinjs-lib/src/bufferutils')
-const bitcoinTypes = require('bitcoinjs-lib/src/types')
-const bip174Tools = require('bip174/src/lib/converter/tools')
-const witnessUtxoConverter = require('bip174/src/lib/converter/input/witnessUtxo')
+const { bufferutils, types: bitcoinTypes } = require('../bitcoinjs_compat/internals')
 const { Psbt, Transaction } = require('bitcoinjs-lib')
 const { IS_BITCOINJS_V7 } = require('./version')
 const { MAX_U64, MAX_SAFE_BIG, verifyU64, narrowU64 } = require('./u64')
+
+// bip174 3 exposes only its public package root and bitcoinjs-lib 7 already
+// uses its BigInt serializers. Load these v2 internals only for the v6 fallback.
+const bip174Tools = IS_BITCOINJS_V7 || typeof module.require !== 'function'
+    ? null
+    : module.require('bip174/src/lib/converter/tools')
+const witnessUtxoConverter = IS_BITCOINJS_V7 || typeof module.require !== 'function'
+    ? null
+    : module.require('bip174/src/lib/converter/input/witnessUtxo')
 
 // Probe with a 2^53 uint64, one past the stock serializers' ceiling: stock
 // code throws, the patched reader returns it. Idempotence guard (the patch

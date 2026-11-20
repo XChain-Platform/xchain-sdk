@@ -27,8 +27,8 @@ function rowsFor(extra) {
 
 // The explorer's behaviour: a bare read is a 25-row page, and a paged read honours page and limit.
 function serve(rows, stamps) {
-    nock(BASE).persist().get(STATE).query(true).reply(200, (uri) => {
-        const params = new URL(uri, BASE).searchParams;
+    nock(BASE).persist().get(STATE).query(true).reply(200, (request) => {
+        const params = new URL(request.url).searchParams;
         stamps.push(Date.now());
         if (!params.has('page')) return { total: rows.length, data: rows.slice(0, 25) };
         const page = Number(params.get('page'));

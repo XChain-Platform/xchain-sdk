@@ -61,4 +61,4 @@
 require('./apply_bufferutils_patch/v7')
 require('./apply_bufferutils_patch/v6')
 
-module.exports = require('bitcoinjs-lib/src/bufferutils')
+module.exports = require('./bitcoinjs_compat/internals').bufferutils

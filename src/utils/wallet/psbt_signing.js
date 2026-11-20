@@ -18,9 +18,8 @@
  *
  ********************************************************************/
 
-require('../apply_bufferutils_patch');
+const bufferutils = require('../apply_bufferutils_patch');
 const bitcoin = require('bitcoinjs-lib');
-const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { SDKWalletError } = require('../errors.js');
 const { ECPair } = require('./key_derivation.js');
@@ -35,6 +34,14 @@ bitcoin.initEccLib(ecc);
 const ENCODER_MAX_FEE_RATE_SAT_VB = { dogecoin: 1000000, litecoin: 100000 };
 const CEILING_HEADROOM = 2;
 const UNKNOWN_CHAIN_CEILING = 10000000;
+
+function witnessStackToScriptWitness(witness) {
+    const parts = [Buffer.from(bufferutils.varuint.encode(witness.length))];
+    for (const item of witness) {
+        parts.push(Buffer.from(bufferutils.varuint.encode(item.length)), Buffer.from(item));
+    }
+    return Buffer.concat(parts);
+}
 
 // supplyNested fills in the redeem script of this key's own P2SH-P2WPKH inputs.
 function createSigningContext(psbtHex, wif, net, supplyNested) {
@@ -257,7 +264,7 @@ module.exports = {
                 });
                 return {
                     finalScriptSig: undefined,
-                    finalScriptWitness: psbtutils.witnessStackToScriptWitness(payment.witness),
+                    finalScriptWitness: witnessStackToScriptWitness(payment.witness),
                 };
             }
             throw new SDKWalletError('FINALIZE_FAILED',

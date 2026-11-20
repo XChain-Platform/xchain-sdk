@@ -24,12 +24,12 @@
 const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const signedMessage = require('./signed_message.js');
-const { ECPairFactory } = require('ecpair');
+const { createECPair } = require('./bitcoinjs_compat/ecpair.js');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { getNetwork } = require('../protocol/networks.js');
 const { SDKAuthError } = require('./errors.js');
 
-const ECPair = ECPairFactory(ecc);
+const ECPair = createECPair(ecc);
 
 // Refuse segwit signing modes where a witness program is anyone-can-spend, as key_derivation.js does
 function refuseSegwitWithoutSupport(net, opts, networkName) {

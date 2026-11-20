@@ -20,13 +20,13 @@
 
 require('../apply_bufferutils_patch');
 const bitcoin = require('bitcoinjs-lib');
-const { ECPairFactory } = require('ecpair');
+const { createECPair } = require('../bitcoinjs_compat/ecpair.js');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { getNetwork, getSupportedNetworks, NETWORKS } = require('../../protocol/networks.js');
 const { SDKWalletError } = require('../errors.js');
 const { isBytes, toBuffer } = require('../bytes');
 
-const ECPair = ECPairFactory(ecc);
+const ECPair = createECPair(ecc);
 
 bitcoin.initEccLib(ecc);
 

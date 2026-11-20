@@ -29,8 +29,8 @@ function stateRows(from, count) {
 // Serves `rows` as the explorer does: default page for a bare read, then `limit`-sized pages.
 function serve(path, rows, defaultLimit) {
     const hits = { bare: 0, pages: [] };
-    nock(BASE).persist().get(path).query(true).reply(200, (uri) => {
-        const params = new URL(uri, BASE).searchParams;
+    nock(BASE).persist().get(path).query(true).reply(200, (request) => {
+        const params = new URL(request.url).searchParams;
         if (!params.has('page')) {
             hits.bare++;
             return { total: rows.length, data: rows.slice(0, defaultLimit) };
