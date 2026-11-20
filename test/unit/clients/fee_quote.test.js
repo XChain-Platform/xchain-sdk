@@ -169,17 +169,20 @@ describe('Native-coin fee quote (client)', function () {
             expect(outs.map(o => o.address)).to.have.members(['extra', 'feeDest']);
         });
 
-        // An EXECUTE quote is authoritative even when the indexer does not return a validity
-        // verdict. The SDK passes its metered amount through instead of replacing it with base gas.
-        it('estimateFees passes through a verdict-free metered EXECUTE quote', async function () {
-            let sdk = makeSdk({ supported: true, valid: null, requiredFeeSats: 250000, requiredFeeSatsExact: "250000" });
-            let r = await sdk.estimateFees({ action: 'EXECUTE', params: {
-                contractActionIndex: 6441, method: 'spin', params: ['10000000'] } },
-                { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' });
-            expect(sdk.explorer._seen).to.include({ action: 'EXECUTE', source: 'src1' });
-            expect(sdk.explorer._seen.params).to.deep.equal(['0', '6441', 'spin', '10000000']);
-            expect(sdk.encoder._seen.customOutputs).to.deep.equal([{ address: 'feeDest', value: 250000 }]);
-            expect(r.nativeFeeQuote.valid).to.equal(null);
+        // A metered EXECUTE whose dry run did not finish gets the indexer's no-verdict answer,
+        // which carries no amount. The SDK must refuse it rather than size a base-only output.
+        it('estimateFees refuses a no-verdict metered EXECUTE quote', async function () {
+            let sdk = makeSdk({ supported: true, valid: null, noVerdict: true, retryable: true, validated: false,
+                requiredFeeSats: undefined, requiredFeeSatsExact: undefined,
+                error: 'fee quote produced no verdict (the dry-run did not finish: handler threw: x); retry shortly' });
+            let err = null;
+            try {
+                await sdk.estimateFees({ action: 'EXECUTE', params: {
+                    contractActionIndex: 6441, method: 'spin', params: ['10000000'] } },
+                    { payFeeInNativeCoin: true, pubkey: 'pk', change: 'src1' });
+            } catch (e) { err = e; }
+            expect(err, 'a no-verdict EXECUTE quote must not be paid').to.not.equal(null);
+            expect(sdk.encoder._seen).to.equal(null);
         });
     });
 });
