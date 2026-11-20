@@ -21,6 +21,7 @@
 
 const { SDKFormatError } = require('../../utils/errors.js');
 const { AUTO_FIELDS, REST_PREFIX, LEGS_FIELD } = require('./field_names.js');
+const { effectiveLegValue, mergeLegOverFields } = require('./leg_inheritance.js');
 
 // Memoized repeated-group decompositions, keyed 'ACTION|VERSION'. `null` is a
 // cached "no repeat" answer, so the derivation runs once per format.
@@ -143,8 +144,9 @@ module.exports = {
 
     // Value of a per-leg field: the leg's own value, falling back to a shared
     // top-level value (so a caller may hoist a constant TICK out of the legs)
+    // under the inheritance rule the validator applies (leg_inheritance.js)
     legFieldValue(fieldName, leg, fields, index) {
-        let value = (leg[fieldName] !== null && leg[fieldName] !== undefined) ? leg[fieldName] : fields[fieldName];
+        let value = effectiveLegValue(leg, fields, fieldName);
         if (value === null || value === undefined) return '';
         if (Array.isArray(value))
             throw new SDKFormatError(
@@ -219,13 +221,12 @@ module.exports = {
         return true;
     },
 
-    // Merge a lone leg into the flat field map (leg values win) and drop LEGS,
-    // so a single-leg format serializes identically whether the caller passed
-    // flat fields or a one-entry legs array
+    // Merge a lone leg into the flat field map (a non-empty leg value wins, an
+    // empty one inherits as leg_inheritance.js states) and drop LEGS, so a
+    // single-leg format serializes identically whether the caller passed flat
+    // fields or a one-entry legs array, and exactly as the validator checked it
     flattenSingleLeg(fields, leg) {
-        let merged = Object.assign({}, fields, leg);
-        delete merged[LEGS_FIELD];
-        return merged;
+        return mergeLegOverFields(fields, leg);
     },
 
     // Field names a repeated format can carry (per-leg group + shared slots)

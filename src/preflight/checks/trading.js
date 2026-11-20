@@ -98,7 +98,11 @@ async function checkSameTokenOffer(ctx, noun) {
  * order. ORDER (xchain-indexer src/actions/order/validate.js:76-87): a native side
  * (empty TICK) is judged at COIN_DECIMALS, a token side at its token's DECIMALS, and
  * GET_AMOUNT is skipped on a cross-chain order (GET_COIN another chain). SWAP
- * (src/actions/swap/validate.js:70-75): each side only when its token row exists.
+ * (src/actions/swap/validate.js:70-75): each side only when its token row exists,
+ * and swap/context.js loadTokens loads the GET row only when GET_COIN is this
+ * chain's coin, so a SWAP naming another chain skips GET_AMOUNT as ORDER does.
+ * An empty GET_COIN keeps the local check: both handlers refuse it as an
+ * unsupported COIN before any format check, so a refusal here is never false.
  * A token side whose row is absent is left to TOKEN_NOT_FOUND, which the handler
  * refuses first.
  */
@@ -112,7 +116,7 @@ async function checkTradeAmountFormats(ctx, noun) {
         const tick = ctx.field(side + '_TICK');
         const coin = ctx.field(side + '_COIN');
         let decimals = null;
-        if (side === 'GET' && noun === 'ORDER') {
+        if (side === 'GET') {
             if (!plane) { ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'no chain coin is configured, so a cross-chain GET cannot be told apart'); continue; }
             if (coin && coin !== plane.coin) continue;
         }

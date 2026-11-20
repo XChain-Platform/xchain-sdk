@@ -23,6 +23,7 @@ const config  = require('../config.js');
 const { SDKValidationError } = require('../utils/errors.js');
 const { installMethods } = require('../utils/install_methods.js');
 const { validateField } = require('./validator/field_rules.js');
+const { effectiveLegValue, mergeLegOverFields } = require('./format_selector/leg_inheritance.js');
 const {
     LEGS_FIELD,
     MAX_CODE_SIZE,
@@ -47,7 +48,7 @@ function validateRequiredFields(validator, action, fields, legs) {
             // the top level (SEND v1) or inside every leg (v2/v3).
             if (legs) {
                 let missingIn = legs
-                    .map((leg, i) => (validator.isEmpty(leg[field]) && validator.isEmpty(fields[field])) ? i : -1)
+                    .map((leg, i) => validator.isEmpty(effectiveLegValue(leg, fields, field)) ? i : -1)
                     .filter(i => i !== -1);
                 if (missingIn.length > 0)
                     errors.push(validator.buildError('MISSING_REQUIRED_FIELD',
@@ -85,8 +86,7 @@ function validateLegFields(validator, action, fields, legs) {
     if (!legs) return errors;
     for (let i = 0; i < legs.length; i++) {
         let leg = legs[i];
-        let merged = Object.assign({}, fields, leg);
-        delete merged[LEGS_FIELD];
+        let merged = mergeLegOverFields(fields, leg);
         for (let field in leg) {
             let value = leg[field];
             if (validator.isEmpty(value)) continue;

@@ -45,7 +45,8 @@
  *
  * Re-sync seam (uuid:311476c7).
  * xchain-encoder/test/unit/build/apply_bufferutils_patch.test.js pins
- * compat.js, u64.js, v7.js and version.js byte-identical to the encoder's,
+ * compat.js, u64.js, v7.js, version.js and ../bitcoinjs_compat/internals.js
+ * byte-identical to the encoder's,
  * and pins the code below this banner identical to the encoder entry body
  * except for the one SDK-only require of the v6 part. v6.js has no encoder
  * twin and no guard.
