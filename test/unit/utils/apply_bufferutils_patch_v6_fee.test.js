@@ -12,13 +12,12 @@ const { expect } = require('chai');
 const fs = require('fs');
 const path = require('path');
 const cp = require('child_process');
-const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 // The bitcoinjs-lib 6 shim only runs when version 6 is what resolves, and this
 // package pins 7, so the check runs in a child process whose bitcoinjs-lib and
-// bip174 come from a sibling checkout that still carries version 6.
-const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.resolve(__dirname, '../../../..');
-const DECODER = path.resolve(process.env.XCHAIN_DECODER_DIR || path.join(SIBLING_ROOT, 'xchain-decoder'));
+// bip174 resolve to the dev-only aliases bitcoinjs-lib-v6 and bip174-v2, since no
+// sibling checkout carries version 6.
+const MODULES = path.resolve(__dirname, '../../../node_modules');
 const V6_SHIM = path.resolve(__dirname, '../../../src/utils/apply_bufferutils_patch/v6.js');
 
 const CHILD = `
@@ -26,7 +25,9 @@ const Module = require('module');
 const resolve = Module._resolveFilename;
 const modules = process.env.V6_MODULES;
 Module._resolveFilename = function (request, parent, ...rest) {
-    if (/^(bitcoinjs-lib|bip174)(\\/|$)/.test(request)) request = modules + '/' + request;
+    const alias = { 'bitcoinjs-lib': 'bitcoinjs-lib-v6', bip174: 'bip174-v2' };
+    const hit = /^(bitcoinjs-lib|bip174)(\\/.*|)$/.exec(request);
+    if (hit) request = modules + '/' + alias[hit[1]] + hit[2];
     return resolve.call(this, request, parent, ...rest);
 };
 const { Psbt } = require('bitcoinjs-lib');
@@ -55,12 +56,10 @@ describe('bitcoinjs-lib 6 fee shim keeps the Number-or-BigInt reader rule', func
     let result;
 
     before(function () {
-        const verdict = siblingCheckout(__dirname, DECODER);
-        if (!skipOrFail(this, verdict, 'the bitcoinjs-lib 6 fee shim check against xchain-decoder node_modules')) return;
-        const modules = path.join(verdict.path, 'node_modules');
-        const manifest = path.join(modules, 'bitcoinjs-lib', 'package.json');
-        const v6 = fs.existsSync(manifest) && /^6\./.test(JSON.parse(fs.readFileSync(manifest, 'utf8')).version);
-        if (!skipOrFail(this, { usable: v6, reason: 'no bitcoinjs-lib 6 install at ' + modules }, 'the bitcoinjs-lib 6 fee shim check')) return;
+        const modules = MODULES;
+        const manifest = path.join(modules, 'bitcoinjs-lib-v6', 'package.json');
+        const version = JSON.parse(fs.readFileSync(manifest, 'utf8')).version;
+        expect(version, 'the bitcoinjs-lib-v6 dev alias must be version 6').to.match(/^6\./);
         const out = cp.execFileSync(process.execPath, ['-e', CHILD], {
             encoding: 'utf8', env: Object.assign({}, process.env, { V6_MODULES: modules, V6_SHIM }),
         });
