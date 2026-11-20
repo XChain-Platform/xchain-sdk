@@ -138,6 +138,12 @@ function isValidAmountMergeFormat(decimals, amount) {
 // digit (xchain-indexer src/utility/validation/amount_representability_gate.js).
 const PLAIN_DECIMAL = /^[0-9]+(\.[0-9]+)?$/;
 
+function isPlainDecimalAmount(value) {
+    if (typeof value !== 'string' &&
+        !(typeof value === 'number' && Number.isFinite(value))) return false;
+    return PLAIN_DECIMAL.test(String(value).trim());
+}
+
 // Byte-for-byte the indexer's isRepresentableAmount (same file): the amount text
 // must be a plain unsigned decimal numeral whose significant integer digits fit
 // AMOUNT_MAX_INTEGER_DIGITS and whose fraction fits the tick's decimals. Exponent
@@ -187,5 +193,5 @@ function bignumberParses(num) {
 module.exports = {
     gte, gt, isPositive, add, sub, mulFloor, isValidAmountFormat, isValidAmountMergeFormat,
     isRepresentableAmount, isValidAmountFormatWhere, isValidAmountMergeFormatWhere,
-    exceedsUnsignedColumn, keepsPrefixedSpelling, bignumberParses,
+    exceedsUnsignedColumn, keepsPrefixedSpelling, bignumberParses, isPlainDecimalAmount,
 };

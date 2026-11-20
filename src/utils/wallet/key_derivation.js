@@ -30,12 +30,12 @@ const ECPair = ECPairFactory(ecc);
 
 bitcoin.initEccLib(ecc);
 
-function deriveScriptMultisigAddress(scriptTemplate, scheme, net) {
-    if (scheme !== 'p2sh-multisig' && scheme !== 'p2wsh-multisig') {
-        throw new SDKWalletError('INVALID_SCHEME',
-            'scheme must be one of p2sh-multisig, p2wsh-multisig, taproot-musig2');
-    }
+// OP_CHECKMULTISIG fails at consensus above this many keys, so a larger
+// script yields an address whose funds can never be spent.
+const MAX_PUBKEYS_PER_MULTISIG = 20;
 
+// Parses "multi:<T>:<pk1>:<pk2>:..." into the threshold and compressed keys.
+function parseMultiTemplate(scriptTemplate) {
     const parts = scriptTemplate.split(':');
     if (parts.length < 4 || parts[0] !== 'multi') {
         throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
@@ -51,6 +51,11 @@ function deriveScriptMultisigAddress(scriptTemplate, scheme, net) {
         throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
             'threshold ' + m + ' exceeds cosigner count ' + pubkeyHexes.length);
     }
+    if (pubkeyHexes.length > MAX_PUBKEYS_PER_MULTISIG) {
+        throw new SDKWalletError('INVALID_SCRIPT_TEMPLATE',
+            'multisig supports at most ' + MAX_PUBKEYS_PER_MULTISIG + ' cosigners (got '
+            + pubkeyHexes.length + '); a larger script is unspendable');
+    }
     const pubkeys = pubkeyHexes.map((h, i) => {
         const b = Buffer.from(h, 'hex');
         if (b.length !== 33) {
@@ -59,6 +64,15 @@ function deriveScriptMultisigAddress(scriptTemplate, scheme, net) {
         }
         return b;
     });
+    return { m, pubkeys };
+}
+
+function deriveScriptMultisigAddress(scriptTemplate, scheme, net) {
+    if (scheme !== 'p2sh-multisig' && scheme !== 'p2wsh-multisig') {
+        throw new SDKWalletError('INVALID_SCHEME',
+            'scheme must be one of p2sh-multisig, p2wsh-multisig, taproot-musig2');
+    }
+    const { m, pubkeys } = parseMultiTemplate(scriptTemplate);
 
     try {
         const redeem = bitcoin.payments.p2ms({ m, pubkeys, network: net });

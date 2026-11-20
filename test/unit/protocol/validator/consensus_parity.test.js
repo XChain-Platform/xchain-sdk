@@ -206,6 +206,46 @@ describe('compose verdicts match the indexer: stateless amount and integer rules
     });
 });
 
+// The indexer refuses CHUNK_INDEX / TOTAL_CHUNKS unless the wire text is
+// digit-only: invalid: CHUNK_INDEX (format) / invalid: TOTAL_CHUNKS (format).
+describe('compose verdicts match the indexer: DEPLOY v4 chunk carrier indexes', function () {
+    const carrier = { VERSION: '4', CODE_HASH: 'ab'.repeat(32), CHUNK_INDEX: '0', TOTAL_CHUNKS: '2', CODE_PART: 'YWJj' };
+
+    it('composes the carrier base', function () {
+        expect(composeError('DEPLOY', Object.assign({}, carrier))).to.equal(null);
+    });
+
+    for (const [field, spellings] of [
+        ['CHUNK_INDEX', ['1e0', '0.0', '0x0', '+0', ' 0']],
+        ['TOTAL_CHUNKS', ['2e0', '2.0', '0x2', '+2', ' 2']],
+    ]) {
+        for (const spelling of spellings) {
+            it('refuses indexer-invalid ' + field + ' spelling ' + JSON.stringify(spelling), function () {
+                expect(composes('DEPLOY', Object.assign({}, carrier, { [field]: spelling }))).to.equal(false);
+            });
+        }
+    }
+
+    it('accepts digit strings with leading zeroes and safe integer inputs', function () {
+        expect(composes('DEPLOY', Object.assign({}, carrier, { CHUNK_INDEX: '01' }))).to.equal(true);
+        expect(composes('DEPLOY', Object.assign({}, carrier, { CHUNK_INDEX: 0, TOTAL_CHUNKS: 2 }))).to.equal(true);
+    });
+
+    it('accepts non-negative BigInt chunk fields, which serialize as digit-only text', function () {
+        const params = Object.assign({}, carrier, { CHUNK_INDEX: 0n, TOTAL_CHUNKS: 2n });
+        const wire = actions().composeActionString({ action: 'DEPLOY', params }).actionString;
+        expect(wire.split('|').slice(3, 5)).to.deep.equal(['0', '2']);
+    });
+
+    it('refuses a JS number whose wire text is not digit-only, at the field rule', function () {
+        for (const value of [1e21, -1, 0.5, -1n]) {
+            const err = composeError('DEPLOY', Object.assign({}, carrier, { CHUNK_INDEX: value }));
+            expect(err, String(value)).to.not.equal(null);
+            expect(JSON.stringify(err.errors || err.details || err.message), String(value)).to.contain('CHUNK_INDEX must be a non-negative integer');
+        }
+    });
+});
+
 describe('compose verdicts match the indexer: ISSUE orderings and XBRIDGE shape', function () {
     const issue2 = { VERSION: '2', TICK: 'TEST', MAX_MINT: '10', MINT_SUPPLY: '5', MINT_ADDRESS_MAX: '10',
         MINT_START_BLOCK: '200', MINT_STOP_BLOCK: '5000' };

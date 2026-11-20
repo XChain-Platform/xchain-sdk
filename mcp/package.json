@@ -17,10 +17,11 @@
   "publishConfig": {
     "access": "public"
   },
-  "comment:files": "Publish allowlist: the server is two files. README/LICENSE/package.json ship automatically.",
+  "comment:files": "Publish allowlist: the server is three files, and server.js requires server_dependencies.js at load. README/LICENSE/package.json ship automatically.",
   "files": [
     "cli.js",
-    "server.js"
+    "server.js",
+    "server_dependencies.js"
   ],
   "keywords": [
     "mcp",

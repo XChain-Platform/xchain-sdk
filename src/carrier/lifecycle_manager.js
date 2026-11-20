@@ -171,6 +171,52 @@ async function finishSubmission(manager, setup, actionData, opts, state) {
     return result;
 }
 
+function markPreBroadcastError(error) {
+    if (!error || typeof error !== 'object') return error;
+    error.preBroadcast = true;
+    if (error.details && typeof error.details === 'object') error.details.preBroadcast = true;
+    return error;
+}
+
+function markBroadcastUnknown(error, txid) {
+    if (!error || typeof error !== 'object') return error;
+    if (!error.details || typeof error.details !== 'object') error.details = {};
+    error.details.txid = txid;
+    error.details.broadcast = 'unknown';
+    return error;
+}
+
+async function prepareSubmission(manager, actionData, encoderOpts, opts) {
+    const setup = normalizeSubmission(manager, actionData, opts);
+    assertMainnetLaunched(manager.sdk.network, actionData);
+    const { encoder, progress, wif } = setup;
+    if (opts.strictFreshness) await manager.sdk.assertFresh();
+    progress('creating', { action: actionData.action });
+    let resolvedParams = await manager.sdk.tickResolver.resolveActionParams(actionData.action, actionData.params);
+    if (!opts.skipAddressCompaction)
+        resolvedParams = await manager.sdk.addressResolver.resolveActionParams(actionData.action, resolvedParams);
+    const { createResult, txParams } = buildTransactionRequest(
+        manager, actionData, encoderOpts, resolvedParams, progress);
+    assertNoHaltClassFields(manager.sdk, createResult.actionString, opts.preflight);
+    encoderOpts = await withNativeFeeOutputs(manager.sdk, createResult.actionString, encoderOpts, opts);
+    if (encoderOpts.customOutputs !== txParams.customOutputs) txParams.customOutputs = encoderOpts.customOutputs;
+    const encoded = await encoder.createTx(txParams);
+    const carriedAction = readCarriedAction(encoded, createResult, encoderOpts);
+    const reconcileState = reconcileTransaction(manager, encoded, createResult, encoderOpts, opts);
+    progress('signing', { encoding: encoded.encoding });
+    let signed;
+    if (typeof opts.signer === 'function') {
+        validateCustomSigner(encoded);
+        signed = await opts.signer(encoded.psbt, { encoding: encoded.encoding });
+    } else signed = manager.sdk.wallet.signPsbt(encoded.psbt, wif);
+    const revealSigned = prepareEnvelope(manager, { encoded, createResult, encoderOpts, wif, progress });
+    const phase2 = await prepareChunkReveal(manager, { encoder, signed, encoded, encoderOpts, carriedAction,
+        reconcileState, createResult, wif, progress });
+    progress('broadcasting', { txid: signed.txid });
+    return { setup, encoder, progress, signed, encoded, encoderOpts, createResult,
+        carriedAction, revealSigned, phase2 };
+}
+
 class LifecycleManager {
 
     constructor(sdk) {
@@ -226,34 +272,14 @@ class LifecycleManager {
     //   signed { txHex, txid, psbtHex }, spentInputs [{ txid, vout }]
     // }
     async submitAction(actionData, encoderOpts = {}, opts = {}) {
-        const setup = normalizeSubmission(this, actionData, opts);
-        assertMainnetLaunched(this.sdk.network, actionData);
-        const { encoder, progress, wif } = setup;
-        if (opts.strictFreshness) await this.sdk.assertFresh();
-        progress('creating', { action: actionData.action });
-        let resolvedParams = await this.sdk.tickResolver.resolveActionParams(actionData.action, actionData.params);
-        if (!opts.skipAddressCompaction)
-            resolvedParams = await this.sdk.addressResolver.resolveActionParams(actionData.action, resolvedParams);
-        const transaction = buildTransactionRequest(this, actionData, encoderOpts, resolvedParams, progress);
-        const { createResult, txParams } = transaction;
-        assertNoHaltClassFields(this.sdk, createResult.actionString, opts.preflight);
-        encoderOpts = await withNativeFeeOutputs(this.sdk, createResult.actionString, encoderOpts, opts);
-        if (encoderOpts.customOutputs !== txParams.customOutputs)
-            txParams.customOutputs = encoderOpts.customOutputs;
-        const encoded = await encoder.createTx(txParams);
-        const carriedAction = readCarriedAction(encoded, createResult, encoderOpts);
-        const reconcileState = reconcileTransaction(this, encoded, createResult, encoderOpts, opts);
-        progress('signing', { encoding: encoded.encoding });
-        let signed;
-        if (typeof opts.signer === 'function') {
-            validateCustomSigner(encoded);
-            signed = await opts.signer(encoded.psbt, { encoding: encoded.encoding });
-        } else signed = this.sdk.wallet.signPsbt(encoded.psbt, wif);
-        const revealSigned = prepareEnvelope(this, { encoded, createResult, encoderOpts, wif, progress });
-        const phase2 = await prepareChunkReveal(this, { encoder, signed, encoded, encoderOpts, carriedAction,
-            reconcileState, createResult, wif, progress });
-        progress('broadcasting', { txid: signed.txid });
-        await encoder.broadcastTx(signed.txHex);
+        let state;
+        try { state = await prepareSubmission(this, actionData, encoderOpts, opts); }
+        catch (error) { throw markPreBroadcastError(error); }
+        const { setup, encoder, progress, signed, encoded, createResult,
+            carriedAction, revealSigned, phase2 } = state;
+        encoderOpts = state.encoderOpts;
+        try { await encoder.broadcastTx(signed.txHex); }
+        catch (error) { throw markBroadcastUnknown(error, signed.txid); }
         // The commit is on the wire from here, so every later throw is tagged with
         // what was broadcast (markBroadcastError) instead of reading as a clean failure.
         const sent = {
@@ -285,5 +311,6 @@ installMethods(LifecycleManager.prototype, require('./lifecycle_manager/settleme
 
 // Shared with BatchBuilder.build, which composes and can hand the encoder a PSBT request.
 LifecycleManager.assertNoHaltClassFields = assertNoHaltClassFields;
+LifecycleManager.markPreBroadcastError = markPreBroadcastError;
 
 module.exports = LifecycleManager;

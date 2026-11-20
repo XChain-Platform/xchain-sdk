@@ -91,6 +91,65 @@ describe('XChainSDK', function () {
     });
 });
 
+describe('XChainSDK init retry after failed discovery', function () {
+    registerEnvHooks();
+
+    function hubOnlySdk() {
+        const sdk = new XChainSDK({ network: 'bitcoin-regtest', retry: false });
+        sdk.hub = {};
+        return sdk;
+    }
+
+    it('retries init after the first hub request rejects', async function () {
+        const sdk = hubOnlySdk();
+        expect(sdk.encoder).to.equal(null);
+        sdk.hub.getDiscoveryConfig = sinon.stub()
+            .onFirstCall().rejects(new Error('hub down'))
+            .onSecondCall().resolves({});
+        sdk.applyEndpoints = sinon.stub().callsFake(() => { sdk.encoder = {}; });
+        sdk.startPollingOnce = sinon.stub();
+
+        let firstError;
+        try { await sdk.init(); } catch (e) { firstError = e; }
+        expect(firstError && firstError.message).to.equal('hub down');
+        await sdk.init();
+
+        expect(sdk.hub.getDiscoveryConfig.callCount).to.equal(2);
+        expect(sdk.encoder).to.be.ok;
+        expect(sdk.startPollingOnce.calledOnce).to.equal(true);
+    });
+
+    it('still shares an in-flight discovery and caches its success', async function () {
+        const sdk = hubOnlySdk();
+        sdk.hub.getDiscoveryConfig = sinon.stub().resolves({});
+        sdk.applyEndpoints = sinon.stub();
+        sdk.startPollingOnce = sinon.stub();
+
+        await Promise.all([sdk.init(), sdk.init()]);
+        await sdk.init();
+
+        expect(sdk.hub.getDiscoveryConfig.calledOnce).to.equal(true);
+        expect(sdk.startPollingOnce.calledOnce).to.equal(true);
+    });
+
+    it('retries when applying discovered endpoints throws', async function () {
+        const sdk = hubOnlySdk();
+        sdk.hub.getDiscoveryConfig = sinon.stub().resolves({});
+        sdk.applyEndpoints = sinon.stub()
+            .onFirstCall().throws(new Error('bad discovery payload'))
+            .onSecondCall().callsFake(() => { sdk.encoder = {}; });
+        sdk.startPollingOnce = sinon.stub();
+
+        let firstError;
+        try { await sdk.init(); } catch (e) { firstError = e; }
+        expect(firstError && firstError.message).to.equal('bad discovery payload');
+        await sdk.init();
+
+        expect(sdk.hub.getDiscoveryConfig.callCount).to.equal(2);
+        expect(sdk.encoder).to.be.ok;
+    });
+});
+
 describe('XChainSDK', function () {
     registerEnvHooks();
 

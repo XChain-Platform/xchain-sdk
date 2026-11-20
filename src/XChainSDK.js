@@ -194,6 +194,7 @@ class XChainSDK {
         initializeCoreModules(this);
 
         let network = options.network || config.env.network() || null;
+        this.network = network;
         initializeNetworkUtilities(this, network);
         initializeActionHelpers(this);
         initializeVerificationHelpers(this, network);

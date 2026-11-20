@@ -71,6 +71,20 @@ const FRAME_ADDRESS_FIELDS = ['address', 'source', 'destination', 'payer_address
 // server's own subscriber list), so it is never assumed present.
 const FRAME_ADDRESS_ARRAY_FIELD = 'destinations';
 
+const addressCodec = require('../utils/utility/address_codec.js');
+
+// The explorer canonicalizes valid bech32 subscription keys to lowercase.
+// Preserve every other address spelling because base58 and custody identifiers
+// are case-sensitive.
+function canonicalSubscriptionAddress(address) {
+    if (typeof address !== 'string') return address;
+    try {
+        return addressCodec.bech32Decode(address) ? address.toLowerCase() : address;
+    } catch (e) {
+        return address;
+    }
+}
+
 /*
  * Every frame type the explorer routes to an address channel.
  *
@@ -172,6 +186,7 @@ function frameData(msg) {
 function frameIsForAddress(msg, address) {
     const data = frameData(msg);
     if (!data) return true;
+    const expected = canonicalSubscriptionAddress(address);
     let named = false;
 
     // The array field first, because it is the only one that names the RECIPIENT
@@ -185,7 +200,7 @@ function frameIsForAddress(msg, address) {
         for (const value of destinations) {
             if (value === undefined || value === null || value === '') continue;
             named = true;
-            if (value === address) return true;
+            if (canonicalSubscriptionAddress(value) === expected) return true;
         }
     }
 
@@ -193,7 +208,7 @@ function frameIsForAddress(msg, address) {
         const value = data[field];
         if (value === undefined || value === null || value === '') continue;
         named = true;
-        if (value === address) return true;
+        if (canonicalSubscriptionAddress(value) === expected) return true;
     }
     return !named;
 }
@@ -220,6 +235,7 @@ module.exports = {
     MEMPOOL_EVENT_TYPES,
     CANONICAL_ACTION_INDEX,
     CANONICAL_CALL_ID,
+    canonicalSubscriptionAddress,
     oneShotTeardown,
     frameData,
     frameIsForAddress,

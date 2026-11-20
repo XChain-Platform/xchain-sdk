@@ -148,9 +148,11 @@ function validateCodePart(validator, action, field, value, allFields, errors) {
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateChunkIndexes(validator, action, field, value, allFields, errors) {
-    // CHUNK_INDEX / TOTAL_CHUNKS validation (non-negative integers; bounds checked cross-field)
+    // The serializer writes String(value), and the indexer accepts only a
+    // digit-only string, so the same test on the same projection refuses
+    // exactly what the indexer refuses. Bounds are checked cross-field.
     if (field === 'CHUNK_INDEX' || field === 'TOTAL_CHUNKS') {
-        if (!validator.util.isNumeric(value) || !Number.isInteger(Number(value)) || Number(value) < 0)
+        if (!/^\d+$/.test(String(value)))
             errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a non-negative integer', { field, value }));
     }
 }

@@ -19,7 +19,7 @@
  ********************************************************************/
 
 const ActionWaiter = require('../utils/action_waiter.js');
-const { CANONICAL_ACTION_INDEX, CANONICAL_CALL_ID, oneShotTeardown, frameData, frameIsForAddress, frameIdMatches, entityGuarded } = require('./event_frames.js');
+const { CANONICAL_ACTION_INDEX, CANONICAL_CALL_ID, canonicalSubscriptionAddress, oneShotTeardown, frameData, frameIsForAddress, frameIdMatches, entityGuarded } = require('./event_frames.js');
 
 // Keep event subscriptions together because they share validation and teardown rules.
 module.exports = {
@@ -138,6 +138,7 @@ module.exports = {
     // Shortcut: listen for COINPAY_REQUIRED events on an address
     // Returns an unsubscribe function
     onCoinpayRequired(address, callback) {
+        address = canonicalSubscriptionAddress(address);
         const ws = this.requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('COINPAY_REQUIRED', onEvent);
@@ -152,6 +153,7 @@ module.exports = {
     // Shortcut: listen for ORDER_MATCH events on an address
     // Returns an unsubscribe function
     onOrderMatch(address, callback, opts) {
+        address = canonicalSubscriptionAddress(address);
         const ws = this.requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('ORDER_MATCH', onEvent);

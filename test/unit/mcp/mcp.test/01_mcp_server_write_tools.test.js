@@ -386,7 +386,7 @@ describe('MCP server (write tools)', () => {
         const [ct, st] = InMemoryTransport.createLinkedPair();
         await Promise.all([server.connect(st), client.connect(ct)]);
 
-        const res = await client.callTool({ name: 'compose_action', arguments: { coin: 'BTC', action: 'send', params: { tick: 'TOK', amount: '5' } } });
+        const res = await client.callTool({ name: 'compose_action', arguments: { coin: 'TBTC', action: 'send', params: { tick: 'TOK', amount: '5' } } });
         const body = JSON.parse(res.content[0].text);
         expect(body).to.deep.equal({ action_string: 'SEND|0|TOK|5|dest', psbt: 'deadbeef', encoding: 'OP_RETURN', signed: false });
         // The default sender is the session ADDRESS (the encoder's pubkey field

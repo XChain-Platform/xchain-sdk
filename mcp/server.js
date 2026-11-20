@@ -34,75 +34,10 @@ const crypto = require('crypto');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { z } = require('zod');
 const { version: SDK_VERSION } = require('./package.json');
-
-// The SDK class, resolved for both lives this file leads: installed from npm
-// (xchain-mcp depends on @dankest-llc/xchain-sdk, so the named deep require
-// wins) and in-repo under xchain-sdk/mcp/ (no installed copy of the package
-// exists, so fall back to the sibling source tree). Deep require on purpose:
-// the server needs only the class, not index.js and its REPL/ws baggage.
-let XChainSDKClass;
-try {
-    XChainSDKClass = require('@dankest-llc/xchain-sdk/src/XChainSDK.js');
-} catch {
-    XChainSDKClass = require('../src/XChainSDK.js');
-}
-
-// Same dual resolution for the shared cap-table predicate: the ceiling gate below
-// must apply the evaluator's own notion of an enforceable cap, not a second one.
-// The installed form names the evaluator's older path, which every published SDK
-// release still resolves, so this package keeps working against 0.18.0 as well.
-let hasEnforceableCap;
-try {
-    ({ hasEnforceableCap } = require('@dankest-llc/xchain-sdk/src/cosigner/policyEvaluator.js'));
-} catch {
-    ({ hasEnforceableCap } = require('../src/cosigner/policy_evaluator.js'));
-}
-
-// The serialized-boundary halt gate submitAction crosses before the encoder is
-// contacted, resolved like the other SDK pieces. compose_action crosses it too.
-// An SDK release without the static leaves it unrun, never a TypeError per compose.
-let LifecycleManagerClass = null;
-for (const id of ['@dankest-llc/xchain-sdk/src/carrier/lifecycle_manager.js', '../src/carrier/lifecycle_manager.js']) {
-    try { LifecycleManagerClass = require(id); break; } catch { /* try the next resolution */ }
-}
-
-// Explorer-style coin prefixes → SDK network strings. Mainnet/testnet default
-// to the public *.xchain.io hosts (SDK zero-config); R* regtest prefixes get
-// only a localhost explorer, so writes need ENCODER_URL (usual SDK env vars).
-const COIN_NETWORKS = {
-    BTC: 'bitcoin-mainnet', TBTC: 'bitcoin-testnet', RBTC: 'bitcoin-regtest',
-    LTC: 'litecoin-mainnet', TLTC: 'litecoin-testnet', RLTC: 'litecoin-regtest',
-    DOGE: 'dogecoin-mainnet', TDOGE: 'dogecoin-testnet', RDOGE: 'dogecoin-regtest',
-};
-
-// AgentSession.validatePolicy, resolved like the other SDK pieces. Optional: an
-// installed SDK that predates the export (or its path) still validates per call.
-let AgentSessionClass = null;
-for (const id of ['@dankest-llc/xchain-sdk/src/cosigner/agent_session.js', '../src/cosigner/agent_session.js']) {
-    try { AgentSessionClass = require(id); break; } catch { /* try the next resolution */ }
-}
-
-// A tick-to-cap table bounds every tick only through its own '*' entry: the evaluator
-// resolves a cap per tick and a tick with no entry and no '*' is uncapped, so a table
-// naming only some ticks leaves every other token the wallet holds unbounded.
-function hasWildcardCap(table) {
-    return !!table && typeof table === 'object' && Object.prototype.hasOwnProperty.call(table, '*')
-        && hasEnforceableCap({ '*': table['*'] });
-}
-
-// Allowed actions that no amount cap reaches for every tick. The evaluator reads
-// maxPerAction[ACTION] by exact own key, with the allowlist upper-cased, and
-// applies maxPerWindow.perTick to every amount-bearing action, so a perTick '*' entry
-// covers all of them and otherwise each action needs its own '*' entry.
-function uncappedActions(policy) {
-    if (!Array.isArray(policy.allowedActions)) return [];
-    if (hasWildcardCap(policy.maxPerWindow && policy.maxPerWindow.perTick)) return [];
-    const table = policy.maxPerAction;
-    const own = (key) => (table && typeof table === 'object' && Object.prototype.hasOwnProperty.call(table, key)
-        ? table[key] : undefined);
-    return [...new Set(policy.allowedActions.map((a) => String(a).toUpperCase()))]
-        .filter((action) => !hasWildcardCap(own(action)));
-}
+const {
+    AgentSessionClass, COIN_NETWORKS, LifecycleManagerClass, XChainSDKClass,
+    assertMainnetLaunched, hasEnforceableCap, uncappedActions,
+} = require('./server_dependencies.js');
 
 const DOCS_BASE = 'https://docs.xchain.io';
 
@@ -358,8 +293,10 @@ function buildServer(options = {}) {
                 + 'Enforced by the operator-configured AgentSession policy: out-of-policy actions are refused '
                 + 'before signing, with a POLICY_* code. Treat policy refusals as final, not retryable. '
                 + 'At most once: repeating a call with the same coin, action and params is REFUSED with '
-                + 'POLICY_DUPLICATE_SUBMIT and the original txid, so a call that timed out is safe to repeat '
-                + 'and does not pay twice. The guard is bounded by the policy\'s idempotency retention horizon '
+                + 'POLICY_DUPLICATE_SUBMIT and the original txid when known, so a call that timed out does not '
+                + 'pay twice. A call that failed before broadcasting can be repeated unchanged. A duplicate '
+                + 'refusal without a txid means the earlier attempt\'s outcome is unknown; check wallet history '
+                + 'before passing a new key. The guard is bounded by the policy\'s idempotency retention horizon '
                 + '(30 days by default), not unlimited: an identical call made after the key has aged out is '
                 + 'treated as a new payment. To make a DELIBERATE second identical payment, pass a new '
                 + 'idempotency_key.',
@@ -385,12 +322,13 @@ function buildServer(options = {}) {
                     { idempotencyKey: idempotencyKey || derivedIdempotencyKey(coin, ACTION, params) });
                 return ok({ txid: result.txid, status: result.status, policy: result.policy });
             } catch (err) {
-                // A duplicate refusal carries the earlier txid. Without it the caller
-                // is told only that it already paid, with no way to find the payment
-                // and resume waiting on it, which is the retry this refusal exists to
-                // replace. Nothing else is copied out of details.
+                // Surface a known prior txid for resumption. A txid-less duplicate is
+                // explicitly unknown; nothing else is copied out of error details.
                 const txid = err && err.details && err.details.txid;
-                return txid ? fail(err, { txid }) : fail(err);
+                if (txid) return fail(err, { txid });
+                if (err && err.code === 'POLICY_DUPLICATE_SUBMIT')
+                    return fail(err, { txid: null, outcome: 'unknown' });
+                return fail(err);
             }
         });
     }
@@ -402,6 +340,7 @@ function buildServer(options = {}) {
     // sender's next build.
     tool('compose_action', 'Compose an unsigned transaction for an XChain action: returns the ACTION string and an unsigned PSBT. Nothing is signed or broadcast; the caller signs externally. '
         + 'The encoder RESERVES the sender\'s selected UTXOs for about 5 minutes; if the PSBT will not be signed, pass the returned reservation.id to release_reservation to free them.'
+        + ' Before mainnet launch, protocol actions on mainnet are refused with MAINNET_NOT_LAUNCHED, as submit_action refuses them.'
         + (wallet ? ' Defaults to the configured agent wallet\'s pubkey.' : ' Requires pubkey (no wallet is configured).'),
         {
             coin: coinParam,
@@ -413,11 +352,11 @@ function buildServer(options = {}) {
             const sender = pubkey || (wallet ? sessionFor(coin).address : null);
             if (!sender) throw Object.assign(new Error('pubkey is required: no agent wallet is configured'), { code: 'MISSING_PUBKEY' });
             const sdk = sdkFor(coin);
-            const actionResult = await sdk.createAction({ action: String(action).toUpperCase(), params });
+            const ACTION = String(action).toUpperCase();
+            if (assertMainnetLaunched) assertMainnetLaunched(sdk.network, { action: ACTION, params });
+            const actionResult = await sdk.createAction({ action: ACTION, params });
             const actionString = actionResult && actionResult.actionString !== undefined ? actionResult.actionString : actionResult;
-            // The steps submit_action runs before the encoder is contacted: refuse a
-            // halt-class action, and on a native-fee chain add the quoted fee output the
-            // indexer requires (a refused quote throws before any UTXO is reserved).
+            // Match submit's launch and halt gates, then add any native-fee output.
             if (LifecycleManagerClass && typeof LifecycleManagerClass.assertNoHaltClassFields === 'function')
                 LifecycleManagerClass.assertNoHaltClassFields(sdk, actionString);
             const feeOutputs = typeof sdk.nativeFeeOutputs === 'function'

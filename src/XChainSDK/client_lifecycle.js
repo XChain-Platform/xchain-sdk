@@ -138,17 +138,20 @@ module.exports = {
         return this._readyPromise;
     },
 
-    // One-shot hub discovery + endpoint overlay (+ start polling). Guarded so
-    // init() and the lazy gate share a single in-flight fetch. May throw (init()
-    // inspects the error; ensureReady() swallows it).
+    // Share one in-flight fetch and cache a successful discovery. A failed
+    // attempt is dropped so an explicit later init() can retry.
     discover() {
         if (this._discovering) return this._discovering;
-        this._discovering = (async () => {
+        const attempt = (async () => {
             await this.hub.getDiscoveryConfig();
             this.applyEndpoints();
             this.startPollingOnce();
         })();
-        return this._discovering;
+        this._discovering = attempt;
+        attempt.catch(() => {
+            if (this._discovering === attempt) this._discovering = null;
+        });
+        return attempt;
     },
 
     // Overlay hub-discovered endpoints onto the live clients (mutating, not

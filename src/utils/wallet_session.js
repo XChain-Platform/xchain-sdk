@@ -280,8 +280,11 @@ class WalletSession {
     }
 
     async submitInner(actionData, encoderOpts = {}, submitOpts = {}) {
-        let { utxos, refusesUnconfirmed } = await loadAvailableUTXOs(this, encoderOpts);
-        let mergedEncoder = buildEncoderOptions(this, encoderOpts, utxos, refusesUnconfirmed);
+        let mergedEncoder;
+        try {
+            const { utxos, refusesUnconfirmed } = await loadAvailableUTXOs(this, encoderOpts);
+            mergedEncoder = buildEncoderOptions(this, encoderOpts, utxos, refusesUnconfirmed);
+        } catch (error) { throw LifecycleManager.markPreBroadcastError(error); }
         return submitAndTrack(this, actionData, mergedEncoder, submitOpts);
     }
 }

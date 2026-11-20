@@ -9,6 +9,7 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
+const bitcoin = require('bitcoinjs-lib');
 const WalletUtils = require('../../../../src/utils/wallet.js');
 const { getNetwork } = require('../../../../src/protocol/networks.js');
 
@@ -223,3 +224,63 @@ describe('WalletUtils', function() {
         });
     });
 });
+
+describe('WalletUtils', function() {
+
+    describe('deriveMultisigAddress() key-count ceiling', function() {
+        const keysTemplate = (wallet, m, n) => 'multi:' + m + ':'
+            + Array.from({ length: n }, () => wallet.generateKeyPair().publicKeyHex).join(':');
+
+        it('should derive p2wsh-multisig up to the 20-key OP_CHECKMULTISIG limit', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            for (const [m, n] of [[1, 16], [1, 17], [20, 20]]) {
+                const result = wallet.deriveMultisigAddress({ scriptTemplate: keysTemplate(wallet, m, n), scheme: 'p2wsh-multisig' });
+                expect(result.address, m + '-of-' + n).to.match(/^bcrt1q/);
+            }
+        });
+
+        it('should refuse more than 20 keys with INVALID_SCRIPT_TEMPLATE on either script scheme', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            for (const scheme of ['p2wsh-multisig', 'p2sh-multisig']) {
+                for (const [m, n] of [[1, 21], [21, 21]]) {
+                    expect(codeOf(() => wallet.deriveMultisigAddress({
+                        scriptTemplate: keysTemplate(wallet, m, n), scheme,
+                    })), scheme + ' ' + m + '-of-' + n).to.equal('INVALID_SCRIPT_TEMPLATE');
+                }
+            }
+        });
+
+        it('should leave p2sh-multisig above the 520-byte redeem limit to the library refusal', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            expect(wallet.deriveMultisigAddress({ scriptTemplate: keysTemplate(wallet, 1, 15), scheme: 'p2sh-multisig' }).redeemScript).to.be.a('string');
+            expect(codeOf(() => wallet.deriveMultisigAddress({
+                scriptTemplate: keysTemplate(wallet, 1, 16), scheme: 'p2sh-multisig',
+            }))).to.equal('MULTISIG_DERIVE_FAILED');
+        });
+
+        // The derive ceiling must match the SDK's own spend path, or a derived address strands funds.
+        it('should derive exactly the p2wsh key counts the SDK multisig signer can spend', function() {
+            const wallet = new WalletUtils('bitcoin-regtest');
+            const kps20 = Array.from({ length: 20 }, () => wallet.generateKeyPair());
+            const derived = wallet.deriveMultisigAddress({
+                scriptTemplate: 'multi:1:' + kps20.map((k) => k.publicKeyHex).join(':'), scheme: 'p2wsh-multisig',
+            });
+            const signed = wallet.signMultisigPsbt(spendPsbtHex(Buffer.from(derived.witnessScript, 'hex')), kps20[0].wif);
+            expect(wallet.finalizeMultisigPsbt(signed.psbtHex).txid).to.match(/^[0-9a-f]{64}$/);
+
+            const kps21 = Array.from({ length: 21 }, () => wallet.generateKeyPair());
+            const script21 = bitcoin.payments.p2ms({ m: 1, pubkeys: kps21.map((k) => Buffer.from(k.publicKey)) }).output;
+            expect(codeOf(() => wallet.signMultisigPsbt(spendPsbtHex(Buffer.from(script21)), kps21[0].wif))).to.equal('SIGN_FAILED');
+        });
+    });
+});
+
+// Builds an unsigned PSBT spending a P2WSH output locked to witnessScript.
+function spendPsbtHex(witnessScript) {
+    const net = getNetwork('bitcoin-regtest');
+    const out = bitcoin.payments.p2wsh({ redeem: { output: witnessScript }, network: net }).output;
+    const psbt = new bitcoin.Psbt({ network: net });
+    psbt.addInput({ hash: Buffer.alloc(32, 1), index: 0, witnessUtxo: { script: out, value: 50000 }, witnessScript });
+    psbt.addOutput({ script: out, value: 49000 });
+    return psbt.toHex();
+}

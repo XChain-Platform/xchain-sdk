@@ -13,8 +13,7 @@
  **********************************************************************
  *
  * compose_action runs the steps submit_action runs before the encoder is
- * contacted: the halt-class gate, and on a native-fee chain the quoted fee
- * output handed to the encoder as customOutputs.
+ * contacted: the launch and halt-class gates, then any native-fee output.
  *
  ********************************************************************/
 
@@ -27,12 +26,13 @@ const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
 const { buildServer } = require('../../../../mcp/server.js');
 const XChainSDK = require('../../../../src/XChainSDK.js');
 const coins = require('../../../../src/coins');
+const { MAINNET_LAUNCH_TIME } = require('../../../../src/protocol/mainnet_launch.js');
 
 function composeStub(network, overrides) {
     const calls = [];
     return Object.assign({
         network, calls,
-        createAction: async () => ({ actionString: 'SEND|0|TOK|5|dest' }),
+        createAction: async (...args) => { calls.push(['createAction', ...args]); return { actionString: 'SEND|0|TOK|5|dest' }; },
         encodeTx: async (params) => { calls.push(['encodeTx', params]); return { psbt: 'beef', encoding: 'OP_RETURN' }; },
     }, overrides || {});
 }
@@ -80,6 +80,7 @@ function registerNativeFeeTests() {
             return sdk;
         });
         try {
+            sinon.stub(Date, 'now').returns(MAINNET_LAUNCH_TIME * 1000);
             const res = await compose(client, { coin: 'LTC', params: { tick: 'TOK', amount: '5', destination } });
             const sent = sdk.encoder.createTx.firstCall && sdk.encoder.createTx.firstCall.args[0];
             expect(res.isError, JSON.stringify(res.content)).to.not.equal(true);
@@ -98,6 +99,53 @@ function registerNativeFeeTests() {
         const res = await compose(client);
         expect(res.isError).to.equal(true);
         expect(made[0].calls.some((c) => c[0] === 'encodeTx')).to.equal(false);
+    });
+}
+
+function registerLaunchGateTests() {
+    afterEach(() => sinon.restore());
+
+    it('refuses a mainnet compose before launch and before creating or encoding', async () => {
+        sinon.stub(Date, 'now').returns((MAINNET_LAUNCH_TIME - 100) * 1000);
+        const made = [];
+        const client = await connectWith((network) => { const sdk = composeStub(network); made.push(sdk); return sdk; });
+        const res = await compose(client, { coin: 'BTC' });
+        expect(res.isError).to.equal(true);
+        expect(JSON.parse(res.content[0].text).code).to.equal('MAINNET_NOT_LAUNCHED');
+        expect(made[0].calls).to.deep.equal([]);
+    });
+
+    it('refuses a native-fee mainnet compose before quoting or encoding', async () => {
+        sinon.stub(Date, 'now').returns((MAINNET_LAUNCH_TIME - 100) * 1000);
+        const made = [];
+        const client = await connectWith((network) => {
+            const sdk = composeStub(network, {
+                nativeFeeOutputs: async () => { sdk.calls.push(['nativeFeeOutputs']); return []; },
+            });
+            made.push(sdk);
+            return sdk;
+        });
+        const res = await compose(client, { coin: 'LTC' });
+        expect(JSON.parse(res.content[0].text).code).to.equal('MAINNET_NOT_LAUNCHED');
+        expect(made[0].calls).to.deep.equal([]);
+    });
+
+    it('allows testnet compose before launch', async () => {
+        sinon.stub(Date, 'now').returns((MAINNET_LAUNCH_TIME - 100) * 1000);
+        const made = [];
+        const client = await connectWith((network) => { const sdk = composeStub(network); made.push(sdk); return sdk; });
+        const res = await compose(client, { coin: 'TBTC' });
+        expect(res.isError, JSON.stringify(res.content)).to.not.equal(true);
+        expect(made[0].calls.map((call) => call[0])).to.deep.equal(['createAction', 'encodeTx']);
+    });
+
+    it('allows mainnet compose at the launch time', async () => {
+        sinon.stub(Date, 'now').returns(MAINNET_LAUNCH_TIME * 1000);
+        const made = [];
+        const client = await connectWith((network) => { const sdk = composeStub(network); made.push(sdk); return sdk; });
+        const res = await compose(client, { coin: 'BTC' });
+        expect(res.isError, JSON.stringify(res.content)).to.not.equal(true);
+        expect(made[0].calls.some((call) => call[0] === 'encodeTx')).to.equal(true);
     });
 }
 
@@ -138,4 +186,5 @@ function registerHaltGateTests() {
 describe('MCP compose_action runs the submit-path checks before the encoder', () => {
     registerNativeFeeTests();
     registerHaltGateTests();
+    registerLaunchGateTests();
 });
