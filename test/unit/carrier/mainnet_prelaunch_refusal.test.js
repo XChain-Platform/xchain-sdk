@@ -19,9 +19,7 @@ const { assertMainnetLaunched, isMainnetNetwork, MAINNET_LAUNCH_TIME } =
     require('../../../src/protocol/mainnet_launch.js');
 const { makeSdk } = require('./lifecycle_manager.test/helpers/lifecycle_manager.js');
 
-describe('mainnet prelaunch refusal', function () {
-    afterEach(() => sinon.restore());
-
+function registerLaunchRuleTests() {
     it('recognises only *-mainnet networks', function () {
         assert.strictEqual(isMainnetNetwork('bitcoin-mainnet'), true);
         assert.strictEqual(isMainnetNetwork('bitcoin-testnet'), false);
@@ -43,7 +41,9 @@ describe('mainnet prelaunch refusal', function () {
         assertMainnetLaunched('bitcoin-mainnet', undefined, 0);
         assertMainnetLaunched('bitcoin-testnet', { action: 'SEND' }, 0);
     });
+}
 
+function registerLifecycleTest() {
     it('submitAction refuses before any encoder call', async function () {
         sinon.stub(Date, 'now').returns((MAINNET_LAUNCH_TIME - 100) * 1000);
         const sdk = makeSdk();
@@ -53,7 +53,9 @@ describe('mainnet prelaunch refusal', function () {
             lm.submitAction({ action: 'SEND', params: {} }, {}, { wif: 'x' }),
             (e) => e.code === 'MAINNET_NOT_LAUNCHED');
     });
+}
 
+function registerSdkTests() {
     it('refuses through a real SDK configured for mainnet', async function () {
         sinon.stub(Date, 'now').returns((MAINNET_LAUNCH_TIME - 100) * 1000);
         const sdk = new XChainSDK({
@@ -85,4 +87,11 @@ describe('mainnet prelaunch refusal', function () {
             else process.env.NETWORK = previous;
         }
     });
+}
+
+describe('mainnet prelaunch refusal', function () {
+    afterEach(() => sinon.restore());
+    registerLaunchRuleTests();
+    registerLifecycleTest();
+    registerSdkTests();
 });

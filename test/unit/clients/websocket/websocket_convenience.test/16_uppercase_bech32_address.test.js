@@ -12,26 +12,19 @@ const { closeFixture, createFixture, passBarrier } = require('./support/setup.js
 const LOWER = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
 const UPPER = LOWER.toUpperCase();
 
-describe('uppercase bech32 address subscriptions', function () {
-    let server;
-    let sdk;
+let server;
+let sdk;
 
-    beforeEach(async function () {
-        ({ server, sdk } = await createFixture());
-        await sdk.connectWs();
-    });
-
-    afterEach(function (done) {
-        closeFixture(sdk, server, done);
-    });
-
+function registerCanonicalizationTest() {
     it('canonicalizes only checksum-valid bech32 addresses', function () {
         expect(canonicalSubscriptionAddress(UPPER)).to.equal(LOWER);
         expect(canonicalSubscriptionAddress('1AbC')).to.equal('1AbC');
         expect(canonicalSubscriptionAddress('C:BTC:0')).to.equal('C:BTC:0');
         expect(canonicalSubscriptionAddress('bC1invalid')).to.equal('bC1invalid');
     });
+}
 
+function registerAddressFrameTest() {
     it('delivers lowercase snapshot and live frames to an uppercase subscriber', async function () {
         const spy = sinon.spy();
         sdk.onAddress(UPPER, spy, { snapshot: true });
@@ -47,7 +40,9 @@ describe('uppercase bech32 address subscriptions', function () {
         await waitForCalls(spy, 3);
         expect(spy.callCount).to.equal(3);
     });
+}
 
+function registerSharedSubscriptionTest() {
     it('shares one lowercase subscription across address spellings', function () {
         const stopUpper = sdk.onAddress(UPPER, sinon.spy());
         const stopLower = sdk.onAddress(LOWER, sinon.spy());
@@ -60,7 +55,9 @@ describe('uppercase bech32 address subscriptions', function () {
         expect(sdk.ws._subscriptions.filter((entry) => entry.channels.includes('address')))
             .to.have.lengthOf(0);
     });
+}
 
+function registerShortcutTest() {
     it('delivers lowercase frames through each address shortcut', async function () {
         const mempool = sinon.spy();
         const coinpay = sinon.spy();
@@ -84,7 +81,9 @@ describe('uppercase bech32 address subscriptions', function () {
         expect(coinpay.calledOnce).to.equal(true);
         expect(order.calledOnce).to.equal(true);
     });
+}
 
+function registerOtherAddressTest() {
     it('still rejects a lowercase frame for another address', async function () {
         const spy = sinon.spy();
         sdk.onAddress(UPPER, spy);
@@ -95,4 +94,21 @@ describe('uppercase bech32 address subscriptions', function () {
         await passBarrier(sdk, server);
         expect(spy.called).to.equal(false);
     });
+}
+
+describe('uppercase bech32 address subscriptions', function () {
+    beforeEach(async function () {
+        ({ server, sdk } = await createFixture());
+        await sdk.connectWs();
+    });
+
+    afterEach(function (done) {
+        closeFixture(sdk, server, done);
+    });
+
+    registerCanonicalizationTest();
+    registerAddressFrameTest();
+    registerSharedSubscriptionTest();
+    registerShortcutTest();
+    registerOtherAddressTest();
 });
