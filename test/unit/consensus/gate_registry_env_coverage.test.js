@@ -101,7 +101,7 @@ describe('gate registry env view covers the regtest arming grammar', function ()
     });
 });
 
-describe('gate registry env view resolves the BTC snapshot gates', function () {
+describe('gate registry env view covers the regtest arming grammar', function () {
     it('resolves the archive roll-call presence gate at the BTC snapshot block', function () {
         const key = 'archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION';
         assert.strictEqual(gates.activeAt(key, 'regtest', 'BTC', 0, null), true);
