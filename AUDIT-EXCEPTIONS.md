@@ -17,7 +17,16 @@ not on a calendar.
 
 ## `elliptic` - CVE-2025-14505 / GHSA-848j-6mx2-7j84
 
-**Verdict: REACHABLE, accepted. Not "unreachable" - see below, because the
+**Status 2026-11-20: RESOLVED for runtime.** The sdk no longer depends on
+`bitcoinjs-message`: `src/utils/signed_message.js` signs and verifies Bitcoin
+messages on `@bitcoinerlab/secp256k1`, byte-identical to the old package across
+the 28 golden vectors in `test/fixtures/signed-message-vectors.json`, so the
+production install carries no `secp256k1@3` and no `elliptic`. `elliptic` is
+still present only as a dev-only transitive of the build polyfills
+(`crypto-browserify`), never loaded by sdk runtime code. The analysis below is
+kept as the record of why the replacement was made.
+
+**Verdict (2026-08-15, superseded above): REACHABLE, accepted. Not "unreachable" - see below, because the
 obvious reading of this one is wrong.**
 
 Recorded 2026-08-15. Severity **low** (CVSS v4 2.9, EPSS 0.167%), and low by

@@ -23,7 +23,7 @@
 
 const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
-const bitcoinMessage = require('bitcoinjs-message');
+const signedMessage = require('./signed_message.js');
 const { ECPairFactory } = require('ecpair');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { getNetwork } = require('../protocol/networks.js');
@@ -130,14 +130,12 @@ class AuthUtils {
             const privateKey = keyPair.privateKey;
             const compressed = keyPair.compressed;
 
-            // bitcoinjs-message sign(message, privateKey, compressed, messagePrefix, sigOptions).
-            // Signing is deterministic RFC 6979 by design: no extraEntropy is supplied
-            // (elliptic GHSA-848j-6mx2-7j84 is an accepted advisory, see AUDIT-EXCEPTIONS.md).
+            // No extra entropy keeps signing deterministic under RFC 6979.
             const sigOptions = {};
             if (opts.segwitRedeemScript) sigOptions.segwitType = 'p2sh(p2wpkh)';
             if (opts.segwitNative) sigOptions.segwitType = 'p2wpkh';
 
-            const signature = bitcoinMessage.sign(
+            const signature = signedMessage.sign(
                 message,
                 privateKey,
                 compressed,
@@ -199,7 +197,7 @@ class AuthUtils {
         }
 
         try {
-            const valid = bitcoinMessage.verify(message, address, signature, net.messagePrefix);
+            const valid = signedMessage.verify(message, address, signature, net.messagePrefix);
             return { valid: !!valid, address: address, error: null };
         } catch (err) {
             return { valid: false, address: address, error: err.message };
