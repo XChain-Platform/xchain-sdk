@@ -233,6 +233,18 @@ module.exports = {
     },
 
     handleError(err, url) {
+        // A timeout can fire after the headers arrived (a stalled body): axios then rejects
+        // with the 2xx response still attached, as ECONNABORTED or as ERR_BAD_RESPONSE
+        // "stream has been aborted". A success status is never the failure, so it is a
+        // timeout when the stream was aborted and a network failure otherwise.
+        const status = err.response ? err.response.status : 0;
+        const stalledBody = status > 199 && status < 300;
+        if (stalledBody && !/abort|timeout/i.test(String(err.message))) {
+            throw new SDKExplorerError('EXPLORER_NETWORK', 'Explorer response failed after HTTP ' + status + ': ' + err.message, { url, error: err.message });
+        }
+        if (err.code === 'ECONNABORTED' || stalledBody) {
+            throw new SDKExplorerError('EXPLORER_TIMEOUT', 'Explorer request timed out: ' + url, { url, timeout: this.timeout });
+        }
         if (err.response) {
             // A 429 reaching here already survived retry.js's honoured wait, so
             // it is the caller's to handle. Keep the "Explorer returned HTTP
@@ -250,9 +262,6 @@ module.exports = {
                 'Explorer returned HTTP ' + err.response.status + ' for ' + url,
                 { url, status: err.response.status, data: err.response.data }
             );
-        }
-        if (err.code === 'ECONNABORTED') {
-            throw new SDKExplorerError('EXPLORER_TIMEOUT', 'Explorer request timed out: ' + url, { url, timeout: this.timeout });
         }
         throw new SDKExplorerError('EXPLORER_NETWORK', 'Explorer request failed: ' + err.message, { url, error: err.message });
     },
