@@ -65,6 +65,46 @@ function hasDelimitedToken(text, token) {
     return false;
 }
 
+function bip322Sign(message, keyPair, net, opts) {
+    if (opts.segwitNative || opts.segwitRedeemScript) {
+        throw new SDKAuthError('INVALID_SIGNATURE_FORMAT',
+            'BIP-322 simple format cannot be combined with legacy SegWit options.');
+    }
+    return bip322.signSimple(message, keyPair.privateKey, keyPair.publicKey, net, {
+        auxRand: opts.auxRand
+    });
+}
+
+function legacyAddress(keyPair, net, opts) {
+    if (opts.segwitNative) {
+        return bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }).address;
+    }
+    if (opts.segwitRedeemScript) {
+        return bitcoin.payments.p2sh({
+            redeem: bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }),
+            network: net
+        }).address;
+    }
+    return bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey, network: net }).address;
+}
+
+function legacySign(message, keyPair, net, opts) {
+    const sigOptions = {};
+    if (opts.segwitRedeemScript) sigOptions.segwitType = 'p2sh(p2wpkh)';
+    if (opts.segwitNative) sigOptions.segwitType = 'p2wpkh';
+    const signature = signedMessage.sign(
+        message,
+        keyPair.privateKey,
+        keyPair.compressed,
+        net.messagePrefix,
+        Object.keys(sigOptions).length > 0 ? sigOptions : undefined
+    );
+    return {
+        signature: signature.toString('base64'),
+        address: legacyAddress(keyPair, net, opts)
+    };
+}
+
 
 class AuthUtils {
 
@@ -185,51 +225,13 @@ class AuthUtils {
         try {
             const format = opts.format || 'legacy';
             if (format === 'bip322-simple') {
-                if (opts.segwitNative || opts.segwitRedeemScript) {
-                    throw new SDKAuthError('INVALID_SIGNATURE_FORMAT',
-                        'BIP-322 simple format cannot be combined with legacy SegWit options.');
-                }
-                return bip322.signSimple(message, keyPair.privateKey, keyPair.publicKey, net, {
-                    auxRand: opts.auxRand
-                });
+                return bip322Sign(message, keyPair, net, opts);
             }
             if (format !== 'legacy') {
                 throw new SDKAuthError('INVALID_SIGNATURE_FORMAT',
                     `Unsupported message signature format: ${format}.`);
             }
-            const privateKey = keyPair.privateKey;
-            const compressed = keyPair.compressed;
-
-            // No extra entropy keeps signing deterministic under RFC 6979.
-            const sigOptions = {};
-            if (opts.segwitRedeemScript) sigOptions.segwitType = 'p2sh(p2wpkh)';
-            if (opts.segwitNative) sigOptions.segwitType = 'p2wpkh';
-
-            const signature = signedMessage.sign(
-                message,
-                privateKey,
-                compressed,
-                net.messagePrefix,
-                Object.keys(sigOptions).length > 0 ? sigOptions : undefined
-            );
-
-            // Derive the address for the return value
-            let address;
-            if (opts.segwitNative) {
-                address = bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }).address;
-            } else if (opts.segwitRedeemScript) {
-                address = bitcoin.payments.p2sh({
-                    redeem: bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }),
-                    network: net
-                }).address;
-            } else {
-                address = bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey, network: net }).address;
-            }
-
-            return {
-                signature: signature.toString('base64'),
-                address: address
-            };
+            return legacySign(message, keyPair, net, opts);
         } catch (err) {
             if (err.name === 'SDKAuthError') throw err;
             throw new SDKAuthError('SIGN_FAILED', `Message signing failed: ${err.message}`);

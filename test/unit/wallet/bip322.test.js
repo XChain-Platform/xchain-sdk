@@ -21,7 +21,7 @@ const FALLBACK_VECTOR = {
     signature: 'AUCJYOwOjxYAvatTAGYaVlNXBVyFuc4MwNQkOuK2tl8xhfKDONd0NjfYyNSYcRqeCp8hsAnCEPHAVEkO9h6vbQ/R'
 };
 
-describe('BIP-322 simple P2TR messages', function() {
+describe('BIP-322 simple P2TR vectors and signing', function() {
     it('verifies the published prefixed P2TR vector', function() {
         expect(bip322.verifySimple(VECTOR.address, VECTOR.message, VECTOR.signature, MAINNET)).to.equal(true);
     });
@@ -55,7 +55,9 @@ describe('BIP-322 simple P2TR messages', function() {
             format: 'bip322-simple'
         })).to.deep.equal({ valid: true, error: null });
     });
+});
 
+describe('BIP-322 simple P2TR failures', function() {
     it('rejects message, signer, signature and format changes', function() {
         expect(bip322.verifySimple(VECTOR.address, 'wrong message', VECTOR.signature, MAINNET)).to.equal(false);
         expect(bip322.verifySimple(FALLBACK_VECTOR.address, VECTOR.message, VECTOR.signature, MAINNET))
