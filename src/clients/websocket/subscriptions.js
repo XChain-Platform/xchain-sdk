@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const onceKeys = require('./once_keys.js');
+
 module.exports = {
     // Bookkeeping key for one tracked subscription: the channel array and the
     // params, compared exactly as unsubscribe() has always compared them (the
@@ -67,6 +69,19 @@ module.exports = {
     subscribe(channels, params) {
         const key      = this.subscriptionKey(channels, params);
         const existing = this._subscriptions.find(sub => sub.key === key);
+        if (existing && onceKeys.hasSpentKeys(existing)) {
+            // The server already removed some of this once entry's keys, so the
+            // confirmation it holds names a subscription that is gone. Arm it again
+            // with a fresh frame. The entry itself is kept, not replaced, so an
+            // earlier holder's later unsubscribe() still releases only its own ref.
+            existing.refs += 1;
+            delete existing.spent;
+            const rearmId  = 'sub-' + (this.nextId++);
+            const rearmMsg = { action: 'subscribe', id: rearmId, channels };
+            if (params) rearmMsg.params = params;
+            existing.pending = this.sendWithResponse(rearmId, rearmMsg);
+            return existing.pending;
+        }
         if (existing) {
             existing.refs += 1;
             // Callers await this. The server answers one SUBSCRIBED per subscribe

@@ -33,17 +33,19 @@ function inputIsPresigned(input) {
 }
 
 // Indices of the unsigned inputs that spend the caller-approved outpoints.
-// Throws when the encoder added an unsigned input the caller never named, since
-// the key would otherwise sign it along with the approved set.
+// Throws when the encoder added any input the caller never named: an unsigned
+// one would be signed along with the approved set, and a pre-signed one can carry
+// data the decoder reads and attributes to the caller's own first input.
 function approvedInputIndices(psbtHex, approved, net) {
     const psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
     const indices = [];
     psbt.txInputs.forEach((txIn, i) => {
-        if (inputIsPresigned(psbt.data.inputs[i])) return;
+        const presigned = inputIsPresigned(psbt.data.inputs[i]);
         const key = outpointKey(Buffer.from(txIn.hash).reverse().toString('hex'), txIn.index);
         if (!approved.has(key))
             throw new SDKActionError('UNAPPROVED_INPUT',
-                `the encoder response spends ${key}, which is not among the supplied utxos; refusing to sign`);
+                `the encoder response spends ${key}${presigned ? ' (arrived pre-signed)' : ''}, which is not among the supplied utxos; refusing to sign`);
+        if (presigned) return;
         indices.push(i);
     });
     if (!indices.length)

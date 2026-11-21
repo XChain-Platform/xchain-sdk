@@ -102,11 +102,13 @@ function preparePhase2(manager, spendResult, reconcileState, createResult, wif, 
 
     // Phase-2 input scripts reveal the carrier committed by phase 1. This check
     // rejects an additional inline carrier without re-authorizing encoded bytes.
+    // The reveal tag is accepted here only because assertRevealInputsBound follows.
     assertCarrierBinding({
-        psbt:         spendResult.psbt,
-        actionString: createResult.actionString,
-        network:      manager.reconcileNetwork(),
-        label:        'phase-2 reveal',
+        psbt:           spendResult.psbt,
+        actionString:   createResult.actionString,
+        network:        manager.reconcileNetwork(),
+        label:          'phase-2 reveal',
+        allowRevealTag: true,
     });
 
     // The decoder reads data from every reveal input in order, so the inputs must

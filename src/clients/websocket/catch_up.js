@@ -38,6 +38,7 @@
 'use strict';
 
 const pacing = require('./pacing.js');
+const onceKeys = require('./once_keys.js');
 
 // Continuations past this many truncated rounds are reported as a gap instead. The
 // server's depth limit means about eleven are ever needed.
@@ -289,6 +290,15 @@ function answerCatchUp(client, msg) {
     nextCatchUp(client);
 }
 
+// What a reconnect sends for one tracked entry. An entry with nothing spent is
+// queued itself, so its replay mark (replayedTo) stays on the entry across drops;
+// a partly spent one is split into single-key requests, and a spent UNSUBSCRIBED
+// arriving during their replay still marks the owning entry (once_keys.js).
+function replayRequests(sub) {
+    if (!onceKeys.hasSpentKeys(sub)) return [sub];
+    return onceKeys.liveRequests(sub, sub);
+}
+
 // Replay every tracked subscription after a reconnect. With a cursor to resume from,
 // the ones that can carry NEW_ACTION are queued and sent one at a time.
 function resubscribe(client) {
@@ -298,13 +308,16 @@ function resubscribe(client) {
     const cursor = (client.lastActionIndex !== null && BigInt(client.lastActionIndex) > 0n) ? client.lastActionIndex : null;
     const queue  = [];
     for (const sub of client._subscriptions) {
-        if (cursor !== null && needsCatchUp(sub.channels)) {
-            queue.push(sub);
-            continue;
+        // A once entry the server spent replays only its live keys, or nothing.
+        for (const request of replayRequests(sub)) {
+            if (cursor !== null && needsCatchUp(request.channels)) {
+                queue.push(request);
+                continue;
+            }
+            // Paced by send() and retried on RATE_LIMITED (message_pump.js), so a long
+            // subscription list cannot outrun the server's message rate.
+            pacing.sendTrackedSubscribe(client, request.channels, Object.assign({}, request.params), 0, sub);
         }
-        // Paced by send() and retried on RATE_LIMITED (message_pump.js), so a long
-        // subscription list cannot outrun the server's message rate.
-        pacing.sendTrackedSubscribe(client, sub.channels, Object.assign({}, sub.params));
     }
     if (queue.length > 0) {
         client._catchUp = { queue, cursor, current: null, maxSeen: null, timer: null };

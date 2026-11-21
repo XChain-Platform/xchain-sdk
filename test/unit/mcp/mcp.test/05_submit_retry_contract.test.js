@@ -49,6 +49,11 @@ const submit = (client) => client.callTool({
     arguments: { coin: 'TDOGE', action: 'SEND', params: { tick: 'TOK', amount: '5' } },
 });
 
+const submitParams = (client, params) => client.callTool({
+    name: 'submit_action',
+    arguments: { coin: 'TDOGE', action: 'SEND', params },
+});
+
 describe('MCP submit_action retry contract', () => {
     afterEach(() => sinon.restore());
 
@@ -56,13 +61,18 @@ describe('MCP submit_action retry contract', () => {
         const failure = Object.assign(new Error('create failed'), { preBroadcast: true });
         const body = sinon.stub(WalletSession.prototype, 'submitInner');
         body.onFirstCall().rejects(failure);
-        body.onSecondCall().resolves({ txid: 'retry-tx', status: 'valid' });
+        body.onSecondCall().resolves({
+            txid: 'retry-tx',
+            indexed: { status: 'valid', statusKnown: true, statusSource: 'indexer' },
+        });
         const client = await connected();
 
         expect((await submit(client)).isError).to.equal(true);
         const retry = await submit(client);
         expect(retry.isError, JSON.stringify(retry.content)).to.not.equal(true);
-        expect(JSON.parse(retry.content[0].text).txid).to.equal('retry-tx');
+        expect(JSON.parse(retry.content[0].text)).to.include({
+            txid: 'retry-tx', status: 'valid', statusKnown: true, statusSource: 'indexer',
+        });
         expect(body.calledTwice).to.equal(true);
     });
 
@@ -80,11 +90,47 @@ describe('MCP submit_action retry contract', () => {
     });
 
     it('describes both safe pre-broadcast retries and ambiguous duplicate refusals', async () => {
-        sinon.stub(WalletSession.prototype, 'submitInner').resolves({ txid: 'tx', status: 'valid' });
+        sinon.stub(WalletSession.prototype, 'submitInner').resolves({
+            txid: 'tx', indexed: { status: 'valid', statusKnown: true, statusSource: 'indexer' },
+        });
         const client = await connected();
         const description = (await client.listTools()).tools
             .find((tool) => tool.name === 'submit_action').description;
         expect(description).to.match(/failed before broadcasting can be repeated/i);
         expect(description).to.match(/without a txid.*outcome is unknown/i);
+    });
+
+    it('surfaces assumed and absent indexer verdicts without inventing confirmation', async () => {
+        const body = sinon.stub(WalletSession.prototype, 'submitInner');
+        body.onFirstCall().resolves({
+            txid: 'assumed-tx',
+            indexed: { status: 'valid', statusKnown: false, statusSource: 'assumed' },
+        });
+        body.onSecondCall().resolves({ txid: 'no-verdict-tx', indexed: null });
+        const client = await connected();
+
+        const assumed = JSON.parse((await submitParams(client, { tick: 'TOK', amount: '4' })).content[0].text);
+        expect(assumed).to.include({
+            txid: 'assumed-tx', status: 'valid', statusKnown: false, statusSource: 'assumed',
+        });
+        const absent = JSON.parse((await submitParams(client, { tick: 'TOK', amount: '3' })).content[0].text);
+        expect(absent).to.include({ txid: 'no-verdict-tx', status: null, statusKnown: false, statusSource: null });
+    });
+
+    it('blocks respelled, colliding, and multi-leg cap bypasses before broadcast', async () => {
+        const body = sinon.stub(WalletSession.prototype, 'submitInner').resolves({ txid: 'unexpected' });
+        const client = await connected();
+        const cases = [
+            [{ Tick: 'TOK', Amount: '99' }, 'POLICY_AMOUNT_EXCEEDED'],
+            [{ tick: 'TOK', amount: '1', AMOUNT: '99' }, 'POLICY_PARAM_KEY_COLLISION'],
+            [{ tick: 'TOK', legs: [{ amount: '99', destination: 'other' }] }, 'POLICY_LEGS_UNSUPPORTED'],
+        ];
+
+        for (const [params, code] of cases) {
+            const response = await submitParams(client, params);
+            expect(response.isError).to.equal(true);
+            expect(JSON.parse(response.content[0].text).code).to.equal(code);
+        }
+        expect(body.called).to.equal(false);
     });
 });

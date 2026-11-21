@@ -299,7 +299,8 @@ function buildServer(options = {}) {
                 + 'before passing a new key. The guard is bounded by the policy\'s idempotency retention horizon '
                 + '(30 days by default), not unlimited: an identical call made after the key has aged out is '
                 + 'treated as a new payment. To make a DELIBERATE second identical payment, pass a new '
-                + 'idempotency_key.',
+                + 'idempotency_key. The response includes the indexer status, whether it is known, and its source; '
+                + 'an assumed status is not an indexer confirmation.',
             inputSchema: {
                 coin: coinParam,
                 action: z.string().describe('ACTION name, e.g. SEND, MINT, EXECUTE'),
@@ -320,7 +321,12 @@ function buildServer(options = {}) {
                     { action: ACTION, params },
                     {},
                     { idempotencyKey: idempotencyKey || derivedIdempotencyKey(coin, ACTION, params) });
-                return ok({ txid: result.txid, status: result.status, policy: result.policy });
+                const indexed = result && result.indexed;
+                return ok({
+                    txid: result.txid, status: indexed && typeof indexed.status === 'string' ? indexed.status : null,
+                    statusKnown: !!(indexed && indexed.statusKnown === true), statusSource: indexed && indexed.statusSource ? indexed.statusSource : null,
+                    policy: result.policy,
+                });
             } catch (err) {
                 // Surface a known prior txid for resumption. A txid-less duplicate is
                 // explicitly unknown; nothing else is copied out of error details.

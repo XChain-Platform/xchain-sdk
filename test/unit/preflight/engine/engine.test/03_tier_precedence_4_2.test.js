@@ -19,7 +19,7 @@ function registerAuthoritativeDryRunCases() {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => notFound(),
                 getBalances: () => [],
-                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
             } });
             const r = await sdk.preflight('SEND|0|MISSING|1|addr', { source: 's', preflight: 'report' });
             const tokenFinding = r.findings.find(f => f.code === 'TOKEN_NOT_FOUND');
@@ -32,7 +32,7 @@ function registerAuthoritativeDryRunCases() {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG' }),
                 getBalances: () => [{ tick: 'JDOG', amount: '100' }],
-                getFeeQuote: () => ({ supported: true, valid: false, status: 'some-reject' }),
+                getPreflight: () => ({ supported: true, valid: false, status: 'some-reject' }),
             } });
             const r = await sdk.preflight('SEND|0|JDOG|1|addr', { source: 's', preflight: 'report' });
             const dry = r.findings.find(f => f.code === 'DRYRUN_INVALID');
@@ -50,7 +50,7 @@ function registerResolvedTickDeltaCase() {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG', divisible: 0 }),
                 getBalances: () => [{ tick: 'JDOG', amount: '1000' }],
-                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
             } });
             const r = await sdk.preflight(`SEND|0|${wireTick}|600|addr`, {
                 source: 's', preflight: 'report', localDeltas: [{ tick: 'JDOG', amount: '600' }],
@@ -75,7 +75,7 @@ function registerBalancePrecedenceCases() {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG', divisible: 0 }),
                 getBalances: () => [{ tick: 'JDOG', amount: '1000' }],
-                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
             } });
             const r = await sdk.preflight('SEND|0|JDOG|600|addr', {
                 source: 's', preflight: 'report', localDeltas: [{ tick: 'JDOG', amount: '600' }],
@@ -96,7 +96,7 @@ function registerBalancePrecedenceCases() {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG', divisible: 0 }),
                 getBalances: () => [{ tick: 'JDOG', amount: '100' }],
-                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
             } });
             const r = await sdk.preflight('SEND|0|JDOG|600|addr', { source: 's', preflight: 'report' });
             const bal = r.findings.find(f => f.code === 'BALANCE_INSUFFICIENT');

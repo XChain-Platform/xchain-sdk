@@ -35,7 +35,7 @@ describe('pre-flight engine', function () {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG' }),
                 getBalances: () => [{ tick: 'JDOG', amount: '100' }],
-                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 9 }),
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 9 }),
             } });
             const r = await sdk.preflight('SEND|0|JDOG|1|addr', { source: 's', preflight: 'report' });
             expect(r.findings.some(f => f.code === 'DRYRUN_VALID')).to.equal(true);

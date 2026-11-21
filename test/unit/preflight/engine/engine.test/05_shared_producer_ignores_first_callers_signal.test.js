@@ -16,7 +16,7 @@ describe('pre-flight shared producer and caller abort', function () {
         const sdk = mockSdk({ explorerSpec: {
             getToken: () => ({ tick: 'JDOG' }),
             getBalances: () => [{ tick: 'JDOG', amount: '100' }],
-            getFeeQuote: async () => {
+            getPreflight: async () => {
                 quoteCalls++;
                 await new Promise(r => setTimeout(r, 80));
                 return { supported: true, valid: true, status: 'valid', blockIndex: 500 };

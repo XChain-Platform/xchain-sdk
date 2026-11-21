@@ -18,7 +18,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const LifecycleManager = require('../../../../src/carrier/lifecycle_manager.js');
 const feeMethods = require('../../../../src/XChainSDK/fees_and_services.js');
-const { nativeFeeQuoteSource } = require('../../../../src/carrier/native_fee_source.js');
+const { nativeFeeQuoteSource, sameCustomOutput, mergeNativeFeeOutputs } = require('../../../../src/carrier/native_fee_source.js');
 const coins = require('../../../../src/coins');
 const { FAKE_WIF, makeSdk } = require('./helpers/lifecycle_manager.js');
 
@@ -63,5 +63,32 @@ describe('native-coin fee quote source', function () {
     it('submitAction quotes the fee as the resolved source', async function () {
         for (const [opts, expected] of QUOTE_SOURCE_CASES)
             assert.strictEqual(await quotedSource(opts), expected);
+    });
+});
+
+describe('native-coin fee output merge', function () {
+    const fee = { address: FEE_DESTINATION, value: 500 };
+
+    it('appends a native output the caller did not supply, without mutating either list', function () {
+        const caller = [{ address: 'other', value: 600 }];
+        const native = [fee];
+        const merged = mergeNativeFeeOutputs(caller, native);
+        assert.deepStrictEqual(merged, [{ address: 'other', value: 600 }, fee]);
+        assert.strictEqual(caller.length, 1);
+        assert.strictEqual(native.length, 1);
+        assert.notStrictEqual(merged, caller);
+    });
+
+    it('keeps one copy when the caller already supplied the same output, number or string', function () {
+        assert.deepStrictEqual(mergeNativeFeeOutputs([fee], [fee]), [fee]);
+        const asString = { address: FEE_DESTINATION, value: '500' };
+        assert.deepStrictEqual(mergeNativeFeeOutputs([asString], [fee]), [asString]);
+        assert.strictEqual(sameCustomOutput(asString, fee), true);
+        assert.strictEqual(sameCustomOutput({ address: FEE_DESTINATION, value: 501 }, fee), false);
+    });
+
+    it('treats a missing caller list as empty', function () {
+        assert.deepStrictEqual(mergeNativeFeeOutputs(undefined, [fee]), [fee]);
+        assert.deepStrictEqual(mergeNativeFeeOutputs(null, []), []);
     });
 });

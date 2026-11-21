@@ -25,6 +25,7 @@ const { coinPrefix } = require('../../utils/endpoints.js');
 const { WS_OPEN, WS_SCHEMA_VERSION, COIN_PREFIX_MAP } = require('./socket_constants.js');
 const catchUp = require('./catch_up.js');
 const pacing  = require('./pacing.js');
+const onceKeys = require('./once_keys.js');
 
 // Envelope schema gate: the server stamps every frame with schema_version.
 // If it speaks a NEWER envelope schema than this SDK build understands,
@@ -46,6 +47,16 @@ function warnOnSchemaMismatch(client, msg) {
     }
 }
 
+// The client state system frames carry: the server info, the catch-up flag, and a
+// spent once subscription, whose key is marked so a reconnect does not arm it again
+// (once_keys.js). Every frame still reaches the handlers afterwards.
+function noteSystemFrame(client, msg) {
+    if (msg.type === 'WELCOME') client.serverInfo = msg.data;
+    if (msg.type === 'CATCH_UP_COMPLETE') client.catchingUp = false;
+    if (msg.catch_up && !client.catchingUp) client.catchingUp = true;
+    if (onceKeys.isOnceSpendFrame(msg)) onceKeys.noteOnceSpent(client, msg.data);
+}
+
 module.exports = {
     // Internal methods
 
@@ -56,17 +67,7 @@ module.exports = {
         // reconnect replay holds it until every queued catch-up closes (catch_up.js).
         catchUp.trackCursor(this, msg);
 
-        // Handle system messages
-        if (msg.type === 'WELCOME') {
-            this.serverInfo = msg.data;
-        }
-
-        if (msg.type === 'CATCH_UP_COMPLETE') {
-            this.catchingUp = false;
-        }
-        if (msg.catch_up && !this.catchingUp) {
-            this.catchingUp = true;
-        }
+        noteSystemFrame(this, msg);
 
         // A COMPLETE or an error carrying the pending catch-up's id moves the reconnect on.
         if (this._catchUp && (msg.type === 'CATCH_UP_COMPLETE' || msg.type === 'error')) {

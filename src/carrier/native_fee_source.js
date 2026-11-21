@@ -18,6 +18,9 @@
  * fee. estimateFees and submitAction both resolve it here, so the output an
  * estimate quotes is the output a submit would build for the same options: the
  * funding address wins, then the change address, then the signing pubkey.
+ * Both paths also merge the quoted fee output into the caller's customOutputs
+ * here, so a caller who already supplied that exact output gets one fee output
+ * from each path, never two.
  *
  ********************************************************************/
 
@@ -28,4 +31,18 @@ function nativeFeeQuoteSource(encoderOpts){
     return o.sourceAddress || o.change || o.pubkey;
 }
 
-module.exports = { nativeFeeQuoteSource };
+function sameCustomOutput(a, b) {
+    return Boolean(a && b && a.address === b.address && String(a.value) === String(b.value));
+}
+
+// A new list: the caller's outputs in order, then each native-fee output the caller
+// did not already supply. Neither input is mutated.
+function mergeNativeFeeOutputs(callerOutputs, nativeOutputs) {
+    const merged = Array.isArray(callerOutputs) ? callerOutputs.slice() : [];
+    for (const output of nativeOutputs || [])
+        if (!merged.some(existing => sameCustomOutput(existing, output)))
+            merged.push(output);
+    return merged;
+}
+
+module.exports = { nativeFeeQuoteSource, sameCustomOutput, mergeNativeFeeOutputs };

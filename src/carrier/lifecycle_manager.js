@@ -20,7 +20,7 @@
  ********************************************************************/
 
 const ActionWaiter = require('../utils/action_waiter.js');
-const { nativeFeeQuoteSource } = require('./native_fee_source.js');
+const { nativeFeeQuoteSource, mergeNativeFeeOutputs } = require('./native_fee_source.js');
 const { installMethods } = require('../utils/install_methods.js');
 const { assertMainnetLaunched } = require('../protocol/mainnet_launch.js');
 const {
@@ -52,10 +52,6 @@ const { SDKPreflightError } = require('../utils/errors.js');
 // full pre-flight would, never less. Any other value enforces.
 const NON_ENFORCING = new Set(['off', 'warn', 'report', 'local']);
 
-function sameCustomOutput(a, b) {
-    return a && b && a.address === b.address && String(a.value) === String(b.value);
-}
-
 // Quote against the exact composed bytes and merge the required native-coin fee
 // output before the encoder can build or broadcast anything. Submit opts carry
 // workflow-level overrides; direct callers can put the same override beside the
@@ -71,11 +67,7 @@ async function withNativeFeeOutputs(sdk, actionString, encoderOpts, opts) {
         nativeOpts.payFeeInNativeCoin = encoderOpts.payFeeInNativeCoin;
     const nativeOutputs = await sdk.nativeFeeOutputs(actionString, nativeOpts);
     if (!nativeOutputs.length) return encoderOpts;
-    const customOutputs = Array.isArray(encoderOpts.customOutputs)
-        ? encoderOpts.customOutputs.slice() : [];
-    for (const output of nativeOutputs)
-        if (!customOutputs.some(existing => sameCustomOutput(existing, output)))
-            customOutputs.push(output);
+    const customOutputs = mergeNativeFeeOutputs(encoderOpts.customOutputs, nativeOutputs);
     return Object.assign({}, encoderOpts, { customOutputs });
 }
 

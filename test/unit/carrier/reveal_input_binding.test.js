@@ -60,9 +60,19 @@ function legInput(encoding, commit, index, redeem, extra = {}) {
     return input;
 }
 
-function revealFor(inputs) {
+// The reveal's marker as the encoder writes it: XCHN plus the encoding name,
+// obfuscated under the first input's txid (the commit).
+function tagOutput(txid, encoding) {
+    const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
+    const plain = Buffer.concat([Buffer.from('XCHN'), Buffer.from(encoding.toLowerCase(), 'utf8')]);
+    const data = Buffer.concat([cipher.update(plain), cipher.final()]);
+    return { script: bitcoin.payments.embed({ data: [data] }).output, value: 0 };
+}
+
+function revealFor(inputs, tag) {
     const psbt = new bitcoin.Psbt({ network: NET });
     for (const { partialSig, ...input } of inputs) psbt.addInput(input);
+    if (tag) psbt.addOutput(tagOutput(tag.txid, tag.encoding));
     psbt.addOutput({ script: DEST.output, value: inputs.length * LEG_VALUE - 1000 });
     inputs.forEach(({ partialSig }, i) => { if (partialSig) psbt.updateInput(i, { partialSig }); });
     return psbt;
@@ -150,8 +160,8 @@ for (const encoding of ['P2SH', 'P2WSH']) {
     });
 }
 
-function phaseTwoState(encoding, fixture, inputs, signReveal) {
-    const psbt = revealFor(inputs);
+function phaseTwoState(encoding, fixture, inputs, signReveal, tagged) {
+    const psbt = revealFor(inputs, tagged ? { txid: fixture.commit.getId(), encoding } : null);
     return { manager: { reconcileNetwork: () => NET, sdk: { wallet: { signRevealPsbt: signReveal } } },
         state: { encoder: { spendP2sh: async () => ({ psbt: psbt.toHex() }) },
             signed: { txid: fixture.commit.getId(), txHex: fixture.commit.toHex() },
@@ -176,6 +186,16 @@ for (const encoding of ['P2SH', 'P2WSH']) {
             const swapped = phaseTwoState(encoding, fixture, inputs, sign);
             await assert.rejects(() => prepareChunkReveal(swapped.manager, swapped.state),
                 error => error.code === 'REVEAL_INPUTS_REFUSED');
+            assert.strictEqual(signed.length, 1);
+        });
+
+        // The reveal is the one transaction allowed to carry the chunk tag.
+        it('signs an honest reveal that carries the chunk tag', async function () {
+            const fixture = commitFor(encoding);
+            const signed = [];
+            const sign = psbt => { signed.push(psbt); return { txHex: 'aa', txid: 'bb' }; };
+            const tagged = phaseTwoState(encoding, fixture, honestInputs(encoding, fixture), sign, true);
+            await prepareChunkReveal(tagged.manager, tagged.state);
             assert.strictEqual(signed.length, 1);
         });
     });

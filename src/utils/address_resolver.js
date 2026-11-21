@@ -15,12 +15,12 @@
  * XChain Platform SDK - Address Resolver
  *
  * Transaction-size optimization: an address can be referenced on the wire
- * either by its full string (1JDog...) or by its immutable numeric index id
- * with a caret prefix (^57). The id form is almost always smaller. This
- * resolver looks an address up via the explorer, caches the id permanently
- * (index_addresses ids never change once assigned, and they are deterministic
- * + reorg-stable), and substitutes the `^<id>` form into the action before it
- * is serialized. It is the address twin of tick_resolver.js.
+ * either by its full string (1JDog...) or by its numeric index id with a
+ * caret prefix (^57). The id form is almost always smaller. This
+ * resolver looks an address up via the explorer for each action and substitutes
+ * the current `^<id>` form before it is serialized. A rollback can free a dense
+ * id for reuse, so resolved ids are never retained across actions. It is the
+ * address twin of tick_resolver.js.
  *
  * Behavior is opt-out, ON by default: the SDK tries to produce the smallest
  * transaction and falls back to the supplied address whenever the id cannot be
@@ -69,11 +69,6 @@ class AddressResolver {
 
     constructor(sdk) {
         this.sdk = sdk;
-        // Permanent address -> numeric-id cache. An index_addresses id is immutable
-        // once assigned, so entries never need invalidation. Addresses are
-        // case-sensitive, so the key is the exact address string; an SDK instance is
-        // bound to one network/coin, so ids cannot collide across coins in one cache.
-        this.cache = new Map();
     }
 
     // Compaction is on by default; opt out with { compactAddresses: false }.
@@ -111,7 +106,6 @@ class AddressResolver {
         // not plain index_addresses lookups; leave them as-is.
         if (str.charAt(0) === 'C' && str.indexOf(':') !== -1) return address;
         if (str === 'BURN') return address;
-        if (this.cache.has(str)) return '^' + this.cache.get(str);
         if (!this.sdk.explorer) return address;             // no explorer: keep the address
 
         let id = null;
@@ -128,7 +122,6 @@ class AddressResolver {
         }
 
         if (id === null || !/^[0-9]+$/.test(id)) return address;   // not indexed yet / unusable id
-        this.cache.set(str, id);
         return '^' + id;
     }
 

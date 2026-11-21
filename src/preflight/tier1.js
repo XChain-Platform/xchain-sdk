@@ -19,7 +19,9 @@
  * response per spec §4.3. Prefers the validity-first
  * `/preflight` endpoint (verdict decoupled from native-fee support,
  * guardInert surfaced as a boolean); falls back to `/feequote` when
- * the explorer predates the `/preflight` endpoint (404). The load-bearing rule: several
+ * the explorer predates the `/preflight` endpoint (404). A `/feequote`
+ * answer is a verdict only in native fee mode, because that endpoint
+ * always judges with a native fee output. The load-bearing rule: several
  * response shapes are NOT validity verdicts and must fall through to
  * Tier 2 exclusively, never becoming a `dryrun` finding:
  *
@@ -53,6 +55,7 @@
 'use strict';
 
 const { FINDING_CODES, TIER1_DENYLIST, TIER1_SUBCOMMAND_PREFLIGHT } = require('./constants.js');
+const coins = require('../coins');
 
 /*
  * Run Tier 1 for a parsed action.
@@ -87,9 +90,9 @@ async function runTier1({ sdk, parsed, source, feeMode, signal, timeoutMs }) {
     if (!sdk.explorer)
         return { kind: 'unavailable', reason: 'no explorer client' };
 
-    let quote;
+    let answer;
     try {
-        quote = await withAbort(callEndpoint(sdk, {
+        answer = await withAbort(callEndpointVia(sdk, {
             action,
             params: paramsToWire(parsed),
             source,
@@ -101,7 +104,29 @@ async function runTier1({ sdk, parsed, source, feeMode, signal, timeoutMs }) {
         return { kind: 'unavailable', reason: e && e.message ? e.message : String(e) };
     }
 
-    return classifyQuote(quote);
+    const outcome = classifyQuote(answer.quote);
+    // The legacy /feequote endpoint always dry-runs with a native fee output, so
+    // its verdict answers for native fee mode only. In any other mode it would
+    // stand in for the XCHAIN balance debit it never checked, so Tier 2 stands.
+    if (outcome.kind === 'verdict' && answer.via === 'feequote' && !nativeFeeModeApplies(sdk, feeMode))
+        return { kind: 'no-verdict', reason: 'fee-quote fallback judges native fee mode only', quote: answer.quote };
+    return outcome;
+}
+
+// Whether the composed transaction settles its protocol fee as a native-coin
+// output: the caller's stated mode wins, else the connected chain's own mode.
+// An unknown chain is not native, which keeps a guess out of the verdict.
+function nativeFeeModeApplies(sdk, feeMode) {
+    if (feeMode) return feeMode === 'native';
+    try {
+        const [fullName, network] = String((sdk && sdk.config && sdk.config.network) || '').split('-');
+        const tick = coins.FULL_NAME_TO_TICK[fullName];
+        if (!tick || !coins.NETWORKS.includes(network)) return false;
+        const cfg = coins.getCoinConfig(tick, network);
+        return !!cfg && cfg.FEE_PAYMENT_MODE === 'native';
+    } catch (e) {
+        return false;
+    }
 }
 
 function classifyNonVerdict(quote) {
@@ -228,10 +253,13 @@ function normalizeSubCommands(raw) {
 // substituted response is the same flat refusal the fallback would have
 // produced, so an explorer that predates the sub-command door degrades to
 // exactly the pre-row-55 behaviour: no-verdict, Tier 2 stands, disclosed.
-async function callEndpoint(sdk, args, subCommandPreflight) {
+//
+// callEndpointVia also names which endpoint answered, because a /feequote
+// verdict is a verdict only in native fee mode (see runTier1).
+async function callEndpointVia(sdk, args, subCommandPreflight) {
     if (typeof sdk.explorer.getPreflight === 'function') {
         try {
-            return await sdk.explorer.getPreflight(args, { noRetry: true });
+            return { quote: await sdk.explorer.getPreflight(args, { noRetry: true }), via: 'preflight' };
         } catch (e) {
             const notFound = e && (e.code === 'EXPLORER_HTTP_404' || e.code === 'EXPLORER_HTTP_501');
             if (!notFound) throw e;
@@ -239,8 +267,12 @@ async function callEndpoint(sdk, args, subCommandPreflight) {
         }
     }
     if (subCommandPreflight)
-        return { supported: false, denied: true, valid: null };
-    return sdk.explorer.getFeeQuote(args);
+        return { quote: { supported: false, denied: true, valid: null }, via: 'substitute' };
+    return { quote: await sdk.explorer.getFeeQuote(args), via: 'feequote' };
+}
+
+async function callEndpoint(sdk, args, subCommandPreflight) {
+    return (await callEndpointVia(sdk, args, subCommandPreflight)).quote;
 }
 
 // The wire params string for the quote endpoint: everything after

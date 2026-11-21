@@ -79,6 +79,23 @@ describe('scoped WIF signing on submitAction', function () {
             .to.throw().with.property('code', 'UNAPPROVED_INPUT');
     });
 
+    it('refuses a pre-signed input the caller never named', async function () {
+        const f = fixture(s => [{ script: s, value: 190000 }]);
+        f.psbt.updateInput(1, { finalScriptWitness: Buffer.from('0101aa', 'hex') });
+        const sdk = new XChainSDK({ network: NETWORK });
+        const view = await capture(sdk, [{ txid: f.txid, vout: 0 }]);
+        expect(() => view.wallet.signPsbt(f.psbt.toHex(), f.kp.wif))
+            .to.throw(/pre-signed/).with.property('code', 'UNAPPROVED_INPUT');
+    });
+
+    it('still skips a pre-signed input the caller did name', async function () {
+        const f = fixture(s => [{ script: s, value: 190000 }]);
+        f.psbt.updateInput(1, { finalScriptWitness: Buffer.from('0101aa', 'hex') });
+        const sdk = new XChainSDK({ network: NETWORK });
+        const view = await capture(sdk, [{ txid: f.txid, vout: 0 }, { txid: f.txid, vout: 1 }]);
+        expect(view.wallet.signPsbt(f.psbt.toHex(), f.kp.wif).txHex).to.be.a('string');
+    });
+
     it('leaves the sdk unscoped when no utxos are supplied', async function () {
         const sdk = new XChainSDK({ network: NETWORK });
         expect(await capture(sdk, null)).to.equal(sdk);

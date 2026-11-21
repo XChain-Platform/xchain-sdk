@@ -86,7 +86,14 @@ describe('AddressResolver', function () {
             const r = new AddressResolver(makeSdk({}, async (a) => { calls++; return { info: { address_id: 57 } }; }));
             expect(await r.resolve(ADDR)).to.equal('^57');
             expect(await r.resolve(ADDR)).to.equal('^57');
-            expect(calls).to.equal(1);
+            expect(calls).to.equal(2);
+        });
+
+        it('uses a reassigned address id on the next action after a reorg', async function () {
+            let id = 57;
+            const r = new AddressResolver(makeSdk({}, async () => ({ info: { address_id: id++ } })));
+            expect(await r.resolve(ADDR)).to.equal('^57');
+            expect(await r.resolve(ADDR)).to.equal('^58');
         });
     });
 });

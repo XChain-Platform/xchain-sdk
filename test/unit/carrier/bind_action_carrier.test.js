@@ -172,8 +172,8 @@ describe('carrier binding: the transaction must carry the action that was submit
         });
 
         it('skips the P2SH/P2WSH reveal tag, which carries a marker and no params', function () {
-            expect(bind({ psbt: tagPsbt('p2sh'), actionString: SEND_A })).to.not.throw();
-            expect(bind({ psbt: tagPsbt('p2wsh'), actionString: SEND_A })).to.not.throw();
+            expect(bind({ psbt: tagPsbt('p2sh'), actionString: SEND_A, allowRevealTag: true })).to.not.throw();
+            expect(bind({ psbt: tagPsbt('p2wsh'), actionString: SEND_A, allowRevealTag: true })).to.not.throw();
         });
 
         it('skips a lane that emits no OP_RETURN at all (MULTISIGN, chunk funding, commit)', function () {

@@ -21,7 +21,7 @@
 const { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput } = require('../carrier/reconcile_encoded.js');
 const { exactU64 } = require('../carrier/reconcile_encoded/script_matching.js');
 const { assertCarrierBinding, assertPhaseFundingBound } = require('../carrier/bind_action_carrier.js');
-const { nativeFeeQuoteSource } = require('../carrier/native_fee_source.js');
+const { nativeFeeQuoteSource, mergeNativeFeeOutputs } = require('../carrier/native_fee_source.js');
 const EncoderClient = require('../clients/encoder.js');
 const { SDKConfigError, SDKExplorerError } = require('../utils/errors.js');
 const coins = require('../coins');
@@ -249,10 +249,9 @@ module.exports = {
         let result = this.actions.createAction(actionData);
         let encoder = this.requireEncoder();
 
-        let customOutputs  = Array.isArray(encoderOpts.customOutputs) ? encoderOpts.customOutputs.slice() : [];
         let native = await resolveNativeFeeOutputs(this, actionData, encoderOpts, nativeFeeQuoteSource(encoderOpts));
         let nativeFeeQuote = native.quote;
-        for (let out of native.outputs) customOutputs.push(out);
+        let customOutputs  = mergeNativeFeeOutputs(encoderOpts.customOutputs, native.outputs);
 
         let feeResult = await encoder.estimateFee(buildFeeEstimateRequest(result, encoderOpts, customOutputs));
         reconcileFeeEstimate(this, feeResult, result, encoderOpts, customOutputs, nativeFeeQuote);

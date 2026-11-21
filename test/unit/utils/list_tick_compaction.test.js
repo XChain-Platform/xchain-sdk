@@ -108,6 +108,17 @@ describe('LIST ticker item compaction', function () {
         assert.deepStrictEqual(out.ITEM, ['DOGE:FAIL', 'LTC:SLOW']);
         assert.deepStrictEqual(hangingCalls, [{ rest: 'SLOW', options: { noRetry: true } }]);
     });
+
+    it('uses a reassigned ticker id on the next LIST action after a reorg', async function () {
+        const dogeTokens = { PEPE: 12 };
+        const h = harness({ dogeTokens });
+        const params = { TYPE: '1', ITEM: ['DOGE:PEPE'] };
+
+        assert.deepStrictEqual((await h.resolver.resolveActionParams('LIST', params)).ITEM, ['DOGE:^12']);
+        dogeTokens.PEPE = 13;
+        assert.deepStrictEqual((await h.resolver.resolveActionParams('LIST', params)).ITEM, ['DOGE:^13']);
+        assert.strictEqual(h.dogeCalls.length, 2);
+    });
 });
 
 describe('LIST ticker item compaction guards', function () {

@@ -89,7 +89,7 @@ function testAllowedDestination(action) {
 
         expect(captured.addressResolverCalls).to.equal(0);
         expect(captured.created).to.have.length(1);
-        expect(captured.created[0].params.destination).to.equal(FULL_ADDRESS);
+        expect(captured.created[0].params.DESTINATION).to.equal(FULL_ADDRESS);
     };
 }
 

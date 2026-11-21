@@ -55,15 +55,15 @@ function coinExplorers(resolver) {
     return resolver.listCoinExplorers;
 }
 
+// A fresh lookup per action: its id memo dedupes items within one LIST only,
+// because a rollback can free a ticker id for reuse between actions.
 function coinTickLookup(resolver) {
-    if (resolver.listCoinTickLookup) return resolver.listCoinTickLookup;
     const explorers = coinExplorers(resolver);
     if (!explorers) return null;
-    resolver.listCoinTickLookup = createCoinTickLookup({
+    return createCoinTickLookup({
         explorers,
         cap: promise => resolver.withCap(promise, resolver.lookupCapMs)
     });
-    return resolver.listCoinTickLookup;
 }
 
 async function compactListTickItems(resolver, params) {

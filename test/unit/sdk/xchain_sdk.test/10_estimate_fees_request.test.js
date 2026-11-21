@@ -118,6 +118,38 @@ describe('XChainSDK', function () {
 describe('XChainSDK', function () {
     afterEach(function () { sinon.restore(); });
 
+    describe('estimateFees: a caller-supplied native-fee output', function () {
+
+        it('does not duplicate an output supplied by the documented workaround', async function () {
+            const sdk = makeSDK();
+            const estimate = sinon.stub(sdk.encoder, 'estimateFee').resolves({ psbt: plainPsbt(), encoding: 'OP_RETURN' });
+            sinon.stub(sdk, 'quoteNativeFee').resolves({ supported: true, valid: true, requiredFeeSats: 500, requiredFeeSatsExact: "500", feeDestination: addressFor(0x02) });
+            const supplied = [{ address: addressFor(0x02), value: 500 }];
+            await sdk.estimateFees(SEND, { pubkey: 'mypub', payFeeInNativeCoin: true, customOutputs: supplied });
+            expect(estimate.firstCall.args[0].customOutputs).to.deep.equal([{ address: addressFor(0x02), value: 500 }]);
+            expect(supplied, 'the caller list is not mutated').to.have.length(1);
+        });
+
+        it('refuses a PSBT paying the fee twice when the caller supplied the fee output once', async function () {
+            const sdk = makeSDK();
+            const fee = { script: bitcoin.address.toOutputScript(addressFor(0x02), NET), value: 500 };
+            sinon.stub(sdk.encoder, 'estimateFee').resolves({ psbt: plainPsbt([fee, fee]), encoding: 'OP_RETURN' });
+            sinon.stub(sdk, 'quoteNativeFee').resolves({ supported: true, valid: true, requiredFeeSats: 500, requiredFeeSatsExact: "500", feeDestination: addressFor(0x02) });
+            let err;
+            try {
+                await sdk.estimateFees(SEND, {
+                    pubkey: 'mypub', payFeeInNativeCoin: true,
+                    customOutputs: [{ address: addressFor(0x02), value: 500 }],
+                });
+            } catch (e) { err = e; }
+            expect(err, 'a doubled fee must not come back signable').to.be.an('error');
+        });
+    });
+});
+
+describe('XChainSDK', function () {
+    afterEach(function () { sinon.restore(); });
+
     describe('estimateFees: chunked carriers and the reconcile gate', function () {
 
         it('binds a chunked FILE carrier to the rawData the caller sent', async function () {

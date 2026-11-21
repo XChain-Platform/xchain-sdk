@@ -67,8 +67,15 @@ describe('TickResolver', function () {
             let calls = 0;
             const r = new TickResolver(makeSdk({}, async (tick) => { calls++; return { info: { tick, tick_id: 7 } }; }));
             expect(await r.resolve('FOO')).to.equal('^7');
-            expect(await r.resolve('foo')).to.equal('^7'); // case-insensitive cache hit
-            expect(calls).to.equal(1);
+            expect(await r.resolve('foo')).to.equal('^7');
+            expect(calls).to.equal(2);
+        });
+
+        it('uses a reassigned ticker id on the next action after a reorg', async function () {
+            let id = 7;
+            const r = new TickResolver(makeSdk({}, async (tick) => ({ info: { tick, tick_id: id++ } })));
+            expect(await r.resolve('FOO')).to.equal('^7');
+            expect(await r.resolve('foo')).to.equal('^8');
         });
 
         it('passes empty / null / undefined through untouched', async function () {

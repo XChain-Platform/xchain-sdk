@@ -35,6 +35,7 @@
 
 const { evaluatePolicy } = require('./policy_evaluator/evaluate_policy.js');
 const valueDerivability = require('./policy/value_derivability.js');
+const Utility = require('../utils/utility.js');
 // allowedDestinations binds only formats with a DESTINATION field; the current set is
 // pinned by the G9 enforceability test (see the G9 note in evaluate_policy.js).
 const {
@@ -56,8 +57,36 @@ const {
     UNRESOLVED_TICK_BUCKET,
 } = require('./policy_evaluator/value_resolution.js');
 
+function canonicalizeObject(input, path, collisions, util) {
+    const out = {};
+    const sources = {};
+    for (const key of Object.keys(input || {})) {
+        const canonical = util.camelToUpperSnake(key);
+        if (sources[canonical]) {
+            collisions.push({ path, canonical, keys: [sources[canonical], key] });
+        } else {
+            sources[canonical] = key;
+        }
+        let value = input[key];
+        if (canonical === 'LEGS' && Array.isArray(value)) {
+            value = value.map((leg, index) => leg && typeof leg === 'object' && !Array.isArray(leg)
+                ? canonicalizeObject(leg, `${path}.LEGS[${index}]`, collisions, util)
+                : leg);
+        }
+        out[canonical] = value;
+    }
+    return out;
+}
+
+function canonicalizeParams(params) {
+    const collisions = [];
+    const canonical = canonicalizeObject(params, 'params', collisions, new Utility());
+    return { params: canonical, collisions };
+}
+
 module.exports = {
     evaluatePolicy,
+    canonicalizeParams,
     // Exposed so AgentSession and the daemon share the exact same primitives.
     pick,
     capFor,

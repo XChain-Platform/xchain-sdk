@@ -15,11 +15,11 @@
  * XChain Platform SDK - Ticker Resolver
  *
  * Transaction-size optimization: a ticker can be referenced on the wire
- * either by its full text name (JDOG) or by its immutable numeric id with a
- * caret prefix (^1234). The id form is almost always smaller. This resolver
- * looks a ticker name up via the explorer, caches the id permanently (ids
- * never change once assigned), and substitutes the `^<id>` form into the
- * action before it is serialized.
+ * either by its full text name (JDOG) or by its numeric id with a caret
+ * prefix (^1234). The id form is almost always smaller. This resolver
+ * looks a ticker name up via the explorer for each action and substitutes the
+ * current `^<id>` form before it is serialized. A rollback can free a dense id
+ * for reuse, so resolved ids are never retained across actions.
  *
  * Behavior is opt-out, ON by default: the SDK tries to produce the smallest
  * transaction and falls back to the supplied name whenever the id cannot be
@@ -68,11 +68,6 @@ class TickResolver {
     constructor(sdk) {
         this.sdk = sdk;
         this.lookupCapMs = LOOKUP_CAP_MS;
-        // Permanent name -> numeric-id cache. A ticker id (index_tickers.id) is
-        // immutable once assigned, so entries never need invalidation. Keyed by
-        // lowercase name; an SDK instance is bound to a single network/coin, so
-        // ids cannot collide across coins within one cache.
-        this.cache = new Map();
     }
 
     // Compaction is on by default; opt out with { compactTickers: false }.
@@ -105,8 +100,6 @@ class TickResolver {
         let str = String(tick);
         if (str === '') return tick;
         if (str.charAt(0) === '^') return tick;          // already an id reference
-        let key = str.toLowerCase();
-        if (this.cache.has(key)) return '^' + this.cache.get(key);
         if (!this.sdk.explorer) return tick;             // no explorer: keep the name
 
         let id = null;
@@ -124,7 +117,6 @@ class TickResolver {
         }
 
         if (id === null || !/^[0-9]+$/.test(id)) return tick;   // not indexed yet / unusable id
-        this.cache.set(key, id);
         return '^' + id;
     }
 

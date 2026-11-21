@@ -116,7 +116,11 @@ function writableStub(network) {
                     throw e;
                 }
                 if (key !== undefined && key !== null) seen.set(String(key), 'txAA');
-                return { txid: 'txAA', status: 'valid', policy: { action: actionData.action, windowUsage: { count: 1 } } };
+                return {
+                    txid: 'txAA',
+                    indexed: { status: 'valid', statusKnown: true, statusSource: 'indexer' },
+                    policy: { action: actionData.action, windowUsage: { count: 1 } },
+                };
             },
         };
     };
@@ -266,6 +270,7 @@ describe('MCP server (write tools)', () => {
         });
         const body = JSON.parse(res.content[0].text);
         expect(body.txid).to.equal('txAA');
+        expect(body).to.include({ status: 'valid', statusKnown: true, statusSource: 'indexer' });
         expect(body.policy.windowUsage.count).to.equal(1);
         const sessCall = created[0].calls.find((c) => c[0] === 'agentSession');
         expect(sessCall[2]).to.deep.equal(POLICY);

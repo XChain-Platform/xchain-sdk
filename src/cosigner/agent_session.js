@@ -50,7 +50,9 @@ const { SDKPolicyError } = require('../utils/errors.js');
 // The pure policy verdict is shared with the co-signer daemon so both
 // enforcement points run identical logic. AgentSession adds the throw +
 // observer + file-backed window store around it.
-const { evaluatePolicy, addDecimal, hasEnforceableCap, UNRESOLVED_TICK_BUCKET } = require('./policy_evaluator.js');
+const {
+    evaluatePolicy, canonicalizeParams, addDecimal, hasEnforceableCap, UNRESOLVED_TICK_BUCKET,
+} = require('./policy_evaluator.js');
 
 function validatePolicy(policy) {
     if (!Array.isArray(policy.allowedActions) || policy.allowedActions.length === 0)
@@ -343,7 +345,15 @@ class AgentSession extends WalletSession {
         if (halt)
             this.deny('POLICY_HALTED', `AgentSession is halted: ${halt}`, { killSwitchFile: this._killSwitchFile });
 
-        const evaluation = this.evaluate(actionData);
+        const canonical = canonicalizeParams(actionData && actionData.params);
+        if (canonical.collisions.length) {
+            const collision = canonical.collisions[0];
+            this.deny('POLICY_PARAM_KEY_COLLISION',
+                `${collision.path} contains keys ${collision.keys.join(' and ')} that both compose as ${collision.canonical}`,
+                { collisions: canonical.collisions });
+        }
+        const preparedActionData = Object.assign({}, actionData, { params: canonical.params });
+        const evaluation = this.evaluate(preparedActionData);
 
         if (evaluation.needsConfirmation) {
             const ok = await this.policy.confirmAbove.handler({
@@ -359,7 +369,7 @@ class AgentSession extends WalletSession {
         const entry = authorizeSubmission(this, evaluation, submitOpts);
         let result;
         try {
-            result = await super.submitInner(actionData, encoderOpts, this.policy.allowedDestinations
+            result = await super.submitInner(preparedActionData, encoderOpts, this.policy.allowedDestinations
                 && ['MINT', 'MESSAGE', 'SWEEP'].includes(evaluation.action)
                 ? Object.assign({}, submitOpts, { skipAddressCompaction: true }) : submitOpts);
         } catch (err) {
