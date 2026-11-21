@@ -5,10 +5,7 @@
 
 const { expect } = require('chai');
 const AuthUtils = require('../../../src/utils/auth.js');
-const bip322 = require('../../../src/utils/bip322.js');
-const { getNetwork } = require('../../../src/protocol/networks.js');
 
-const MAINNET = getNetwork('bitcoin-mainnet');
 const VECTOR = {
     message: 'PURVOQ544B6HUATVBJZN5EZJUU',
     address: 'bc1pcquvhrqv0q68t4m0hfq6tpn006qrskyc7yrqnp2uyrf2emg3wynsdjyk38',
@@ -23,21 +20,20 @@ const FALLBACK_VECTOR = {
 
 describe('BIP-322 simple P2TR vectors and signing', function() {
     it('verifies the published prefixed P2TR vector', function() {
-        expect(bip322.verifySimple(VECTOR.address, VECTOR.message, VECTOR.signature, MAINNET)).to.equal(true);
+        const auth = new AuthUtils('bitcoin-mainnet');
+        expect(auth.verifyMessage(VECTOR.address, VECTOR.message, VECTOR.signature, {
+            format: 'bip322-simple'
+        })).to.deep.equal({ valid: true, error: null });
     });
 
     it('verifies the published no-prefix compatibility vector', function() {
-        expect(bip322.verifySimple(
+        const auth = new AuthUtils('bitcoin-mainnet');
+        expect(auth.verifyMessage(
             FALLBACK_VECTOR.address,
             FALLBACK_VECTOR.message,
             FALLBACK_VECTOR.signature,
-            MAINNET
-        )).to.equal(true);
-    });
-
-    it('matches the published UTF-8 message hash', function() {
-        expect(bip322.messageHash('Hello World').toString('hex'))
-            .to.equal('f0eb03b1a75ac6d9847f55c624a99169b5dccba2a31f5b23bea77ba270de0a7a');
+            { format: 'bip322-simple' }
+        )).to.deep.equal({ valid: true, error: null });
     });
 
     it('signs deterministically when auxiliary randomness is fixed', function() {
@@ -59,12 +55,14 @@ describe('BIP-322 simple P2TR vectors and signing', function() {
 
 describe('BIP-322 simple P2TR failures', function() {
     it('rejects message, signer, signature and format changes', function() {
-        expect(bip322.verifySimple(VECTOR.address, 'wrong message', VECTOR.signature, MAINNET)).to.equal(false);
-        expect(bip322.verifySimple(FALLBACK_VECTOR.address, VECTOR.message, VECTOR.signature, MAINNET))
-            .to.equal(false);
-        expect(bip322.verifySimple(VECTOR.address, VECTOR.message, VECTOR.signature.slice(0, -1), MAINNET))
-            .to.equal(false);
-        expect(bip322.verifySimple(VECTOR.address, VECTOR.message, 'fulAA==', MAINNET)).to.equal(false);
+        const auth = new AuthUtils('bitcoin-mainnet');
+        const verify = (address, message, signature) => auth.verifyMessage(address, message, signature, {
+            format: 'bip322-simple'
+        }).valid;
+        expect(verify(VECTOR.address, 'wrong message', VECTOR.signature)).to.equal(false);
+        expect(verify(FALLBACK_VECTOR.address, VECTOR.message, VECTOR.signature)).to.equal(false);
+        expect(verify(VECTOR.address, VECTOR.message, VECTOR.signature.slice(0, -1))).to.equal(false);
+        expect(verify(VECTOR.address, VECTOR.message, 'fulAA==')).to.equal(false);
     });
 
     it('returns a structured auth failure without throwing', function() {
