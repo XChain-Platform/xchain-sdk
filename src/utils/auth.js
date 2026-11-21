@@ -24,6 +24,7 @@
 const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const signedMessage = require('./signed_message.js');
+const bip322 = require('./bip322.js');
 const { createECPair } = require('./bitcoinjs_compat/ecpair.js');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { getNetwork } = require('../protocol/networks.js');
@@ -33,7 +34,8 @@ const ECPair = createECPair(ecc);
 
 // Refuse segwit signing modes where a witness program is anyone-can-spend, as key_derivation.js does
 function refuseSegwitWithoutSupport(net, opts, networkName) {
-    if ((opts.segwitNative || opts.segwitRedeemScript) && net.supportsSegwit === false) {
+    if ((opts.segwitNative || opts.segwitRedeemScript || opts.format === 'bip322-simple') &&
+        net.supportsSegwit === false) {
         throw new SDKAuthError('SEGWIT_NOT_SUPPORTED',
             `SegWit message signing is not supported on ${networkName}.`);
     }
@@ -157,6 +159,8 @@ class AuthUtils {
      * @param {boolean} [opts.segwitRedeemScript=false] - For P2SH-P2WPKH addresses
      * @param {boolean} [opts.segwitNative=false] - For P2WPKH (bech32) addresses
      * @param {string} [opts.network] - Override instance network
+     * @param {'legacy'|'bip322-simple'} [opts.format='legacy'] - Signature format
+     * @param {Uint8Array} [opts.auxRand] - Optional 32-byte BIP-340 auxiliary randomness
      * @returns {{ signature: string, address: string }}
      * @throws {SDKAuthError} SEGWIT_NOT_SUPPORTED when a segwit option is set on a non-segwit network (dogecoin-*)
      */
@@ -179,6 +183,20 @@ class AuthUtils {
         }
 
         try {
+            const format = opts.format || 'legacy';
+            if (format === 'bip322-simple') {
+                if (opts.segwitNative || opts.segwitRedeemScript) {
+                    throw new SDKAuthError('INVALID_SIGNATURE_FORMAT',
+                        'BIP-322 simple format cannot be combined with legacy SegWit options.');
+                }
+                return bip322.signSimple(message, keyPair.privateKey, keyPair.publicKey, net, {
+                    auxRand: opts.auxRand
+                });
+            }
+            if (format !== 'legacy') {
+                throw new SDKAuthError('INVALID_SIGNATURE_FORMAT',
+                    `Unsupported message signature format: ${format}.`);
+            }
             const privateKey = keyPair.privateKey;
             const compressed = keyPair.compressed;
 
@@ -227,10 +245,12 @@ class AuthUtils {
      * @param {string} address - Claimed owner address
      * @param {string} message - The original message that was signed
      * @param {string} signature - Base64 signature from signMessage
-     * @param {string} [network] - Override instance network
+     * @param {string|Object} [network] - Override instance network, or verification options
+     * @param {Object} [opts]
+     * @param {'legacy'|'bip322-simple'} [opts.format='legacy'] - Signature format
      * @returns {{ valid: boolean, address: string, error: string|null }}
      */
-    verifyOwnership(address, message, signature, network) {
+    verifyOwnership(address, message, signature, network, opts = {}) {
         if (!address || typeof address !== 'string') {
             return { valid: false, address: address || null, error: 'Address is required.' };
         }
@@ -241,6 +261,11 @@ class AuthUtils {
             return { valid: false, address: address, error: 'Signature is required.' };
         }
 
+        if (network && typeof network === 'object') {
+            opts = network;
+            network = opts.network;
+        }
+
         let net;
         try {
             net = this.resolveNet(network);
@@ -249,6 +274,18 @@ class AuthUtils {
         }
 
         try {
+            const format = opts.format || 'legacy';
+            if (format === 'bip322-simple') {
+                const valid = bip322.verifySimple(address, message, signature, net);
+                return {
+                    valid,
+                    address: address,
+                    error: valid ? null : 'Invalid BIP-322 simple signature.'
+                };
+            }
+            if (format !== 'legacy') {
+                return { valid: false, address: address, error: `Unsupported message signature format: ${format}.` };
+            }
             const valid = signedMessage.verify(message, address, signature, net.messagePrefix);
             return { valid: !!valid, address: address, error: null };
         } catch (err) {
@@ -262,11 +299,12 @@ class AuthUtils {
      * @param {string} address
      * @param {string} message
      * @param {string} signature - Base64
-     * @param {string} [network] - Override instance network
+     * @param {string|Object} [network] - Override instance network, or verification options
+     * @param {Object} [opts] - Verification options
      * @returns {{ valid: boolean, error: string|null }}
      */
-    verifyMessage(address, message, signature, network) {
-        const result = this.verifyOwnership(address, message, signature, network);
+    verifyMessage(address, message, signature, network, opts) {
+        const result = this.verifyOwnership(address, message, signature, network, opts);
         return { valid: result.valid, error: result.error };
     }
 }
