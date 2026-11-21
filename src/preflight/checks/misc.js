@@ -120,19 +120,46 @@ const ASPECT_NOTES = {
     SLEEP:    'ownership, lock, and escrow state resolve server-side',
 };
 
+const GENERIC_STATE_NOTE = 'no client-side state checks are certified for this action';
+const VOTE_ASPECT_NOTES = {
+    0: {
+        code: 'VOTE_CREATE_STATE',
+        note: 'governance-token existence, creator token balance, end-block timing, escrow funding, and binding callback contract state resolve server-side',
+    },
+    1: { code: 'VOTE_STATE', note: ASPECT_NOTES.VOTE },
+    2: {
+        code: 'VOTE_FINALIZE_STATE',
+        note: 'poll open state, close eligibility, tally and participation gates, escrow settlement, and binding callback execution resolve server-side',
+    },
+    3: {
+        code: 'VOTE_DELEGATION_STATE',
+        note: 'governance-token existence and the no-self-delegation rule resolve server-side; a valid set or clear replaces the prior standing delegation',
+    },
+};
+
 const LIST_SET_META_NOTE = 'A LIST SET META (format 5) on a shared list is charged the shared-list edit fee (LIST_SHARED_EDIT_BASE); whether the list is shared resolves server-side.';
+
+function addVoteStateNote(ctx) {
+    const entry = VOTE_ASPECT_NOTES[String(ctx.parsed.version)];
+    if (entry) ctx.addUnverified(entry.code, entry.note);
+    else ctx.addUnverified('VOTE_UNKNOWN_STATE', GENERIC_STATE_NOTE);
+}
 
 async function checkMisc(ctx) {
     const action = ctx.parsed.action;
     if (action === 'STAKE' && !checkAmountWidth(ctx, 'AMOUNT', action)) await checkCapabilityStakeBalance(ctx);
     if (action === 'DEPOSIT' || action === 'WITHDRAW') checkAmountWidth(ctx, 'QUANTITY', action);
     if (Object.prototype.hasOwnProperty.call(ASPECT_NOTES, action) && ASPECT_NOTES[action] === null) return;
+    if (action === 'VOTE') {
+        addVoteStateNote(ctx);
+        return;
+    }
     const note = ASPECT_NOTES[action];
     if (note) ctx.addUnverified(action + '_STATE', note);
-    else ctx.addUnverified(action + '_STATE', 'no client-side state checks are certified for this action');
+    else ctx.addUnverified(action + '_STATE', GENERIC_STATE_NOTE);
     if (action === 'LIST' && String(ctx.parsed.version) === '5') {
         ctx.addUnverified('LIST_SET_META_FEE', LIST_SET_META_NOTE);
     }
 }
 
-module.exports = { checkMisc, ASPECT_NOTES, LIST_SET_META_NOTE, STAKE_AMOUNT_MAX_CHARS };
+module.exports = { checkMisc, ASPECT_NOTES, VOTE_ASPECT_NOTES, LIST_SET_META_NOTE, STAKE_AMOUNT_MAX_CHARS };
