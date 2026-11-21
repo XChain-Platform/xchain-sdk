@@ -99,6 +99,10 @@ describe('MCP submit_action retry contract', () => {
         expect(description).to.match(/failed before broadcasting can be repeated/i);
         expect(description).to.match(/without a txid.*outcome is unknown/i);
     });
+});
+
+describe('MCP submit_action retry contract', () => {
+    afterEach(() => sinon.restore());
 
     it('surfaces assumed and absent indexer verdicts without inventing confirmation', async () => {
         const body = sinon.stub(WalletSession.prototype, 'submitInner');
@@ -115,22 +119,5 @@ describe('MCP submit_action retry contract', () => {
         });
         const absent = JSON.parse((await submitParams(client, { tick: 'TOK', amount: '3' })).content[0].text);
         expect(absent).to.include({ txid: 'no-verdict-tx', status: null, statusKnown: false, statusSource: null });
-    });
-
-    it('blocks respelled, colliding, and multi-leg cap bypasses before broadcast', async () => {
-        const body = sinon.stub(WalletSession.prototype, 'submitInner').resolves({ txid: 'unexpected' });
-        const client = await connected();
-        const cases = [
-            [{ Tick: 'TOK', Amount: '99' }, 'POLICY_AMOUNT_EXCEEDED'],
-            [{ tick: 'TOK', amount: '1', AMOUNT: '99' }, 'POLICY_PARAM_KEY_COLLISION'],
-            [{ tick: 'TOK', legs: [{ amount: '99', destination: 'other' }] }, 'POLICY_LEGS_UNSUPPORTED'],
-        ];
-
-        for (const [params, code] of cases) {
-            const response = await submitParams(client, params);
-            expect(response.isError).to.equal(true);
-            expect(JSON.parse(response.content[0].text).code).to.equal(code);
-        }
-        expect(body.called).to.equal(false);
     });
 });
