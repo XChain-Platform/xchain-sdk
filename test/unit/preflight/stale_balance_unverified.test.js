@@ -10,6 +10,7 @@ const { FINDING_CODES } = require('../../../src/preflight/constants.js');
 
 const H = 'n4LCDuwBxvTXAGQuswuTDAicNxtgUwxjDa';
 const WIRE = 'SEND|0|XCHAIN|1|mxNAZQtCRBG3dYu2ufVxSsc7V3c8jh9HDM|memo';
+const CARET_WIRE = 'SEND|0|^5|1|mxNAZQtCRBG3dYu2ufVxSsc7V3c8jh9HDM|memo';
 
 function http429() {
     const e = new Error('Explorer returned HTTP 429 for /RBTC/api/preflight, retry after 1 seconds');
@@ -19,12 +20,12 @@ function http429() {
 
 // An explorer whose balance listing is `rows`, marked with `freshness`, and whose
 // Tier 1 dry run is rate limited.
-function build({ rows, freshness, mode = 'report' }) {
+function build({ rows, freshness, mode = 'report', getToken }) {
     const sdk = mockSdk({
         preflight: mode,
         explorerSpec: {
             getFeeQuote: () => ({ feeExempt: true }),
-            getToken: (t) => ({ info: { tick: String(t) }, decimals: 8 }),
+            getToken: getToken || ((t) => ({ info: { tick: String(t) }, decimals: 8 })),
             getBalances: () => rows,
             getPreflight: http429,
         },
@@ -35,6 +36,13 @@ function build({ rows, freshness, mode = 'report' }) {
 
 const STALE = { stale: true, tipBlock: 416, tipAgeSeconds: 10657639 };
 const ROW = [{ tick: 'XCHAIN', quantity: '1.00000000' }];
+
+function stale404() {
+    const error = new Error('Explorer returned HTTP 404 for token');
+    error.code = 'EXPLORER_HTTP_404';
+    error.details = { status: 404, freshness: STALE };
+    throw error;
+}
 
 function ctxFor(sdk) {
     return new CheckContext({
@@ -74,5 +82,34 @@ describe('pre-flight balance read against a stale explorer mirror', function () 
     it('control: a stale marker with a matching row still returns the row quantity', async function () {
         const ctx = ctxFor(build({ rows: ROW, freshness: STALE }));
         expect(await ctx.balance(H, 'XCHAIN')).to.equal('1.00000000');
+    });
+});
+
+describe('pre-flight balance read against a stale explorer mirror', function () {
+    it('treats a caret token absent from a stale mirror as unverified', async function () {
+        const ctx = ctxFor(build({ rows: [], freshness: null, getToken: stale404 }));
+        expect(await ctx.balance(H, '^5')).to.equal(null);
+        expect(ctx.unverified.map((u) => u.check)).to.include('TOKEN_LOOKUP');
+    });
+
+    it('does not emit a blocking token or balance finding for that stale caret lookup', async function () {
+        const sdk = build({ rows: [], freshness: null, getToken: stale404 });
+        const result = await sdk.preflight(CARET_WIRE, { source: H, preflight: 'report' });
+        expect(result.verdict).to.not.equal('fail');
+        const blocking = result.findings.filter((finding) => finding.severity === 'error')
+            .map((finding) => finding.code);
+        expect(blocking).to.not.include(FINDING_CODES.BALANCE_INSUFFICIENT);
+        expect(blocking).to.not.include(FINDING_CODES.TOKEN_NOT_FOUND);
+    });
+
+    it('control: a caret token absent from a fresh mirror remains a verified zero', async function () {
+        const fresh404 = () => {
+            const error = new Error('Explorer returned HTTP 404 for token');
+            error.code = 'EXPLORER_HTTP_404';
+            error.details = { status: 404, freshness: { stale: false, tipBlock: 114903 } };
+            throw error;
+        };
+        const ctx = ctxFor(build({ rows: [], freshness: null, getToken: fresh404 }));
+        expect(await ctx.balance(H, '^5')).to.equal('0');
     });
 });

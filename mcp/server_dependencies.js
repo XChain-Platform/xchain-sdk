@@ -72,6 +72,12 @@ const AgentSessionClass = optional([
     '../src/cosigner/agent_session.js',
 ]);
 
+const valueDerivability = optional([
+    '@dankest-llc/xchain-sdk/src/cosigner/policy/value_derivability.js',
+    '../src/cosigner/policy/value_derivability.js',
+]);
+const LEGACY_UNBOUNDABLE = new Set(['SWEEP', 'AIRDROP', 'DIVIDEND', 'BATCH', 'CALLBACK', 'EXECUTE']);
+
 // Explorer-style coin prefixes to SDK network strings. Mainnet/testnet default
 // to the public hosts (SDK zero-config); R* regtest prefixes get only a localhost
 // explorer, so writes need ENCODER_URL (usual SDK env vars).
@@ -95,12 +101,28 @@ function hasWildcardCap(table) {
 // covers all of them and otherwise each action needs its own '*' entry.
 function uncappedActions(policy) {
     if (!Array.isArray(policy.allowedActions)) return [];
+    const unboundable = unboundableActions(policy);
+    if (unboundable.length)
+        throw new Error('mcp wallet policy allows ' + unboundable.join(', ')
+            + ', whose spend no amount cap can bind on this rail: remove them from allowedActions (fail-closed)');
     if (hasWildcardCap(policy.maxPerWindow && policy.maxPerWindow.perTick)) return [];
     const table = policy.maxPerAction;
     const own = (key) => (table && typeof table === 'object'
         && Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined);
     return [...new Set(policy.allowedActions.map((action) => String(action).toUpperCase()))]
         .filter((action) => !hasWildcardCap(own(action)));
+}
+
+// Allowed actions whose spend cannot be bounded by an amount cap on this rail.
+// Unknown actions fail closed when the installed SDK exposes its classification table.
+function unboundableActions(policy) {
+    if (!Array.isArray(policy.allowedActions)) return [];
+    const actions = [...new Set(policy.allowedActions.map((action) => String(action).toUpperCase()))];
+    if (!valueDerivability || typeof valueDerivability.isAlwaysUnbounded !== 'function')
+        return actions.filter((action) => LEGACY_UNBOUNDABLE.has(action));
+    const table = valueDerivability.TABLE || {};
+    return actions.filter((action) => !Object.prototype.hasOwnProperty.call(table, action)
+        || valueDerivability.isAlwaysUnbounded(action));
 }
 
 module.exports = {
@@ -110,5 +132,6 @@ module.exports = {
     XChainSDKClass,
     assertMainnetLaunched,
     hasEnforceableCap,
+    unboundableActions,
     uncappedActions,
 };

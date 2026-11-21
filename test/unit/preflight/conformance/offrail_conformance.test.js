@@ -219,6 +219,14 @@ describe('pre-flight conformance A5 cross-chain GET_TICK', function () {
         const r = await reportFor('ORDER|0|BTC|JDOG|1|0|LTC|LTC|1|0|' + ADDR + '||||m', SPEC);
         expect(errors(r, 'TOKEN_NOT_FOUND').filter((f) => f.data.field === 'GET_TICK')).to.deep.equal([]);
     });
+
+    it('A5 a caret cross-chain ORDER GET_TICK requires the remote name', async function () {
+        const wire = 'ORDER|0|BTC|JDOG|1|0|LTC|^42|1|0|' + ADDR + '||||m';
+        const r = await reportFor(wire, SPEC);
+        const findings = errors(r, 'TOKEN_NOT_FOUND').filter((f) => f.data.remoteNameRequired);
+        expect(findings).to.have.lengthOf(1);
+        expect(findings[0].data).to.include({ field: 'GET_TICK', tick: '^42' });
+    });
 });
 
 describe('pre-flight conformance A4 MINT lock', function () {

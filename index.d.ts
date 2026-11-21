@@ -2401,7 +2401,7 @@ export declare class XChainSDK {
     /** Subscribe to new actions with optional type/status/tick filters. */
     onAction(callback: (msg: WsNewActionFrame) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
-    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, DISPENSER_EDIT, DISPENSER_CANCEL, BET, BET_EXPIRED, BET_CLOSED, BET_EDIT, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
+    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, CROSS_SETTLE, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, DISPENSER_EDIT, DISPENSER_CANCEL, BET, BET_EXPIRED, BET_CLOSED, BET_EDIT, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
     onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
 
     /**
@@ -2609,8 +2609,16 @@ export interface UTXOEntry {
 
 export interface ChallengeOptions {
     appId?: string;
+    /** Override the generated nonce. A custom message binds this value only through {nonce}. */
     nonce?: string;
+    /**
+     * Custom message. The placeholders {nonce}, {address}, {timestamp} and
+     * {expiresAt} are filled; the rest is signed as-is. A caller-supplied nonce
+     * is bound only through {nonce}, never by a literal or substring match.
+     */
     message?: string;
+    /** Throw CHALLENGE_UNBOUND instead of returning a custom challenge whose nonce is not bound. */
+    requireNonce?: boolean;
     expiresInMs?: number;
 }
 
@@ -2619,6 +2627,11 @@ export interface ChallengeResult {
     nonce: string;
     timestamp: string;
     expiresAt: string;
+    /**
+     * True when the SDK filled {nonce}, or when an SDK-generated nonce appears
+     * as a whole delimited token. Caller-supplied literal matches do not bind.
+     */
+    bound: boolean;
 }
 
 export interface SignMessageOptions {

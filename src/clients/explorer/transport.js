@@ -204,7 +204,7 @@ module.exports = {
         let marker  = headers['xchain-freshness'];
         let body    = response && response.data;
         let inBody  = (body && typeof body === 'object' && !Array.isArray(body) && body.freshness && typeof body.freshness === 'object') ? body.freshness : null;
-        if (marker === undefined && !inBody) return;
+        if (marker === undefined && !inBody) return null;
         let stale = inBody ? inBody.stale === true : String(marker).toLowerCase() === 'stale';
         let num   = (v) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
         const record = {
@@ -216,6 +216,7 @@ module.exports = {
         };
         this._freshness = record;
         if (body && typeof body === 'object') bodyFreshness.set(body, record);
+        return record;
     },
 
     // The last freshness marker this client saw, or null before any marked
@@ -246,6 +247,7 @@ module.exports = {
             throw new SDKExplorerError('EXPLORER_TIMEOUT', 'Explorer request timed out: ' + url, { url, timeout: this.timeout });
         }
         if (err.response) {
+            const freshness = this.recordFreshness(err.response);
             // A 429 reaching here already survived retry.js's honoured wait, so
             // it is the caller's to handle. Keep the "Explorer returned HTTP
             // 429 for <url>" prefix byte-exact: integrators (and the wallet's
@@ -260,7 +262,7 @@ module.exports = {
             throw new SDKExplorerError(
                 'EXPLORER_HTTP_' + err.response.status,
                 'Explorer returned HTTP ' + err.response.status + ' for ' + url,
-                { url, status: err.response.status, data: err.response.data }
+                { url, status: err.response.status, data: err.response.data, freshness }
             );
         }
         throw new SDKExplorerError('EXPLORER_NETWORK', 'Explorer request failed: ' + err.message, { url, error: err.message });

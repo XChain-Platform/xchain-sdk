@@ -23,13 +23,14 @@ const twoStepPins = require('../../file/multipart_two_step_pins.js');
 const assemblyWait = require('../../utils/action_waiter/file_assembly_wait.js');
 const reconcile = require('../../carrier/reconcile_encoded.js');
 const carrierBinding = require('../../carrier/bind_action_carrier.js');
+const noActionCarrier = require('../../carrier/assert_no_action_carrier.js');
 const { FILE_MULTIPART_ACTIVATION_TIME } = require('../../protocol/constants.js');
 const { sourceDetails } = require('./file_multipart_source.js');
 const { baseCoin, feeRateOf, fundPieces } = require('./file_multipart_wave_funding.js');
 
 const MULTIPART = Object.assign({}, multipartPlan, readiness, funding, pieceRequest,
     fundingMatch, resume, progress, lane, gatedBatch, blockTimes, twoStep,
-    twoStepPins, assemblyWait, reconcile, carrierBinding);
+    twoStepPins, assemblyWait, reconcile, carrierBinding, noActionCarrier);
 
 function tierOf(sdk) {
     const network = (sdk.options && sdk.options.network) || (sdk.wallet && sdk.wallet.network) || '';

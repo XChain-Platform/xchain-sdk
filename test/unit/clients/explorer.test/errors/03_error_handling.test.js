@@ -35,7 +35,10 @@ describe('ExplorerClient', function () {
 
     describe('error handling', function () {
         it('wraps HTTP 404 as SDKExplorerError', async function () {
-            nock(BASE).get('/BTC/api/token/NOEXIST').reply(404, { error: 'not found' });
+            nock(BASE).get('/BTC/api/token/NOEXIST').reply(404, { error: 'not found' }, {
+                'xchain-freshness': 'stale',
+                'xchain-tip-block': '416',
+            });
             try {
                 await client.getToken('NOEXIST');
                 expect.fail('should have thrown');
@@ -43,6 +46,9 @@ describe('ExplorerClient', function () {
                 expect(e.name).to.equal('SDKExplorerError');
                 expect(e.code).to.equal('EXPLORER_HTTP_404');
                 expect(e.details.status).to.equal(404);
+                expect(e.details.freshness.stale).to.equal(true);
+                expect(e.details.freshness.tipBlock).to.equal(416);
+                expect(client.freshness().stale).to.equal(true);
             }
         });
 
@@ -53,6 +59,17 @@ describe('ExplorerClient', function () {
                 expect.fail('should have thrown');
             } catch (e) {
                 expect(e.code).to.equal('EXPLORER_HTTP_503');
+            }
+        });
+
+        it('leaves freshness empty when an HTTP error has no marker', async function () {
+            nock(BASE).get('/BTC/api/token/NO-MARKER').reply(404, { error: 'not found' });
+            try {
+                await client.getToken('NO-MARKER');
+                expect.fail('should have thrown');
+            } catch (e) {
+                expect(e.details.freshness).to.equal(null);
+                expect(client.freshness()).to.equal(null);
             }
         });
 

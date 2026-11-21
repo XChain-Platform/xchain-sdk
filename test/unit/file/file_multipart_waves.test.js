@@ -35,6 +35,7 @@ function workflowModules(plan, reconcile = () => true) {
         readRecentBlockTimes: async () => Array(11).fill(200),
         pieceCreateTxParams: args => ({ piece: args.data, utxos: [args.utxo] }),
         reconcileEncoded: reconcile,
+        assertNoActionCarrier: () => {},
     });
 }
 

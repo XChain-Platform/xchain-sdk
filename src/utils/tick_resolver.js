@@ -29,8 +29,8 @@
  ********************************************************************/
 
 // Fields across all ACTION formats whose value references an EXISTING token,
-// and therefore can be compacted to the `^<id>` wire form (the xchain-indexer
-// accepts `^<id>` anywhere it accepts a ticker; see getTickerId()). The
+// and therefore can be compacted to the `^<id>` wire form where the id belongs
+// to the reading chain's ticker table (see getTickerId()). The
 // defining TICK of an ISSUE is handled separately at the call site below,
 // gated by format rather than excluded outright: the validator now accepts a
 // caret-led ISSUE TICK (row 24), but compacting it is only safe on the
@@ -42,6 +42,7 @@
 // gated_files.gate_ticker by literal string, so a `^<id>` un-gates the file.
 const { TICK_REF_FIELDS } = require('../protocol/tick_ref_fields.js');
 const { compactListTickItems } = require('./list_tick_compaction.js');
+const { parseCoinCode } = require('./endpoints.js');
 
 // ISSUE formats that reject an unknown TICK outright (xchain-indexer
 // src/actions/issue.js: format 6 requires an existing tokenInfo at
@@ -62,6 +63,21 @@ const ISSUE_TICK_COMPACT_FORMATS = new Set(['6', '7']);
 // in well under this; the cap only matters for a host that accepts a connection
 // but never responds, where it bounds the fall-back-to-name latency.
 const LOOKUP_CAP_MS = 2500;
+
+function actionParam(sdk, params, wanted) {
+    for (const key of Object.keys(params)) {
+        if (sdk.util.camelToUpperSnake(key) === wanted) return params[key];
+    }
+    return undefined;
+}
+
+function hasForeignGetTick(sdk, action, params) {
+    if (action !== 'ORDER' && action !== 'SWAP') return false;
+    const getCoin = actionParam(sdk, params, 'GET_COIN');
+    if (getCoin === undefined || getCoin === null || String(getCoin).trim() === '') return false;
+    const local = parseCoinCode(sdk.explorer && sdk.explorer.coin);
+    return !local || String(getCoin).trim().toUpperCase() !== local.coin;
+}
 
 class TickResolver {
 
@@ -131,6 +147,7 @@ class TickResolver {
         let name = String(action || '').toUpperCase();
         let out  = Object.assign({}, params);
         if (name === 'LIST') out = await compactListTickItems(this, out);
+        const foreignGetTick = hasForeignGetTick(this.sdk, name, out);
         // ISSUE's own TICK needs the wire format before it can be judged (see
         // ISSUE_TICK_COMPACT_FORMATS above); read it once, tolerant of either
         // casing, the same way the loop below maps every other key.
@@ -150,6 +167,9 @@ class TickResolver {
             // which formats() defaults to 0) never compacts: a brand-new token has
             // no id yet.
             if (name === 'ISSUE' && field === 'TICK' && !ISSUE_TICK_COMPACT_FORMATS.has(issueVersion)) continue;
+            // A foreign GET_TICK is matched by name on the remote chain. Its
+            // numeric id would refer to this chain's unrelated ticker table.
+            if (field === 'GET_TICK' && foreignGetTick) continue;
             let val = out[key];
             if (val === undefined || val === null || Array.isArray(val)) continue;
             out[key] = await this.resolve(val);

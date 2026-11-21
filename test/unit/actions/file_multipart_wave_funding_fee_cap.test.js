@@ -14,7 +14,7 @@
 const assert = require('assert');
 const { fundPieces } = require('../../../src/actions/workflows/file_multipart_wave_funding.js');
 
-function harness(reconcile) {
+function harness(reconcile, carrierGuard = () => {}) {
     const events = [];
     const sdk = {
         requireExplorer: () => ({ coin: 'RBTC' }),
@@ -27,6 +27,7 @@ function harness(reconcile) {
     const modules = {
         multipartFundingOutputs: (values, address) => ({ customOutputs: values.map(value => ({ address, value })) }),
         reconcileEncoded: (psbt, intent) => reconcile(intent),
+        assertNoActionCarrier: carrierGuard,
         matchFundingOutputs: expected => expected.map((output, vout) => ({ vout, value: output.value })),
     };
     const source = { sourceAddress: 'source', pubkey: 'pub', lane: 'standard' };
@@ -61,5 +62,12 @@ describe('multipart wave funding fee ceiling', function () {
         assert.deepStrictEqual(events, []);
         await run({});
         assert.deepStrictEqual(events, ['sign', 'broadcast']);
+    });
+
+    it('refuses a data carrier before the funding transaction is signed or broadcast', async function () {
+        const refusal = Object.assign(new Error('unexpected carrier'), { code: 'UNEXPECTED_DATA_CARRIER' });
+        const { run, events } = harness(() => {}, () => { throw refusal; });
+        await assert.rejects(() => run({}), error => error === refusal);
+        assert.deepStrictEqual(events, []);
     });
 });

@@ -303,7 +303,7 @@ function buildServer(options = {}) {
                 + 'an assumed status is not an indexer confirmation.',
             inputSchema: {
                 coin: coinParam,
-                action: z.string().describe('ACTION name, e.g. SEND, MINT, EXECUTE'),
+                action: z.string().describe('ACTION name, e.g. SEND, MINT'),
                 params: z.record(z.string(), z.any()).describe('Action parameters (e.g. {tick, amount, destination}). Amounts are decimal strings.'),
                 idempotency_key: z.string().min(1).optional().describe(
                     'Optional. Defaults to a hash of coin+action+params, which is what makes a repeated call safe. '

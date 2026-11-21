@@ -48,7 +48,7 @@ function coinExplorers(resolver) {
 
     if (!resolver.listCoinExplorers) {
         resolver.listCoinExplorers = {};
-        for (const entry of buildCoinExplorers(sdk.explorer, parts.tier, ExplorerClient))
+        for (const entry of buildCoinExplorers(sdk.explorer, parts.tier, ExplorerClient, sdk.options.pool))
             resolver.listCoinExplorers[entry.chain] = entry.explorer;
     }
     resolver.listCoinExplorers[parts.coin] = sdk.explorer;

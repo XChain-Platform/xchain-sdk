@@ -329,6 +329,15 @@ function isCapInert(action) {
     return versions.every((v) => byAction[v].byRef === true);
 }
 
+// Whether every classified format of an action is unbounded. Unlike
+// isCapInert, this includes command-shaped value that is not by-reference.
+function isAlwaysUnbounded(action) {
+    const byAction = ownLookup(TABLE, action);
+    if (!byAction) return false;
+    const versions = Object.keys(byAction);
+    return versions.length > 0 && versions.every((v) => byAction[v].class === UNBOUNDED);
+}
+
 // Every (action, version) the co-signer's decoder can parse. Shares the
 // decoder's structural gates so the conformance test measures the same
 // surface the daemon actually reaches.
@@ -369,6 +378,7 @@ function decodableFormats() {
 module.exports = {
     classify,
     isCapInert,
+    isAlwaysUnbounded,
     decodableFormats,
     TABLE,
     NONE,

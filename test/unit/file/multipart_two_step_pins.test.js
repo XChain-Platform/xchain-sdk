@@ -78,6 +78,26 @@ describe('two-step multipart commit pre-sign gate', function () {
         assert.deepStrictEqual(pins.inputIndices, [0]);
     });
 
+    const carriers = [
+        ['an injected action OP_RETURN',
+            bitcoin.payments.embed({ data: [Buffer.from('XCHNSEND|0|TOK|1000|recipient|m')] }).output, 0n],
+        ['a decoy OP_RETURN', bitcoin.payments.embed({ data: [Buffer.from('decoy')] }).output, 0n],
+        ['an OP_RETURN repeating the requested action',
+            bitcoin.payments.embed({ data: [Buffer.from('XCHNFILE|0|part')] }).output, 0n],
+        ['a bare multisig output', bitcoin.payments.p2ms({ m: 1,
+            pubkeys: [Buffer.from(CALLER.publicKey), Buffer.from(ATTACKER.publicKey)] }).output, 1000n],
+    ];
+    for (const [name, script, value] of carriers) {
+        it(`refuses ${name}`, function () {
+            const outputs = [{ script: commitOutput(xOnly(CALLER)), value: 50000n },
+                { script: SOURCE.output, value: 48000n }, { script, value }];
+            assert.throws(() => preSign(honest({ outputs })),
+                refusedWith('ENVELOPE_COMMIT_MISMATCH', 'DATA_CARRIER_OUTPUT'));
+        });
+    }
+});
+
+describe('two-step multipart commit pre-sign gate', function () {
     it('refuses a commit that spends an extra wallet input', function () {
         const extra = { txid: '22'.repeat(32), vout: 1, value: 90000, scriptPubKey: UTXO.scriptPubKey };
         assert.throws(() => preSign(honest({ inputs: [UTXO, extra] })),

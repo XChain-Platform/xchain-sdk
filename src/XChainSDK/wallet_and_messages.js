@@ -105,7 +105,7 @@ module.exports = {
         if (!network) throw new SDKConfigError('NETWORK_NOT_CONFIGURED', 'Network is required for cross-chain message queries.');
 
         let tier = network.split('-')[1]; // 'mainnet', 'testnet', or 'regtest'
-        let explorers = buildCoinExplorers(explorer, tier, ExplorerClient);
+        const explorers = buildCoinExplorers(explorer, tier, ExplorerClient, this.options.pool);
 
         return this.messaging.getAllMessages(address, opts, explorers);
     },

@@ -21,7 +21,7 @@
  * rather than silently resetting the window.
  *
  *   let agent = sdk.agentSession(wif, {
- *       allowedActions: ['SEND', 'EXECUTE'],
+ *       allowedActions: ['SEND', 'MINT'],
  *       allowedDestinations: ['bc1q...'],                  // optional
  *       maxPerAction: { SEND: { MYTOKEN: '100', '*': '10' } },
  *       maxPerWindow: { hours: 24, perTick: { MYTOKEN: '500' }, maxActions: 50 },

@@ -48,6 +48,30 @@ describe('MCP wallet ceiling must bind every tick', function () {
             allowedActions: ['SEND', 'MINT'], maxPerAction: { SEND: { '*': '0' }, MINT: { '*': '3' } },
         })).to.not.throw();
     });
+});
+
+describe('MCP wallet ceiling must bind every tick', function () {
+    it('refuses actions whose value no amount ceiling can bind', function () {
+        for (const action of ['BATCH', 'EXECUTE', 'CALLBACK', 'SWEEP']) {
+            const policies = [
+                { allowedActions: [action], maxPerWindow: { hours: 24, perTick: { '*': '10' } } },
+                { allowedActions: [action], maxPerAction: { [action]: { '*': '10' } } },
+            ];
+            for (const policy of policies)
+                expect(build(policy), action).to.throw(new RegExp(action + '.*no amount cap can bind'));
+        }
+    });
+
+    it('normalizes unboundable action names and still allows bounded actions', function () {
+        expect(build({
+            allowedActions: ['send', 'execute'],
+            maxPerWindow: { hours: 24, perTick: { '*': '10' } },
+        })).to.throw(/EXECUTE.*no amount cap can bind/);
+        expect(build({
+            allowedActions: ['SEND', 'MINT'],
+            maxPerWindow: { hours: 24, perTick: { '*': '10' } },
+        })).to.not.throw();
+    });
 
     it('the evaluator holds an unlisted tick to the wildcard the gate now requires', function () {
         const policy = { allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '5', '*': '0' } } };

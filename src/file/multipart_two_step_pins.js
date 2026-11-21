@@ -9,14 +9,15 @@
 
 const bitcoin = require('bitcoinjs-lib');
 const { deriveEnvelopeCommit } = require('../cosigner/envelope.js');
+const { assertNoActionCarrier } = require('../carrier/assert_no_action_carrier.js');
 const { SDKActionError } = require('../utils/errors.js');
 const { bytesEqual } = require('../utils/bytes');
 
 // What the caller already knows about an honest two-step commit before it signs
 // one: the commit spends exactly the funding output the piece was planned on, and
 // it pays exactly one output, the Taproot commit address derived locally from the
-// caller's key and the envelope leaf the encoder reports. Anything else is an
-// encoder-chosen input or destination, so it is refused before a signature exists.
+// caller's key and the envelope leaf the encoder reports. It carries no OP_RETURN
+// or bare-multisig output. Anything else is refused before a signature exists.
 
 function commitRefusal(reason, detail) {
     return new SDKActionError('ENVELOPE_COMMIT_MISMATCH',
@@ -51,10 +52,20 @@ function commitOutputOf(psbt, derived) {
     return matches[0];
 }
 
+function assertNoCommitCarrier(psbt, network) {
+    try { assertNoActionCarrier({ psbt, network, label: 'multipart envelope commit pre-sign' }); }
+    catch (error) {
+        if (error instanceof SDKActionError)
+            throw commitRefusal('DATA_CARRIER_OUTPUT', error.details && error.details.index);
+        throw error;
+    }
+}
+
 // Returns the reconcile pins and the signing scope for the commit PSBT, or throws.
 function twoStepCommitPins({ commit, utxo, callerXOnly, network }) {
     const psbt = parseCommit(commit, network);
     assertSingleInput(psbt, utxo);
+    assertNoCommitCarrier(psbt, network);
     let derived;
     try { derived = deriveEnvelopeCommit({ internalXOnly: callerXOnly, envelopeScript: leafOf(commit), network }); }
     catch (e) {

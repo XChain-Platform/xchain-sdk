@@ -191,14 +191,14 @@ function checkDerivability(policy, state) {
         || !!(policy.maxPerWindow && policy.maxPerWindow.perTick)
         || !!policy.confirmAbove;
 
-    if (UNBOUNDED_VALUE_ACTIONS.has(action) && hasAmountLimit)
+    if ((UNBOUNDED_VALUE_ACTIONS.has(action) || valueDerivability.isAlwaysUnbounded(action)) && hasAmountLimit)
         return deny('POLICY_UNBOUNDED_ACTION',
             `${action} moves an amount the policy cannot bound from the action alone; ` +
             `it cannot be signed while an amount cap is set (remove the amount cap or disallow ${action})`,
             { action }, evaluation);
 
-    // G2: the general form of the guard above. The named set catches the three
-    // actions that are unbounded by their very shape; this catches every OTHER
+    // G2: the general form of the guard above. Actions whose every classified
+    // version is unbounded are denied without a version; this catches every OTHER
     // format whose outflow the evaluator cannot read - the index-reference
     // family (COINPAY/SWAP/ORDER/DISPENSER/BET/VOTE by ACTION_INDEX), the
     // ownership escape hatches on ORDER/SWAP/DISPENSER/ISSUE, and anything new
@@ -206,7 +206,7 @@ function checkDerivability(policy, state) {
     // amount to undefined and every amount gate below silently SKIPPED, so the
     // operator's cap was decorative and no error said so.
     //
-    // Only enforced when the version is known. The daemon always knows it (it
+    // Mixed-version actions are enforced only when the version is known. The daemon always knows it (it
     // decodes the version from the PSBT and passes it, and refuses to sign
     // without one); AgentSession, the client-side guardrail, typically does not
     // - the encoder auto-selects the format after the policy check - and a

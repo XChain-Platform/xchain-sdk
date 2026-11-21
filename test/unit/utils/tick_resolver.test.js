@@ -15,10 +15,12 @@ const Utility = require('../../../src/utils/utility.js');
 // Minimal fake SDK exposing only what TickResolver touches: options, util,
 // and an explorer stub whose getToken returns a token doc (or throws).
 function makeSdk(opts = {}, getToken = null) {
+    const explorer = getToken ? { getToken, coin: opts.coin }
+        : (opts.noExplorer ? null : { getToken: async () => { throw new Error('not stubbed'); }, coin: opts.coin });
     return {
         options: opts.options || {},
         util: new Utility(),
-        explorer: getToken ? { getToken } : (opts.noExplorer ? null : { getToken: async () => { throw new Error('not stubbed'); } })
+        explorer
     };
 }
 
@@ -112,6 +114,32 @@ describe('TickResolver', function () {
             expect(out).to.deep.equal({ k: 'v', other: 5 });
         });
 
+        it('keeps a cross-chain ORDER GET_TICK in full while compacting GIVE_TICK', async function () {
+            const r = new TickResolver(makeSdk({ coin: 'TBTC' }, tokenStub({ jdog: 42 })));
+            const out = await r.resolveActionParams('ORDER', { giveTick: 'JDOG', getCoin: 'LTC', getTick: 'JDOG' });
+            expect(out.giveTick).to.equal('^42');
+            expect(out.getTick).to.equal('JDOG');
+        });
+
+        it('keeps upper-snake cross-chain SWAP GET_TICK in full', async function () {
+            const r = new TickResolver(makeSdk({ coin: 'RBTC' }, tokenStub({ jdog: 42 })));
+            const out = await r.resolveActionParams('SWAP', { GIVE_TICK: 'JDOG', GET_COIN: 'DOGE', GET_TICK: 'JDOG' });
+            expect(out.GIVE_TICK).to.equal('^42');
+            expect(out.GET_TICK).to.equal('JDOG');
+        });
+
+        it('still compacts same-chain and unqualified GET_TICK values', async function () {
+            const r = new TickResolver(makeSdk({ coin: 'TBTC' }, tokenStub({ jdog: 42 })));
+            const same = await r.resolveActionParams('ORDER', { GET_COIN: 'BTC', GET_TICK: 'JDOG' });
+            const unqualified = await r.resolveActionParams('ORDER', { GET_TICK: 'JDOG' });
+            expect(same.GET_TICK).to.equal('^42');
+            expect(unqualified.GET_TICK).to.equal('^42');
+        });
+    });
+});
+
+describe('TickResolver', function () {
+    describe('resolveActionParams()', function () {
         it('does NOT compact the defining TICK of an ISSUE with no VERSION given', async function () {
             const r = new TickResolver(makeSdk({}, tokenStub({ jdog: 1234 })));
             const out = await r.resolveActionParams('ISSUE', { TICK: 'JDOG' });

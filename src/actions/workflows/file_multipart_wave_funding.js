@@ -133,13 +133,15 @@ async function fundPieces(sdk, wave, previousFunding, source, rate, opts, module
         customOutputs: expected, feePerKb: rate * 1000 };
     if (previousChange) request.utxos = [previousChange];
     const encoded = await encoder.createTx(request);
-    modules.reconcileEncoded(encoded.psbt, { network: sdk.wallet.getBitcoinNetwork(),
+    const network = sdk.wallet.getBitcoinNetwork();
+    modules.reconcileEncoded(encoded.psbt, { network,
         customOutputs: expected, changeAddresses: source.sourceAddress,
         callerIdentities: source.pubkey, maxFeeSats: fundingFeeCap(opts),
         // reconcileEncoded reads input values as BigInt and matches a leg with ===.
         requiredSpends: previousChange ? [{ script: Buffer.from(previousChange.scriptPubKey, 'hex'), value: BigInt(previousChange.value) }] : [],
         trustedPrevTxs: previousFunding ? [previousFunding.signed.txHex] : [],
         label: 'multipart funding', phaseShapes: [], phaseSpends: null });
+    modules.assertNoActionCarrier({ psbt: encoded.psbt, network, label: 'multipart funding' });
     const outputs = fundingOutputsFromPsbt(sdk, encoded.psbt);
     const utxos = modules.matchFundingOutputs(expected, outputs, null);
     const signed = sdk.wallet.signPsbt(encoded.psbt, opts.wif);

@@ -7,7 +7,6 @@ const Utility = require('../../src/utils/utility.js');
 
 const WORKFLOW = '../../src/actions/workflows/file_multipart_publish.js';
 const FILE_HASH = 'ab'.repeat(32);
-
 function dependencyStubs(overrides = {}) {
     const stubs = {
         planMultipartFile: async () => plan(false),
@@ -47,6 +46,7 @@ function dependencyStubs(overrides = {}) {
         twoStepRevealParams: (params, hex) => ({ ...params, options: { envelopeCommitHex: hex } }),
         twoStepRecoveryRecord: result => result.envelope,
         reconcileEncoded: () => ({ phaseFunding: [{ txid: 'phase', vout: 0 }] }),
+        assertNoActionCarrier: () => {},
         twoStepCommitPins: () => ({ inputIndices: [0], phaseSpends: [], requiredSpends: [] }),
         assertEnvelopeCommitBinding: () => ({ script: 'funding' }),
         assertEnvelopeCarrierBinding: () => true,

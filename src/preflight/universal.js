@@ -267,7 +267,15 @@ async function checkTokenExistence(ctx, parsed) {
         if (parsed.action === 'PRICE' && String(parsed.version) === '1' && fieldName === 'TICK') continue;
         // A cross-chain ORDER or SWAP names a GET_TICK on another chain, which the indexer
         // leaves to the hub federation (order/validate.js:64-65, swap/validate.js:57-58).
-        if (isCrossChainGet(ctx, parsed, fieldName, nativeTicker)) continue;
+        if (isCrossChainGet(ctx, parsed, fieldName, nativeTicker)) {
+            const remoteTick = ctx.field('GET_TICK');
+            if (!Array.isArray(remoteTick) && String(remoteTick).charAt(0) === '^') {
+                ctx.addFinding(FINDING_CODES.TOKEN_NOT_FOUND, 'error',
+                    'A cross-chain GET_TICK must use the remote token name in full; a local ^<id> cannot name it.',
+                    { field: 'GET_TICK', tick: remoteTick, remoteNameRequired: true });
+            }
+            continue;
+        }
         const v = ctx.params[fieldName];
         const ticks = Array.isArray(v) ? v : (v ? [v] : []);
         for (const tick of ticks) {
