@@ -24,7 +24,7 @@ function entryOf(text, heading) {
 function batchFeeQuoteReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('ed92d5a2ab67d7dafd5f971aaf762316bf479028ee13beaaf6676e8b0f9825a0');
+        .to.equal('8047029e85b6f17bec53abed2d57c50a13ea46f41c51734e411b7e9bfe8554c4');
     const heading = '### 2026-11-22 - a mandatory-native BATCH fee quote dispatches EXECUTE';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
@@ -37,6 +37,20 @@ function batchFeeQuoteReview() {
     expect(entry).to.include('**Direction: NEUTRAL for validity.**');
 }
 
+function batchMatchFeeReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const heading = '### 2026-11-22 - a filling BATCH offer reads its fee from the originating action';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    expect(entry).to.include('The `batch` pin moves from `ed92d5a2` to `8047029e`');
+    expect(entry).to.include('`b89e4dc55`');
+    expect(entry).to.include('96b78122449efed596ed53535d9aedc481350077728a7a958c3cbd2858fea76b probe.js');
+    expect(entry).to.include('BATCH_FEE_QUOTE');
+    expect(entry).to.include('NO CLIENT CHECK MOVES');
+    expect(entry).to.include('**Direction: NEUTRAL for validity.**');
+}
+
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
     it('pins and records the mandatory-native BATCH fee quote review', batchFeeQuoteReview);
+    it('pins and records the filling-offer fee lookup review', batchMatchFeeReview);
 });
