@@ -49,7 +49,7 @@ Object.freeze(NETWORKS);
 // Resolve a supported network, by OWN property only. NETWORKS is a plain object
 // literal, so a bare `NETWORKS[s]` lookup answers '__proto__', 'constructor',
 // 'toString' and every other Object.prototype member with a truthy non-network
-// value. AuthUtils then hands bitcoinMessage.sign/verify an undefined
+// value. AuthUtils would then hand the signed-message utility an undefined
 // messagePrefix instead of the caller getting "Unknown network", so the
 // own-property test is what makes an unsupported network string a refusal here.
 function getNetwork(networkString) {

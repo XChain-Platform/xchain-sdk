@@ -19,13 +19,13 @@
  ********************************************************************/
 
 const ActionWaiter = require('../utils/action_waiter.js');
-const { CANONICAL_ACTION_INDEX, CANONICAL_CALL_ID, oneShotTeardown, frameData, frameIsForAddress, frameIdMatches, entityGuarded } = require('./event_frames.js');
+const { CANONICAL_ACTION_INDEX, CANONICAL_CALL_ID, canonicalSubscriptionAddress, oneShotTeardown, frameData, frameIsForAddress, frameIdMatches, entityGuarded } = require('./event_frames.js');
 
 // Keep event subscriptions together because they share validation and teardown rules.
 module.exports = {
 
-    // Listen for one betting market's live events: bets placed, the deadline
-    // latch, resolve, cancel and expiry.
+    // Listen for one betting market's live events: bets placed, membership
+    // edits, the deadline latch, resolve, cancel and expiry.
     // Returns an unsubscribe function.
     onBetFeed(feedActionIndex, callback) {
         const index = String(feedActionIndex === null || feedActionIndex === undefined ? '' : feedActionIndex).trim();
@@ -39,14 +39,14 @@ module.exports = {
         // feed_action_index, which the ChangeDetector enriches for exactly this
         // correlation, and which the Broadcaster routes the channel on. Getting
         // this backwards is the dispenser_action_index bug onDispenser documents.
-        // BET_CLOSED sets both fields to the feed id, so it matches either way.
-        // Unlike a dispenser there is no entity-own update frame here (no
-        // BET_FEED_UPDATE), so one lifecycle guard plus the SNAPSHOT filter is
-        // the whole surface.
+        // BET_EDIT carries the parent id in feed_action_index just like BET.
+        // There is no BET_FEED_UPDATE, so the edit is the membership-change
+        // signal and shares this lifecycle guard.
         const onLifecycle = entityGuarded((msg) => frameIdMatches(msg, 'feed_action_index', index), callback);
         ws.on('BET', onLifecycle);
         ws.on('BET_EXPIRED', onLifecycle);
         ws.on('BET_CLOSED', onLifecycle);
+        ws.on('BET_EDIT', onLifecycle);
         const onSnapshot = (msg) => {
             if (msg && msg.data && msg.data.channel === 'bet_feed' &&
                 String(msg.data.action_index) === index){
@@ -63,6 +63,7 @@ module.exports = {
             ws.off('BET', onLifecycle);
             ws.off('BET_EXPIRED', onLifecycle);
             ws.off('BET_CLOSED', onLifecycle);
+            ws.off('BET_EDIT', onLifecycle);
             ws.off('SNAPSHOT', onSnapshot);
             ws.unsubscribe(['bet_feed'], params);
         });
@@ -137,6 +138,7 @@ module.exports = {
     // Shortcut: listen for COINPAY_REQUIRED events on an address
     // Returns an unsubscribe function
     onCoinpayRequired(address, callback) {
+        address = canonicalSubscriptionAddress(address);
         const ws = this.requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('COINPAY_REQUIRED', onEvent);
@@ -151,6 +153,7 @@ module.exports = {
     // Shortcut: listen for ORDER_MATCH events on an address
     // Returns an unsubscribe function
     onOrderMatch(address, callback, opts) {
+        address = canonicalSubscriptionAddress(address);
         const ws = this.requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         ws.on('ORDER_MATCH', onEvent);

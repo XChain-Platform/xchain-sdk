@@ -23,6 +23,7 @@ require('../../utils/apply_bufferutils_patch');
 const bitcoin = require('bitcoinjs-lib');
 const { toU64, inputValue } = require('../../carrier/reconcile_encoded/script_matching.js');
 const { pickRevealOptions } = require('./create_tx_options.js');
+const { isPreDispatchRetryable } = require('../../utils/retry.js');
 
 // Report a satoshi total as a Number only when it is exact, so no caller reads a rounded value.
 const safeNumber = (v) => (v !== null && v <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(v) : null);
@@ -87,9 +88,11 @@ function buildCreateTxParams(params) {
     if (params.customOutputs !== undefined)    rpcParams.customOutputs = params.customOutputs;
     if (params.feeQuote !== undefined)         rpcParams.feeQuote = params.feeQuote;
     // Ask the encoder to attach each segwit input's full previous
-    // transaction. Only a hardware signer needs it (see the encoder's own
-    // note), and it costs a node round trip plus real PSBT weight per
-    // input, so it is opt-in per request rather than always-on.
+    // transaction. It costs a node round trip plus real PSBT weight per
+    // input, so this raw client sends it only when asked. The reconciled
+    // submit, reveal, estimate and message paths ask by default, because a
+    // fee judged on amounts the encoder merely states is not bound to the
+    // signatures.
     if (params.attachPrevTx !== undefined)     rpcParams.attachPrevTx = params.attachPrevTx;
 
     // Transparent FILE payload compression. Tri-state on the
@@ -201,7 +204,8 @@ module.exports = {
             rpcParams.utxos = fetchedUtxos;
         }
 
-        return this.rpc('create_tx', rpcParams);
+        // Retry create_tx only before dispatch because a completed build reserves its inputs.
+        return this.rpc('create_tx', rpcParams, { retryOn: isPreDispatchRetryable });
     },
 
     async releaseInputs(reservationId) {
@@ -260,7 +264,8 @@ module.exports = {
         Object.assign(rpcParams, pickRevealOptions(params));
         if (params.encoding !== undefined)         rpcParams.encoding = String(params.encoding).toUpperCase();
 
-        return this.rpc('create_tx', rpcParams);
+        // Retry create_tx only before dispatch because a completed build reserves its inputs.
+        return this.rpc('create_tx', rpcParams, { retryOn: isPreDispatchRetryable });
     },
 
     // Broadcast a signed raw transaction hex to the coin node

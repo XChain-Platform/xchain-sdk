@@ -10,7 +10,12 @@
 
 const { expect } = require('chai');
 const bitcoin = require('bitcoinjs-lib');
-const { verifyCarrierScripts: verifyCarrierScriptsRaw, REASONS } = require('../../../src/carrier/verify_carrier_scripts.js');
+const {
+    verifyCarrierScripts: verifyCarrierScriptsRaw,
+    rawDataMatches,
+    REASONS,
+} = require('../../../src/carrier/verify_carrier_scripts.js');
+const decoder = require('../../../src/decoder/index.js');
 
 const NET = bitcoin.networks.bitcoin;
 const H160 = Buffer.alloc(20, 0xab); // stand-in for the caller HASH160
@@ -249,6 +254,15 @@ describe('carrier-script verification: the rawData push', function () {
     const RAW = Buffer.from(JSON.stringify({ art: 'x'.repeat(300), n: 1 }), 'utf8');
     const check = (fixture, rawData, rawDataCompressed, action = FILE) =>
         verifyCarrierScripts(Object.assign({}, fixture, { encoding: 'P2WSH', actionString: action, rawData, rawDataCompressed }));
+
+    it('exports the same rawData matcher on the decoder surface', function () {
+        expect(decoder.rawDataMatches).to.equal(rawDataMatches);
+        expect(decoder.rawDataMatches([Buffer.from(FILE), RAW], RAW, false)).to.equal(true);
+        expect(decoder.rawDataMatches([Buffer.from(FILE)], RAW, false)).to.equal(false);
+        const compressed = zlib.deflateRawSync(RAW);
+        expect(decoder.rawDataMatches([Buffer.from(FILE), compressed], RAW, true)).to.equal(true);
+        expect(decoder.rawDataMatches([Buffer.from(FILE), compressed], Buffer.from('wrong'), true)).to.equal(false);
+    });
 
     it('passes when push[1] is the caller rawData, given as a latin-1 string or a Buffer', function () {
         expect(check(buildPair(FILE, RAW), RAW.toString('binary')).ok).to.equal(true);

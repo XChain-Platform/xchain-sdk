@@ -18,6 +18,7 @@ const assert  = require('assert');
 const crypto  = require('crypto');
 const Checkpoint = require('../../../src/checkpoint.js');
 const eq         = require('../../../src/consensus/equivocation_header.js');
+const { assertCheckpointVectors, rawCanonical } = require('./checkpoint.test/helpers/checkpoint_assertions.js');
 
 // Raw-hex Ed25519 keypair via Node crypto (SPKI/PKCS8 DER stripping mirrors
 // ValidatorIdentity's prefixes).
@@ -57,6 +58,7 @@ describe('CheckpointVerifier (SDK)', function () {
             Checkpoint.canonicalCheckpoint(makeCheckpoint()),
             'XCHECKPOINT|BTC|mainnet|900123|' + 'ab'.repeat(32) + '|' + 'cd'.repeat(32) +
             '|' + 'ef'.repeat(32) + '|' + '01'.repeat(32) + '|417|900120');
+        assertCheckpointVectors(Checkpoint.canonicalCheckpoint);
     });
 
     it('SPV Phase 2: a post-flag-day rooted checkpoint commits the roots and verifies', function () {
@@ -193,7 +195,6 @@ function signAll(keys, canonical) {
 // otherwise it false-rejects a stake-heavy minority the federation anchored, and
 // unsafe-accepts a key-count majority that lacks stake majority.
 describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
-
     it('weighted PASS: a single-source stake-heavy minority (>2/3 stake, below count) verifies', function () {
         // 4 distinct sources; A holds 70 of 100 stake. Only A's one key signs.
         let A = makeKeypair(), B = makeKeypair(), C = makeKeypair(), D = makeKeypair();
@@ -280,26 +281,33 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
     });
 });
 
-describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
-
+function registerMissingCommitmentTests() {
     // canonicalCheckpoint appends the commitment suffix only when all four
     // fields are present, which is correct THERE (the bytes must match the hub), but it
     // meant a rootless post-activation row fell back to the legacy preimage and its
     // signatures verified against it. The verifier now refuses the row outright.
     it('post-activation, a checkpoint missing its commitment roots fails closed', function () {
-        let A = makeKeypair(), B = makeKeypair(), C = makeKeypair();
-        for (let missing of ['state_root', 'block_merkle_root', 'state_root_version', 'block_merkle_version']) {
-            let cp = makeCheckpoint({ network: 'regtest' });
+        const A = makeKeypair(), B = makeKeypair(), C = makeKeypair();
+        const validators = vset([
+            { source: 'srcA', weight: 10, keys: [A] },
+            { source: 'srcB', weight: 10, keys: [B] },
+            { source: 'srcC', weight: 10, keys: [C] }
+        ]);
+        for (const missing of ['state_root', 'block_merkle_root', 'state_root_version', 'block_merkle_version']) {
+            const cp = makeCheckpoint({ network: 'regtest' });
             delete cp[missing];
-            let canonical = Checkpoint.canonicalCheckpoint(cp);
+            const canonical = Checkpoint.canonicalCheckpoint(cp);
             cp.validator_signatures = signAll([A, B, C], canonical);
-            let validators = vset([
-                { source: 'srcA', weight: 10, keys: [A] },
-                { source: 'srcB', weight: 10, keys: [B] },
-                { source: 'srcC', weight: 10, keys: [C] }
-            ]);
-            let result = Checkpoint.verifyCheckpoint(cp, validators);
+            const result = Checkpoint.verifyCheckpoint(cp, validators);
             assert.strictEqual(result.valid, false, 'missing ' + missing + ' must not verify');
+        }
+        for (const missing of ['state_root_version', 'block_merkle_version']) {
+            const cp = makeCheckpoint({ network: 'regtest' });
+            cp[missing] = null;
+            cp.validator_signatures = signAll([A, B, C], Checkpoint.canonicalCheckpoint(cp));
+            assert.strictEqual(Checkpoint.commitmentMissing(cp), true, 'null ' + missing + ' is missing');
+            assert.strictEqual(Checkpoint.verifyCheckpoint(cp, validators).valid, false,
+                'null ' + missing + ' must not verify');
         }
     });
 
@@ -327,7 +335,9 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         assert.strictEqual(Checkpoint.verifyCheckpoint(zero, validators).valid, true, 'version 0 must verify');
         assert.strictEqual(Checkpoint.commitmentMissing(makeCheckpoint({ state_root: '' })), false, 'inactive below the flag-day');
     });
+}
 
+function registerLegacyCountTest() {
     it('below the flag-day (mainnet) the count path is unchanged: weighted=false', function () {
         let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
         let cp = makeCheckpoint();                                                      // mainnet, inactive
@@ -337,6 +347,11 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
         assert.strictEqual(result.weighted, false);
         assert.strictEqual(result.valid, true);                                         // count 3 >= quorum 3
     });
+}
+
+describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
+    registerMissingCommitmentTests();
+    registerLegacyCountTest();
 });
 
 // EQUIV uniform header (WI-2). At/above the flag-day (regtest activation = 0) the
@@ -348,20 +363,6 @@ describe('CheckpointVerifier - stake-weighted quorum (SDK)', function () {
 // isolates the canonical-binding from the weighted-vs-count verdict, which regtest
 // also flips on.)
 describe('CheckpointVerifier - EQUIV uniform header (SDK)', function () {
-
-    function rawCanonical(cp) {
-        let raw = ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
-            cp.ledger_hash, cp.actions_hash, cp.contract_hash,
-            String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
-        // The commitment suffix is part of the v0 raw that EQUIV wraps, and a regtest
-        // fixture now carries roots because a rootless one cannot exist. Mirror the
-        // production builder so this test still isolates the WRAPPING.
-        if (cp.state_root !== undefined)
-            raw += '|' + [String(cp.state_root).toLowerCase(), String(cp.state_root_version),
-                          String(cp.block_merkle_root).toLowerCase(), String(cp.block_merkle_version)].join('|');
-        return raw;
-    }
-
     it('EQUIV active (regtest): the canonical is the v0 raw wrapped in the uniform header', function () {
         let cp  = makeCheckpoint({ network: 'regtest' });
         let raw = rawCanonical(cp);

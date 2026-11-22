@@ -19,10 +19,15 @@
 'use strict';
 
 const assert = require('assert');
+const EventEmitter = require('events');
 const fs     = require('fs');
 const path   = require('path');
 
 const DTS = path.join(__dirname, '..', '..', '..', 'index.d.ts');
+const EXPLORER_DIR = process.env.XCHAIN_EXPLORER_DIR
+    || path.join(__dirname, '..', '..', '..', '..', 'xchain-explorer');
+const BROADCASTER = path.join(EXPLORER_DIR, 'src', 'ws', 'broadcaster.js');
+const SERIALIZE = path.join(EXPLORER_DIR, 'src', 'ws', 'serialize.js');
 
 // The columns each explorer reader selects, after its post-passes.
 const CONTRACT_LIST = ['action', 'action_index', 'action_format', 'source', 'code_hash', 'api_version',
@@ -33,6 +38,9 @@ const BALANCE_ROW   = ['tick', 'amount'];
 const EXECUTION_ROW = ['action', 'action_index', 'action_format', 'contract_index', 'caller', 'method_name',
     'gas_used', 'gas_limit', 'emitted_count', 'block_index', 'timestamp', 'tx_hash', 'tx_index', 'status'];
 const EXECUTION_DETAIL = ['input_params', 'error_message'];
+const WS_BLOCK = ['block_index', 'block_hash', 'block_time', 'tx_count', 'action_count'];
+const WS_STATS = ['block_height', 'total_actions'];
+const WS_ACTION = ['action_index', 'action', 'tx_hash', 'block_index', 'source', 'status', 'destinations'];
 
 // Names the explorer never sends, which an earlier declaration promised.
 const PHANTOMS = ['actionIndex', 'address', 'owner', 'codeHash', 'deployBlock', 'gasLimit',
@@ -54,9 +62,9 @@ function props(body) {
     return out;
 }
 
-describe('explorer contract row types in index.d.ts', function () {
-    const dts = fs.readFileSync(DTS, 'utf8');
+const dts = fs.readFileSync(DTS, 'utf8');
 
+function registerDeclarationTests() {
     it('declares the contract list columns and no phantom camelCase fields', function () {
         const body = interfaceBody(dts, 'ContractInfo');
         const all  = [].concat(props(body).required, props(body).optional);
@@ -84,4 +92,63 @@ describe('explorer contract row types in index.d.ts', function () {
         assert.match(dts, /getState\(key\?: string\): Promise<ListEnvelope<ContractStateEntry>>;/);
         assert.match(dts, /getBalance\(tick\?: string\): Promise<ListEnvelope<ContractBalanceEntry>>;/);
     });
+
+    it('declares the three core WebSocket payloads and typed callback surfaces', function () {
+        assert.deepStrictEqual(props(interfaceBody(dts, 'WsNewBlockData')).required.sort(), WS_BLOCK.slice().sort());
+        assert.deepStrictEqual(props(interfaceBody(dts, 'WsNetworkStatsData')).required.sort(), WS_STATS.slice().sort());
+        assert.deepStrictEqual(props(interfaceBody(dts, 'WsNewActionData')).required.sort(), WS_ACTION.slice().sort());
+        assert.match(dts, /interface WsFrameEnvelope<T = any>/);
+        assert.match(dts, /onBlock\(callback: \(msg: WsNewBlockFrame\)/);
+        assert.match(dts, /onAction\(callback: \(msg: WsNewActionFrame\)/);
+        assert.match(dts, /onNetworkStats\(callback: \(msg: WsNetworkStatsFrame\)/);
+    });
+
+    it('declares the optional fork fields emitted on catch-up reorg refusal', function () {
+        const member = dts.match(/resync_required: \{([^}]*)\}/);
+        assert.ok(member, 'WsCatchUpEvents has no resync_required member');
+        assert.match(member[1], /fork_block_index\?: string/);
+        assert.match(member[1], /first_invalid_action_index\?: string/);
+    });
+}
+
+function registerProducerFrameTest() {
+    it('matches the core frames emitted by the explorer producer', async function () {
+        if (!fs.existsSync(path.join(EXPLORER_DIR, 'package.json'))) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but no xchain-explorer checkout at ' + EXPLORER_DIR);
+            return this.skip();
+        }
+        for (const file of [BROADCASTER, SERIALIZE])
+            assert.ok(fs.existsSync(file), path.relative(EXPLORER_DIR, file) + ' is missing');
+        const Broadcaster = require(BROADCASTER);
+        const safeStringify = require(SERIALIZE).safeStringify;
+        const frames = [];
+        const wsServer = {
+            explorer: { db: { getMaxActionIndex: async () => 22 } },
+            getClients: () => new Map(),
+        };
+        const producer = new Broadcaster({ wsServer, changeDetector: new EventEmitter() });
+        producer.broadcastToChannel = (coin, channel, frame) => frames.push(frame);
+        producer.broadcastToChannelKey = (key, frame) => frames.push(frame);
+        producer.onBlock('BTC', { block_index: 12n, block_hash: 'aa', block_time: 34n,
+            tx_count: 2n, action_count: 3n });
+        await new Promise((resolve) => setImmediate(resolve));
+        producer.onAction('BTC', { action_index: 7n, action: 'SEND', tx_hash: 'bb',
+            block_index: 12n, source: 'source', status: 'valid', destinations: ['dest'] });
+        const wire = frames.map((frame) => JSON.parse(safeStringify(frame)));
+        const expected = { NEW_BLOCK: WS_BLOCK, NETWORK_STATS: WS_STATS, NEW_ACTION: WS_ACTION };
+        for (const type of Object.keys(expected)) {
+            const frame = wire.find((item) => item.type === type);
+            assert.ok(frame, 'producer emitted no ' + type + ' frame');
+            assert.deepStrictEqual(Object.keys(frame.data).sort(), expected[type].slice().sort());
+        }
+        assert.strictEqual(typeof wire.find((item) => item.type === 'NEW_BLOCK').data.block_index, 'string');
+        assert.strictEqual(typeof wire.find((item) => item.type === 'NETWORK_STATS').data.total_actions, 'string');
+        assert.strictEqual(typeof wire.find((item) => item.type === 'NEW_ACTION').data.action_index, 'string');
+    });
+}
+
+describe('explorer contract row types in index.d.ts', function () {
+    registerDeclarationTests();
+    registerProducerFrameTest();
 });

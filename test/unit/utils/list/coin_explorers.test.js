@@ -9,6 +9,13 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
+const http = require('http');
+const https = require('https');
+const sinon = require('sinon');
+const ExplorerClient = require('../../../../src/clients/explorer.js');
+const TickResolver = require('../../../../src/utils/tick_resolver.js');
+const Utility = require('../../../../src/utils/utility.js');
+const walletAndMessages = require('../../../../src/XChainSDK/wallet_and_messages.js');
 const { COIN_NETWORK_PREFIX, buildCoinExplorers } = require('../../../../src/utils/list/coin_explorers.js');
 
 class FakeClient {
@@ -16,6 +23,11 @@ class FakeClient {
 }
 
 const base = { baseUrl: 'http://explorer.test', port: 4000, timeout: 1234, retry: { attempts: 2 }, hooks: { onRequest() {} } };
+
+// The agent a sibling client actually dials through, read from its axios instance.
+function dialAgent(client) {
+    return client.client.defaults.httpsAgent || client.client.defaults.httpAgent;
+}
 
 describe('coin_explorers', () => {
     it('maps each coin to its network prefix', () => {
@@ -44,5 +56,62 @@ describe('coin_explorers', () => {
         const out = buildCoinExplorers(base, 'mainnet', FakeClient);
         assert.deepStrictEqual(out.map(e => e.explorer.options.network),
             ['bitcoin-mainnet', 'litecoin-mainnet', 'dogecoin-mainnet']);
+    });
+
+    it('passes the given connection pool to every sibling client', () => {
+        const pool = { httpsAgent: {} };
+        for (const { explorer } of buildCoinExplorers(base, 'regtest', FakeClient, pool)) {
+            assert.strictEqual(explorer.options.pool, pool);
+        }
+    });
+
+    it('uses the injected agent in every real sibling client', () => {
+        const agent = new https.Agent();
+        const pool = { httpsAgent: agent };
+        const realBase = new ExplorerClient({ network: 'bitcoin-regtest', explorerUrl: 'https://explorer.test', pool });
+        for (const { explorer } of buildCoinExplorers(realBase, 'regtest', ExplorerClient, pool)) {
+            assert.strictEqual(dialAgent(explorer), agent);
+        }
+    });
+});
+
+describe('coin_explorers through the SDK callers', () => {
+    it('routes cross-chain message lookups through the SDK pool', async () => {
+        const agent = new https.Agent();
+        const pool = { httpsAgent: agent };
+        let seen = null;
+        const sdk = {
+            options: { network: 'bitcoin-regtest', pool },
+            requireExplorer: () => new ExplorerClient({ network: 'bitcoin-regtest', explorerUrl: 'https://explorer.test', pool }),
+            messaging: { getAllMessages: async (address, opts, explorers) => { seen = explorers; return []; } }
+        };
+        await walletAndMessages.getAllMessagesForAddress.call(sdk, 'addr1', {});
+        assert.strictEqual(seen.length, 3);
+        for (const { explorer } of seen) assert.strictEqual(dialAgent(explorer), agent);
+    });
+
+    it('routes cross-chain LIST ticker lookups through the SDK pool', async () => {
+        const agent = new http.Agent();
+        const dialed = [];
+        const getToken = sinon.stub(ExplorerClient.prototype, 'getToken').callsFake(async function () {
+            dialed.push(dialAgent(this));
+            return { info: { tick_id: 12 } };
+        });
+        try {
+            const explorer = {
+                coin: 'RBTC',
+                async getStatus() { return { last_block: { RBTC: 0 } }; },
+                async getToken() { return null; }
+            };
+            const resolver = new TickResolver({
+                options: { network: 'bitcoin-regtest', pool: { httpAgent: agent } },
+                config: { network: 'bitcoin-regtest' }, util: new Utility(), explorer
+            });
+            const out = await resolver.resolveActionParams('LIST', { TYPE: '1', ITEM: ['DOGE:PEPE'] });
+            assert.deepStrictEqual(out.ITEM, ['DOGE:^12']);
+            assert.deepStrictEqual(dialed, [agent]);
+        } finally {
+            getToken.restore();
+        }
     });
 });

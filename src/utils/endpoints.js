@@ -87,23 +87,23 @@ function parseCoinCode(code) {
 // True when `url` already carries an http:// or https:// scheme. A bare host
 // that merely starts with "http" (httpgw.internal) is not a URL yet.
 function hasHttpScheme(url) {
-    return /^https?:\/\//.test(String(url || ''));
+    return /^https?:\/\//i.test(String(url || ''));
 }
 
 // True when `url` carries the https:// scheme (picks the https agent).
 function isHttpsUrl(url) {
-    return /^https:\/\//.test(String(url || ''));
+    return /^https:\/\//i.test(String(url || ''));
 }
 
 // True when `url` already carries a ws:// or wss:// scheme. A bare host that
 // merely starts with "ws" (wss-gw.internal) is not a URL yet.
 function hasWsScheme(url) {
-    return /^wss?:\/\//.test(String(url || ''));
+    return /^wss?:\/\//i.test(String(url || ''));
 }
 
 // True when `url` carries a TLS scheme, https:// or wss://.
 function isSecureUrl(url) {
-    return /^(https|wss):\/\//.test(String(url || ''));
+    return /^(https|wss):\/\//i.test(String(url || ''));
 }
 
 // Network-derived public defaults. Returns {} for regtest (or a missing

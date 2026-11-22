@@ -45,15 +45,8 @@ const { execFileSync } = require('child_process');
 // is already over the repo's 400-line limit and may not grow.
 const handlerDirs = require('./preflight_handler_dirs.js');
 
-/* Output sink, so the gate can be run twice in one `npm run ci` without printing its
- * report twice.
- *
- * The checks below write their findings as they go, which is right for the run that a
- * reviewer reads. The closing --verdict run has the opposite need: it only re-asserts a
- * verdict already printed, so it evaluates with the sink muted and prints one line. Every
- * check writes through say()/warn() rather than console.* for that reason; a console call
- * added later would leak past the mute and duplicate the report.
- */
+// Route check output through say and warn; the verdict run mutes this sink so
+// evaluating twice in one CI run does not duplicate the full report.
 const CONSOLE_SINK = {
     log: (...a) => console.log(...a),
     error: (...a) => console.error(...a),
@@ -69,53 +62,22 @@ function warn(...a) { OUT.error(...a); }
 const indexerRoot = require('./preflight_indexer_root.js');
 const { indexerRootCandidates, describeIndexerCandidates, resolveIndexerRoot } = indexerRoot;
 
-/* The table rows, each tagged 'file', 'directory' or 'malformed' by the shape of the
- * handler path it names. A directory row carries a trailing slash and is hashed over every
- * file in the directory. A file row also covers a same-named directory beside its entry,
- * so either supported handler split shape includes every part in its pin. */
+// Parse file, directory, and malformed map rows; handlerDirs includes every
+// file in directory and split-handler shapes when hashing a pin.
 function parseMap(mapPath) {
     return handlerDirs.parseMapRows(fs.readFileSync(mapPath, 'utf8'));
 }
 
-/* The indexer commit the pinned hashes were taken at.
- *
- * A hash on its own is not a usable baseline. The map tells a reviewer to "re-read the
- * changed handler", which means diffing from what was pinned to what is there now, and a
- * hash gives that diff no left-hand side. On 2026-08-13 that turned into a real trap:
- * the indexer's history was rewritten, six pinned hashes survived only as UNREACHABLE
- * BLOBS, and a reviewer following the map with a commit range would have silently
- * reviewed against the wrong baseline and re-pinned on it, which is precisely the outcome
- * this gate exists to prevent. Recovering them needed an object-store scan nobody had
- * written down.
- *
- * So the map records an anchor, and the failure path below states whether that anchor is
- * still reachable BEFORE the reviewer trusts a range built on it.
- */
+// Read the indexer commit that anchors the pinned hashes and review range.
+// Reachability is checked before callers trust a range from this baseline.
 function parseAnchor(mapPath) {
     const m = /Pins taken at indexer commit:\*\*\s*`([0-9a-f]{7,40})`/
         .exec(fs.readFileSync(mapPath, 'utf8'));
     return m ? m[1] : null;
 }
 
-/* The anchor line and the review command the map builds on it must name ONE commit.
- *
- * parseAnchor reads the machine half; the prose two paragraphs down tells a human which
- * range to diff. Nothing bound the two, and they have now come apart twice by careful
- * authors: on 2026-08-23 the table was re-pinned and the anchor LINE was missed for three
- * days, and on 2026-08-25 the anchor line moved and the review COMMAND did not, so the map
- * declared `2b65e8a4` while handing reviewers a `2d9cbbbf` range. A reviewer following it
- * diffs from the wrong baseline and re-pins on it, which is the outcome the whole gate
- * exists to prevent, and the automated half stays green throughout because it reads the
- * correct line.
- *
- * ONE id, not every hash in the file: the review log legitimately cites older baselines
- * (`188554e5`, `58ab8e9`, `2ca8734f`, `2d9cbbbf`), so a blanket "every hash equals the
- * anchor" lint would fire on correct prose. A missing or unreadable command is a finding
- * rather than a silent pass, the same fail-closed contract the by-value legs hold.
- *
- * Deliberately reads only the map, so evaluate() can run it BEFORE the no-sibling skip:
- * single-repo CI is the one venue a documentation-only edit reaches.
- */
+// Require exactly one review command and the same commit in its range and the
+// map anchor. This map-only check runs before any missing-sibling allowance.
 function checkAnchorConsistency(mapPath) {
     const text = fs.readFileSync(mapPath, 'utf8');
     const anchor = parseAnchor(mapPath);
@@ -144,34 +106,25 @@ function checkAnchorConsistency(mapPath) {
     return 0;
 }
 
-/* Reachable means "can be the left side of a range against HEAD", which is the only
- * property the review instruction actually needs. An orphaned commit can still be present
- * in the object store, so an existence check would answer yes and hand back a range that
- * resolves to nothing useful.
- */
-function anchorIsReachable(indexerRoot, anchor) {
+// Classify whether the anchor can begin a range to HEAD, distinguishing a
+// shallow checkout from an orphaned commit for accurate recovery guidance.
+function anchorReachability(indexerRoot, anchor, runGit = execFileSync) {
     try {
-        execFileSync('git', ['-C', indexerRoot, 'merge-base', '--is-ancestor', anchor, 'HEAD'],
+        runGit('git', ['-C', indexerRoot, 'merge-base', '--is-ancestor', anchor, 'HEAD'],
             { stdio: 'ignore' });
-        return true;
+        return 'reachable';
     } catch (e) {
-        return false;
+        try {
+            const shallow = runGit('git', ['-C', indexerRoot, 'rev-parse', '--is-shallow-repository'],
+                { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+            if (shallow === 'true') return 'shallow';
+        } catch (ignored) {}
+        return 'unreachable';
     }
 }
 
-/* The fee-quote seam, which the hash rows above structurally cannot cover.
- *
- * Every mapped row is a per-handler file under src/actions/, so the row regex carries a
- * literal `src/actions/` prefix and can never match the ACTION LOADER src/actions/index.js. That is the
- * file defining FEE_QUOTE_DENYLIST and FEE_QUOTE_STATIC, and until now the only thing binding
- * them to the SDK's TIER1_DENYLIST was a hand-written comment, which had already drifted.
- *
- * Compared by VALUE rather than by hash on purpose. Hashing all of the loader would fire on
- * every unrelated edit to a large file, and anchor-scoped hashing can silently lose coverage
- * when a marker moves, which is the worse failure for financial logic. The invariant that
- * actually matters is not "the loader is unchanged", it is that the two lists agree, so check
- * exactly that and fail closed when either literal cannot be read.
- */
+// Read fee-quote lists by value because handler hash rows cannot cover the
+// action-loader literals. Missing or ambiguous declarations fail closed.
 function parseStringSet(text, name, where) {
     // const NAME = new Set([...]) | Object.freeze([...]) | [...]
     const re = handlerDirs.declarationPattern(name);
@@ -185,18 +138,8 @@ function parseStringSet(text, name, where) {
     return [...new Set([...hits[0].matchAll(/['"]([A-Z_]+)['"]/g)].map((x) => x[1]))].sort();
 }
 
-/* The reverse fee-charging direction, read from indexer CALL SITES.
- *
- * On the indexer side there is no fee-charging literal to compare against: charging a
- * protocol fee IS calling createFeesObject from a handler under src/actions/. So the set is
- * derived from the handlers themselves, which makes the call sites the source of truth and
- * leaves no second list to drift. The gas-priced VM pair is the one exception: DEPLOY and
- * EXECUTE charge off GAS_SCHEDULE, never through createFeesObject, so they are named here.
- *
- * Comments and string bodies are stripped first, so a prose mention of the helper cannot
- * enrol an action. An empty walk fails CLOSED: "found no callers" must never read as "no
- * action charges a fee", the same contract parseStringSet holds.
- */
+// Derive fee-charging actions from createFeesObject call sites after stripping
+// comments and strings. Gas-priced VM actions are explicit; an empty walk fails closed.
 const GAS_PRICED_ACTIONS = ['DEPLOY', 'EXECUTE'];
 const { stripCommentsAndStrings } = handlerDirs;
 
@@ -292,17 +235,8 @@ function checkFeeQuoteSeam(indexerRoot) {
     return failed;
 }
 
-/* Indexer CONFIG caps this SDK mirrors as literals.
- *
- * A cap defined in xchain-indexer/src/config.js is invisible to every hash row above: the row
- * regex carries a literal src/actions/ prefix, and the handler enforcing the cap reads it by
- * symbol (this.config['MAX_REFILLS']), so the handler's hash does not move when the cap does.
- * A mapped handler hash is a proxy for the value, and this is the class of value it cannot
- * stand in for.
- *
- * Compared by VALUE for the same reason the fee-quote lists are, and fails CLOSED when either
- * literal cannot be read exactly once.
- */
+// Compare mirrored config caps by value because handler hash rows do not move
+// with symbol-based config reads. Each literal must appear exactly once.
 const CONFIG_CAPS = [
     { name: 'MAX_REFILLS', why: 'the SDK names this cap in its DISPENSER_MAX_REFILLS unverified declaration' },
 ];
@@ -346,18 +280,8 @@ function checkConfigConstants(indexerRoot) {
     return failed;
 }
 
-/* Indexer REGEX rules this SDK mirrors as literals.
- *
- * The same class as CONFIG_CAPS, one file further out. CANONICAL_CARET_ID is declared in
- * xchain-indexer/src/db/shared.js, the module the per-feature mixins under src/db/ import
- * it from, and no hash row above can reach it: the row regex carries a literal
- * src/actions/ prefix, so no row can name a file under src/db/ at all. A hash would also
- * prove "the file is unchanged" rather than "the two regexes agree", which is the
- * invariant that actually matters, so this seam pins the literal and not the file.
- *
- * Compared by VALUE - source AND flags - and fails CLOSED when either literal cannot be
- * read exactly once, the contract parseStringSet and parseIntLiteral already hold.
- */
+// Compare mirrored regex source and flags by value because action-handler hashes
+// cannot cover database rules. Each literal must appear exactly once.
 const REGEX_MIRRORS = [
     {
         name: 'CANONICAL_CARET_ID',
@@ -366,12 +290,8 @@ const REGEX_MIRRORS = [
     },
 ];
 
-/* Match `const NAME = /body/flags;`.
- *
- * The body alternation accepts an escaped char or a bracketed class before a bare
- * character, so a `/` inside a character class cannot terminate the literal early and
- * silently truncate the value being compared.
- */
+// Parse `const NAME = /body/flags;` without treating a slash inside a
+// character class as the end of the literal.
 function parseRegexLiteral(text, name, where) {
     const re = new RegExp('const\\s+' + name + '\\s*=\\s*/((?:\\\\.|\\[(?:\\\\.|[^\\]\\\\])*\\]|[^/\\\\\\n])+)/([a-z]*)', 'g');
     const hits = [...text.matchAll(re)];
@@ -408,23 +328,8 @@ function checkRegexMirrors(indexerRoot) {
     return failed;
 }
 
-/* Indexer LIST constants this SDK vendors, compared ORDER INCLUDED.
- *
- * RESERVED_FUTURE_ROOTS lives in xchain-indexer/src/consensus/reserved_roots.js, which no mapped hash
- * row can cover (every row carries a literal src/actions/ prefix) and which issue.js reads
- * by symbol, so the handler's hash does not move when a root is added or dropped. That is
- * the MAX_REFILLS blind spot one file further out, and it matters more here: the SDK's
- * vendored copy in src/preflight/constants.js is what the ISSUE pre-flight refuses a new
- * top-level create against, so a silent drift either warns on a name the chain allows or
- * stays silent on one the chain refuses - after the miner fee is spent.
- *
- * Compared as an ORDERED list rather than a set, for the reason the indexer's own comment
- * gives for pinning the order against xchain-documentation: an unordered compare passes
- * while one side silently reorders, and it also cannot see a DUPLICATE (a set compare
- * swallows a repeated name on one side while the two lengths disagree). Fails CLOSED when
- * either literal cannot be read exactly once, or reads as empty - "could not parse it"
- * must never land as "it agrees", the contract every seam above holds.
- */
+// Compare mirrored indexer lists by value, preserving order and duplicates.
+// Missing, ambiguous, or empty declarations fail closed.
 const LIST_MIRRORS = [
     {
         name: 'RESERVED_FUTURE_ROOTS',
@@ -433,10 +338,8 @@ const LIST_MIRRORS = [
     },
 ];
 
-/* Match `const NAME = [...]` (bare, `Object.freeze([...])` or `new Set([...])`) and return
- * the quoted entries IN SOURCE ORDER, duplicates kept. parseStringSet sorts and dedupes,
- * which is right for a membership comparison and wrong for this one.
- */
+// Parse bare, frozen, or Set list declarations in source order, retaining
+// duplicates for exact ordered comparisons.
 function parseStringList(text, name, where) {
     const re = handlerDirs.declarationPattern(name);
     const hits = [];
@@ -549,15 +452,8 @@ function checkActivationMirrors(indexerRoot) {
     return failed;
 }
 
-/* GAS_SCHEDULE parity across the three coins.
- *
- * The SDK carries its OWN copy of each coin definition, and the gas schedule is what
- * prices every fee the pre-flight quotes. Compared as parsed key/value MAPS rather than
- * as text, so formatting and comment edits do not fire. The coin modules are pure data
- * (no requires, no env reads), so loading them here has no side effects; a module that
- * cannot be loaded, or that carries no GAS_SCHEDULE, fails CLOSED - same contract as
- * parseStringSet, because "could not read it" must never read as "it agrees".
- */
+// Compare each coin's gas schedule as key-value data rather than source text.
+// Coin modules must load a schedule; unreadable or missing data fails closed.
 const GAS_SCHEDULE_COINS = ['BTC', 'LTC', 'DOGE'];
 
 function loadGasSchedule(absPath) {
@@ -600,17 +496,8 @@ function checkGasSchedules(indexerRoot) {
     return failed;
 }
 
-/* Run every check and RETURN the verdict; never exit.
- *
- * Kept exit-free so the same evaluation can back three callers: the strict CLI run, the
- * fail-soft run at the head of `npm run ci`, and the muted --verdict run that closes it.
- * An exiting gate would kill `npm run ci` before mocha loads, so the pre-push gate would
- * report NEVER RAN, not a named failure.
- *
- * Returns 0 for in-sync, or for a declared XCHAIN_ALLOW_NO_INDEXER=1 standalone run whose
- * INDEXER-MAP.md anchor check passed. Returns 1 for a finding, and an unresolved indexer
- * checkout is a finding: a missing sibling is never a silent skip.
- */
+// Run all checks and return 0 or 1 without exiting so strict, soft, and verdict
+// modes share one evaluation. Missing siblings fail unless explicitly allowed.
 function evaluate() {
     const mapPath = path.join(__dirname, '..', 'src', 'preflight', 'INDEXER-MAP.md');
     if (!fs.existsSync(mapPath)) {
@@ -629,12 +516,8 @@ function evaluate() {
 
     const root = resolveIndexerRoot();
     if (!root) {
-        // An unresolved checkout is a FINDING, not a skip. Exiting 0 here and saying so
-        // retires the gate silently: a dropped CI checkout step, a typo in
-        // XCHAIN_INDEXER_PATH and a renamed handler directory all read as "nothing to do"
-        // while every mapped handler goes uncompared. The ONE case that is legitimately not
-        // a finding is a standalone SDK clone, and a run in that case declares itself
-        // (XCHAIN_ALLOW_NO_INDEXER=1) rather than being inferred from a missing directory.
+        // Missing indexer checkout is a finding unless standalone mode explicitly
+        // declares that sibling checks are unavailable.
         if (indexerRoot.noIndexerIsDeclared()) {
             say(`drift-gate: ${indexerRoot.ALLOW_NO_INDEXER_ENV}=1 declared; skipping the sibling `
                 + 'checks. Nothing in src/preflight/INDEXER-MAP.md was compared (sibling CI enforces).');
@@ -666,18 +549,23 @@ function evaluate() {
             'Re-read each handler, update the matching checks/ module (or confirm no client-visible\n' +
             'change), then refresh the hash in src/preflight/INDEXER-MAP.md:\n');
         for (const d of drift) warn(handlerDirs.formatDrift(d));
-        // Now that `npm run ci` runs this locally, the first suspect for a LOCAL
-        // red is the sibling's uncommitted work rather than a real handler change: this
-        // hashes the WORKING TREE, and two of the four handlers in the gate's first firing
-        // were nothing else. CI checks out HEAD and never sees it.
+        // This hashes the sibling working tree, so local uncommitted edits can
+        // report drift that a clean CI checkout will not contain.
         const anchor = parseAnchor(mapPath);
+        const reachability = anchor ? anchorReachability(root, anchor) : null;
         if (!anchor) {
             warn('\nThe map records no anchor commit, so there is no baseline to diff FROM.\n'
                 + 'Add a "Pins taken at indexer commit" line to src/preflight/INDEXER-MAP.md.');
-        } else if (anchorIsReachable(root, anchor)) {
+        } else if (reachability === 'reachable') {
             warn(`\nThe pins were taken at indexer commit ${anchor}, which is still reachable.\n`
                 + 'Review each drifted handler with:\n'
                 + `  git -C ${root} diff ${anchor}..HEAD -- <handler path above>`);
+        } else if (reachability === 'shallow') {
+            warn(`\nNOTE: the anchor commit ${anchor} cannot be checked because ${root} is a shallow clone.\n`
+                + 'This does not mean the indexer history was rewritten. Re-run against a full clone,\n'
+                + 'then review each drifted handler with:\n'
+                + `  git -C ${root} diff ${anchor}..HEAD -- <handler path above>\n`
+                + 'Do not use an object-store blob scan here because a shallow clone may not hold the pinned blobs.');
         } else {
             // The case that cost a reviewer a long detour. Say it plainly rather than
             // letting them build a range on a commit that cannot anchor one.
@@ -742,27 +630,13 @@ function evaluate() {
     return 0;
 }
 
-/* The three run modes, and why the soft one is not a waiver.
- *
- * strict (no flag)  evaluate, print, exit 1 on a finding. What CI's own drift job and any
- *                   hand run get, and the mode the indexer-side gate runs.
- * --soft            evaluate, print the SAME report, exit 0 regardless. Used at the head of
- *                   `npm run ci` so a drift no longer kills the run before mocha loads. The
- *                   finding is not forgiven: the run ends with --verdict, which fails it.
- * --verdict         re-evaluate with the sink muted and exit 1 on a finding, printing one
- *                   line that points back at the report the soft run already printed. Used
- *                   as the LAST link of `npm run ci` so the failure lands after a tally.
- *
- * The pairing is what matters. `npm run ci` must open with --soft and close with --verdict:
- * open with strict and a drift is fatal at load again; drop the close and a drift ships
- * green. test/unit/preflight/drift_gate/drift_gate_modes.test.js asserts both halves of that wiring.
- */
+// Strict mode fails immediately; soft mode prints and continues; verdict mode
+// re-evaluates muted and fails after suites finish. CI must pair soft first
+// with verdict last so drift remains fatal without suppressing the test tally.
 function main(argv, evaluateFn) {
     const args = argv || process.argv.slice(2);
-    // Injectable only so the modes can be tested against BOTH verdicts. A clean
-    // evaluation cannot be synthesised from a fixture (the pins are real handler
-    // bytes), and reading it off the live sibling would make the test pass or fail
-    // on whatever a second coder has in that checkout today.
+    // Inject evaluation so mode tests cover both verdicts without depending on
+    // live sibling handler bytes.
     const run = evaluateFn || evaluate;
     const soft = args.includes('--soft');
     const verdict = args.includes('--verdict');
@@ -799,7 +673,7 @@ function main(argv, evaluateFn) {
 if (require.main === module) main();
 module.exports = {
     resolveIndexerRoot, indexerRootCandidates, parseMap, parseAnchor, parseStringSet, parseStringList, parseRegexLiteral,
-    deriveFeeChargingActions, checkAnchorConsistency, checkFeeQuoteSeam,
+    deriveFeeChargingActions, checkAnchorConsistency, anchorReachability, checkFeeQuoteSeam,
     checkConfigConstants, checkRegexMirrors, checkListMirrors, checkGasSchedules, evaluate, main,
     checkActivationMirrors, parseAddGateTable,
 };

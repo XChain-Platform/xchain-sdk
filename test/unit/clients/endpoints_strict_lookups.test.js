@@ -89,6 +89,11 @@ describe('endpoints http scheme detection', function () {
         expect(hasHttpScheme('https-hub')).to.equal(false);
         expect(isHttpsUrl('https://a')).to.equal(true);
         expect(isHttpsUrl('https-hub')).to.equal(false);
+        expect(hasHttpScheme('HTTPS://a')).to.equal(true);
+        expect(hasHttpScheme('Http://a')).to.equal(true);
+        expect(isHttpsUrl('HtTpS://a')).to.equal(true);
+        expect(isHttpsUrl('HTTP://a')).to.equal(false);
+        expect(hasHttpScheme('HTTPGW.internal')).to.equal(false);
     });
 
     it('a bare host starting with http gets a scheme and port on every client', function () {
@@ -105,11 +110,18 @@ describe('endpoints http scheme detection', function () {
         const ex = new ExplorerClient({ explorerUrl: 'https://explorer.xchain.io', explorerPort: 8080 });
         expect(ex.client.defaults.baseURL).to.equal('https://explorer.xchain.io');
         expect(new HubConnector({ hubUrl: 'http://hub.test', hubPort: 1 }).urls).to.deep.equal(['http://hub.test']);
+        expect(new ExplorerClient({ explorerUrl: 'HTTPS://explorer.test', explorerPort: 8080 }).client.defaults.baseURL)
+            .to.equal('HTTPS://explorer.test');
+        expect(new EncoderClient({ encoderUrl: 'HTTPS://encoder.test', encoderPort: 3003 }).client.defaults.baseURL)
+            .to.equal('HTTPS://encoder.test');
+        expect(new HubConnector({ hubUrl: 'HTTPS://hub.test', hubPort: 10000 }).urls)
+            .to.deep.equal(['HTTPS://hub.test']);
     });
 
     it('agentOptsFor picks the http agent for a bare host named https-hub', function () {
         const httpAgent = { id: 'http' }, httpsAgent = { id: 'https' };
         expect(agentOptsFor('https-hub:10000', { httpAgent, httpsAgent }).httpAgent).to.equal(httpAgent);
         expect(agentOptsFor('https://hub.test', { httpAgent, httpsAgent }).httpsAgent).to.equal(httpsAgent);
+        expect(agentOptsFor('HTTPS://hub.test', { httpAgent, httpsAgent }).httpsAgent).to.equal(httpsAgent);
     });
 });

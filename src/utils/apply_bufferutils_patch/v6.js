@@ -17,13 +17,19 @@
  *
  ********************************************************************/
 
-const bufferutils = require('bitcoinjs-lib/src/bufferutils')
-const bitcoinTypes = require('bitcoinjs-lib/src/types')
-const bip174Tools = require('bip174/src/lib/converter/tools')
-const witnessUtxoConverter = require('bip174/src/lib/converter/input/witnessUtxo')
+const { bufferutils, types: bitcoinTypes } = require('../bitcoinjs_compat/internals')
 const { Psbt, Transaction } = require('bitcoinjs-lib')
 const { IS_BITCOINJS_V7 } = require('./version')
 const { MAX_U64, MAX_SAFE_BIG, verifyU64, narrowU64 } = require('./u64')
+
+// bip174 3 exposes only its public package root and bitcoinjs-lib 7 already
+// uses its BigInt serializers. Load these v2 internals only for the v6 fallback.
+const bip174Tools = IS_BITCOINJS_V7 || typeof module.require !== 'function'
+    ? null
+    : module.require('bip174/src/lib/converter/tools')
+const witnessUtxoConverter = IS_BITCOINJS_V7 || typeof module.require !== 'function'
+    ? null
+    : module.require('bip174/src/lib/converter/input/witnessUtxo')
 
 // Probe with a 2^53 uint64, one past the stock serializers' ceiling: stock
 // code throws, the patched reader returns it. Idempotence guard (the patch
@@ -173,12 +179,12 @@ function primeBigIntSafeAmts(psbt) {
     if (fee < 0n) {
         throw new Error('Outputs are spending more than Inputs')
     }
-    // Fees are always tiny relative to 2^53; Number() is exact in practice
-    // and the cached fee is only used for the fee-rate sanity check anyway.
-    const feeNumber = Number(fee)
-    c.__FEE = feeNumber
+    // Same reader rule as the amounts: a Number while exact, a BigInt above 2^53-1.
+    // The rate stays a Number (stock multiplies it by the vsize) and is divided
+    // while the fee is still exact.
+    c.__FEE = narrowU64(fee)
     c.__EXTRACTED_TX = tx
-    c.__FEE_RATE = Math.floor(feeNumber / tx.virtualSize())
+    c.__FEE_RATE = Number(fee / BigInt(tx.virtualSize()))
 }
 
 // Would stock's Number sums round? Values are non-negative, so every partial sum is

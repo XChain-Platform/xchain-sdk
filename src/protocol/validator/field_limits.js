@@ -84,7 +84,7 @@ const MAX_GATE_MIN_AMOUNT_LENGTH = 40;
 // isolate limit. Vendored single source of truth: ./protocol/constants.js, whose
 // MAX_CODE_SIZE is in VALUE PARITY with (not a byte-identical copy of)
 // xchain-documentation/protocol/constants.js, which is a superset file
-// (uuid:0eb83c45); kept equal by test/unit/protocol_size_caps.test.js and the
+// (uuid:0eb83c45); kept equal by test/unit/contract/protocol_size_caps.test.js and the
 // cross-service regression suite.
 const MAX_CODE_SIZE      = require('../constants.js').MAX_CODE_SIZE;
 
@@ -116,7 +116,7 @@ const FORBIDDEN_TEXT_CHARS = ['|', ';'];
 const DELIMITER_EXEMPT_FIELDS = new Set([
     'COMMAND',                                                          // BATCH sub-action carrier
     'TICK', 'GIVE_TICK', 'GET_TICK', 'DIVIDEND_TICK', 'CALLBACK_TICK',  // own tick-name validation
-    'GATE_TICKER',                                                      // own |;./ check
+    'GATE_TICKER',                                                      // own |;/ and dot-segment check
     'CONSTRUCTOR_PARAMS', 'PARAMS',                                     // own per-element check
     'NAME', 'DESCRIPTION',                                              // own FILE/ISSUE/LIST text rules
 ]);

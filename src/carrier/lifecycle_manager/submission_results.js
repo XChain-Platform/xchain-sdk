@@ -23,6 +23,7 @@ const { SDKActionError } = require('../../utils/errors.js');
 const { pickRevealOptions } = require('../../clients/encoder/create_tx_options.js');
 const { reconcileEncoded } = require('../reconcile_encoded.js');
 const { assertCarrierBinding, assertEnvelopeCarrierBinding } = require('../bind_action_carrier.js');
+const { assertRevealInputsBound } = require('../bind_reveal_inputs.js');
 
 // Sign an envelope reveal synchronously so it is ready before the commit broadcast.
 function prepareEnvelope(manager, { encoded, createResult, encoderOpts, wif, progress }) {
@@ -74,6 +75,7 @@ function buildPhase2Request(signed, encoded, encoderOpts, carriedAction) {
     // Every createTx option the caller set, from the list createTx reads, so the
     // reveal keeps the hub feeQuote and whatever createTx gains next.
     const request = pickRevealOptions(encoderOpts);
+    if (request.attachPrevTx === undefined) request.attachPrevTx = true;
     // Chunk reveals must reproduce the stored payload exactly. Re-entering the
     // compression pass could produce a carrier that cannot spend the commit.
     if (carriedAction.encoderCompressed) request.compress = false;
@@ -88,22 +90,36 @@ function buildPhase2Request(signed, encoded, encoderOpts, carriedAction) {
 }
 
 // Reconcile, bind and sign phase 2 synchronously before its broadcast begins.
-function preparePhase2(manager, spendResult, reconcileState, createResult, wif) {
+function preparePhase2(manager, spendResult, reconcileState, createResult, wif, signed, encoded) {
     // The reveal must spend every shaped funding output from phase 1, which avoids
     // leaving undecodable carrier value under encoder control.
     reconcileEncoded(spendResult.psbt, Object.assign({}, reconcileState.reconcileIntent, {
         label: 'phase-2 reveal',
         customOutputs: reconcileState.revealCustomOutputs,
         requiredSpends: reconcileState.phase1.phaseFunding,
+        trustedPrevTxs: [signed.txHex],
     }));
 
     // Phase-2 input scripts reveal the carrier committed by phase 1. This check
     // rejects an additional inline carrier without re-authorizing encoded bytes.
+    // The reveal tag is accepted here only because assertRevealInputsBound follows.
     assertCarrierBinding({
-        psbt:         spendResult.psbt,
-        actionString: createResult.actionString,
-        network:      manager.reconcileNetwork(),
-        label:        'phase-2 reveal',
+        psbt:           spendResult.psbt,
+        actionString:   createResult.actionString,
+        network:        manager.reconcileNetwork(),
+        label:          'phase-2 reveal',
+        allowRevealTag: true,
+    });
+
+    // The decoder reads data from every reveal input in order, so the inputs must
+    // be exactly the carrier legs phase 1 verified, with nothing pre-signed.
+    assertRevealInputsBound({
+        psbt:           spendResult.psbt,
+        commitTxHex:    signed.txHex,
+        carrierScripts: encoded.carrierScripts,
+        encoding:       encoded.encoding,
+        network:        manager.reconcileNetwork(),
+        label:          'phase-2 reveal',
     });
 
     // Non-standard P2SH and P2WSH inputs require the reveal-specific finalizer.
@@ -117,7 +133,8 @@ async function prepareChunkReveal(manager, state) {
     if (encoded.encoding !== 'P2SH' && encoded.encoding !== 'P2WSH') return null;
     progress('p2sh_spending', { phase1Txid: signed.txid });
     const spendResult = await encoder.spendP2sh(buildPhase2Request(signed, encoded, encoderOpts, carriedAction));
-    return { spendResult, spendSigned: preparePhase2(manager, spendResult, reconcileState, createResult, wif) };
+    return { spendResult,
+        spendSigned: preparePhase2(manager, spendResult, reconcileState, createResult, wif, signed, encoded) };
 }
 
 // Update phase-2 tracking synchronously after its broadcast has succeeded.
@@ -126,6 +143,19 @@ function finishPhase2(manager, spendResult, spendSigned, broadcastHexes, spentIn
     let phase2Inputs = manager.extractSpentInputs(spendResult.psbt);
     spentInputs = spentInputs.concat(phase2Inputs);
     return { finalTxid: spendSigned.txid, signed: spendSigned, spentInputs };
+}
+
+// Change outputs paid to changeAddress by the broadcast transactions, minus any
+// outpoint in `consumed` (spent by a later phase, or reserved by a signed reveal).
+function survivingChange(manager, broadcastHexes, changeAddress, consumed) {
+    let consumedSet = new Set(consumed.map(i => i.txid + ':' + i.vout));
+    let changeOutputs = [];
+    for (let hex of broadcastHexes) {
+        for (let out of manager.extractChangeOutputs(hex, changeAddress)) {
+            if (!consumedSet.has(out.txid + ':' + out.vout)) changeOutputs.push(out);
+        }
+    }
+    return changeOutputs;
 }
 
 // Shape the public result synchronously after every transaction is broadcast.
@@ -138,14 +168,8 @@ function shapeResult(manager, state) {
 
     // Return only change that survives all later phases, so a caller can safely
     // chain a new unconfirmed action from it.
-    let spentSet = new Set(spentInputs.map(i => i.txid + ':' + i.vout));
     let changeAddress = state.encoderOpts.change || state.encoderOpts.pubkey;
-    let changeOutputs = [];
-    for (let hex of state.broadcastHexes) {
-        for (let out of manager.extractChangeOutputs(hex, changeAddress)) {
-            if (!spentSet.has(out.txid + ':' + out.vout)) changeOutputs.push(out);
-        }
-    }
+    let changeOutputs = survivingChange(manager, state.broadcastHexes, changeAddress, spentInputs);
 
     return {
         txid:          finalTxid,
@@ -175,15 +199,37 @@ function buildWaitOptions(setup) {
     };
 }
 
-// Mark only confirmation timeouts as successful broadcasts that remain unindexed.
-function markConfirmationTimeout(error, finalTxid) {
-    if (error && error.code === 'CONFIRMATION_TIMEOUT'){
+// Codes meaning "sent but not yet settled": the transaction is on the wire and the
+// caller should wait, retry the reveal, or check the mempool, never rebuild.
+const IN_FLIGHT_CODES = new Set([
+    'CONFIRMATION_TIMEOUT',
+    'CHUNK_REVEAL_BROADCAST_FAILED',
+    'ENVELOPE_REVEAL_BROADCAST_FAILED',
+]);
+
+// Tag any error thrown once a transaction is on the wire (a rejected reveal, an
+// indexer wait that expires or refuses, a contract gate) with the inputs the
+// broadcast spent and the change it paid back, so the wallet session's UTXO cache
+// stops offering inputs the mempool already holds. An in-flight code also gets
+// broadcast:true and the last broadcast txid; a settled refusal such as
+// ACTION_INVALID does not, since broadcast:true reads as "awaiting confirmation".
+// `sent` = { txid, broadcastHexes, spentInputs, pendingInputs, changeAddress };
+// pendingInputs are the inputs of a signed reveal that has not gone out, kept
+// out of the change list so retrying that reveal never races a later submit.
+function markBroadcastError(manager, error, sent) {
+    if (!error || typeof error !== 'object') return error;
+    let spentInputs = sent.spentInputs.slice();
+    error.spentInputs   = spentInputs;
+    error.changeOutputs = survivingChange(manager, sent.broadcastHexes, sent.changeAddress,
+        spentInputs.concat(sent.pendingInputs || []));
+    if (IN_FLIGHT_CODES.has(error.code)) {
         error.broadcast = true;
-        error.txid      = finalTxid;
+        error.txid      = sent.txid;
         if (error.details && typeof error.details === 'object'){
             error.details.broadcast = true;
         }
     }
+    return error;
 }
 
 module.exports = {
@@ -193,7 +239,7 @@ module.exports = {
     buildWaitOptions,
     finishEnvelope,
     finishPhase2,
-    markConfirmationTimeout,
+    markBroadcastError,
     prepareChunkReveal,
     prepareEnvelope,
     preparePhase2,

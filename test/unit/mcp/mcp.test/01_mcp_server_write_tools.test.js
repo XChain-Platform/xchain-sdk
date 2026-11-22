@@ -26,6 +26,7 @@ const { expect } = require('chai');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
 const { buildServer, COIN_NETWORKS } = require('../../../../mcp/server.js');
+const { sdkMethodsCalledByServer } = require('../../../helpers/mcp_sdk_calls.js');
 
 // Minimal XChainSDK stand-in: records calls, returns canned values.
 function stubSdk(network) {
@@ -56,6 +57,8 @@ function stubSdk(network) {
         getExecutions: record('getExecutions'),
         getAttestations: record('getAttestations'),
         getValidators: record('getValidators'),
+        verifyCheckpoint: record('verifyCheckpoint'),
+        requireEncoder: () => ({ releaseInputs: (id) => { calls.push(['releaseInputs', id]); return Promise.resolve({ reservationId: id, found: false }); } }),
     };
 }
 
@@ -84,7 +87,10 @@ function writableStub(network) {
         const seen = new Map();
         return {
             address: 'agentaddr', pubkey: 'agentpub',
-            getBalances: async () => [{ tick: 'TOK', amount: '1' }],
+            getBalances: async (opts) => {
+                base.calls.push(['session.getBalances', opts]);
+                return { data: [{ tick: 'TOK', amount: '1' }], total: 1 };
+            },
             computeWindowUsage: () => ({ count: 0, perTick: {}, hours: 24 }),
             // Mirrors AgentSession.submit(actionData, encoderOpts, submitOpts),
             // INCLUDING its idempotency-key requirement: a stub that ignores the
@@ -110,7 +116,10 @@ function writableStub(network) {
                     throw e;
                 }
                 if (key !== undefined && key !== null) seen.set(String(key), 'txAA');
-                return { txid: 'txAA', status: 'valid', policy: { action: actionData.action, windowUsage: { count: 1 } } };
+                return {
+                    txid: 'txAA', indexed: { status: 'valid', statusKnown: true, statusSource: 'indexer' },
+                    policy: { action: actionData.action, windowUsage: { count: 1 } },
+                };
             },
         };
     };
@@ -118,6 +127,13 @@ function writableStub(network) {
 }
 
 describe('MCP server (write tools)', () => {
+
+    it('the writable stub has every method the handlers call through sdkFor', () => {
+        const called = sdkMethodsCalledByServer();
+        expect(called).to.include('agentSession');
+        const stub = writableStub('bitcoin-regtest');
+        for (const name of called) expect(stub[name], `writableStub is missing ${name}`).to.be.a('function');
+    });
 
     it('without wallet config: write tools absent, compose demands a pubkey', async () => {
         const { client } = await connectedPair();
@@ -155,7 +171,7 @@ describe('MCP server (write tools)', () => {
         expect(build({ allowedActions: ['SEND'], maxPerWindow: { maxActions: 5 } }))
             .to.throw(/binding amount ceiling/);
         // Both real ceilings are accepted, so the gate is not simply refusing everything.
-        expect(build({ allowedActions: ['SEND'], maxPerWindow: { perTick: { TOK: '10' } } })).to.not.throw();
+        expect(build({ allowedActions: ['SEND'], maxPerWindow: { hours: 24, perTick: { TOK: '10', '*': '0' } } })).to.not.throw();
         expect(build(POLICY)).to.not.throw();
     });
 });
@@ -180,8 +196,8 @@ describe('MCP server (write tools)', () => {
         // reads own properties only, so it would resolve no cap from one (G1).
         expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: Object.create({ TOK: '5' }) } }))
             .to.throw(/binding amount ceiling/);
-        // A populated table on either clause still builds.
-        expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '5' } } })).to.not.throw();
+        // A table with a wildcard entry on either clause still builds.
+        expect(build({ allowedActions: ['SEND'], maxPerAction: { SEND: { TOK: '5', '*': '0' } } })).to.not.throw();
         expect(build({ allowedActions: ['SEND'], maxPerWindow: { hours: 24, perTick: { '*': '5' } } })).to.not.throw();
     });
 
@@ -205,6 +221,30 @@ describe('MCP server (write tools)', () => {
         expect(decl[1], 'confirmAbove must never count as a binding ceiling on the MCP rail')
             .to.not.match(/confirmAbove/);
     });
+});
+
+describe('MCP server (write tools)', () => {
+
+    it('get_agent_wallet forwards balance paging within the 500-row route limit', async () => {
+        const created = [];
+        const { client } = await connectedPair({
+            sdkFactory: (network) => { const s = writableStub(network); created.push(s); return s; },
+            wallet: { wif: 'WIF', policy: POLICY },
+        });
+        const res = await client.callTool({
+            name: 'get_agent_wallet', arguments: { coin: 'BTC', page: 2, limit: 500 },
+        });
+        expect(res.isError).not.to.equal(true);
+        expect(created[0].calls.find((call) => call[0] === 'session.getBalances'))
+            .to.deep.equal(['session.getBalances', { page: 2, limit: 500 }]);
+
+        const over = await client.callTool({
+            name: 'get_agent_wallet', arguments: { coin: 'BTC', limit: 501 },
+        });
+        expect(over.isError).to.equal(true);
+        expect(created[0].calls.filter((call) => call[0] === 'session.getBalances')).to.have.lengthOf(1);
+    });
+
 });
 
 describe('MCP server (write tools)', () => {
@@ -349,7 +389,7 @@ describe('MCP server (write tools)', () => {
         const [ct, st] = InMemoryTransport.createLinkedPair();
         await Promise.all([server.connect(st), client.connect(ct)]);
 
-        const res = await client.callTool({ name: 'compose_action', arguments: { coin: 'BTC', action: 'send', params: { tick: 'TOK', amount: '5' } } });
+        const res = await client.callTool({ name: 'compose_action', arguments: { coin: 'TBTC', action: 'send', params: { tick: 'TOK', amount: '5' } } });
         const body = JSON.parse(res.content[0].text);
         expect(body).to.deep.equal({ action_string: 'SEND|0|TOK|5|dest', psbt: 'deadbeef', encoding: 'OP_RETURN', signed: false });
         // The default sender is the session ADDRESS (the encoder's pubkey field

@@ -33,6 +33,7 @@
 
 'use strict';
 
+const crypto = require('crypto');
 const { parse } = require('../decoder/parse.js');
 const Utility = require('../utils/utility.js');
 const { SDKFormatError, SDKPreflightError } = require('../utils/errors.js');
@@ -58,10 +59,15 @@ const VIRTUAL_ACTION_FIELDS = {
 };
 
 function buildVirtual(action, fields) {
+    const params = { ...fields };
+    const dispenserIndex = params.DISPENSER_ACTION_INDEX;
+    if ((dispenserIndex === undefined || dispenserIndex === null || dispenserIndex === '')
+        && params.ACTION_INDEX !== undefined)
+        params.DISPENSER_ACTION_INDEX = params.ACTION_INDEX;
     return {
-        ok: true, action, version: 0, params: { ...fields }, rest: null,
+        ok: true, action, version: 0, params, rest: null,
         commands: null,
-        actionString: action + '|0|' + (fields.DISPENSER_ACTION_INDEX || ''),
+        actionString: action + '|0|' + (params.DISPENSER_ACTION_INDEX ?? ''),
         validation: { ok: true, findings: [] },
     };
 }
@@ -98,8 +104,17 @@ function normalizeInput(actionData, actionsCore) {
                 { detail: parsed.detail });
         return parsed;
     }
-    if (actionData && actionData.ok === true && actionData.action)
-        return actionData; // already a ParsedAction
+    if (actionData && actionData.ok === true && actionData.action) {
+        // A virtual ParsedAction's actionString is a summary of its params, and
+        // the coalescer keys on that string while the checks read the params,
+        // so the string is rebuilt from the params rather than trusted.
+        const virtualAction = String(actionData.action).toUpperCase();
+        if (VIRTUAL_ACTION_FIELDS[virtualAction])
+            return buildVirtual(virtualAction, actionData.params || {});
+        // Already a ParsedAction. Returned as the caller's own object, which
+        // runPreflight relies on to key the shared report on its content.
+        return actionData;
+    }
     if (actionData && actionData.action && VIRTUAL_ACTION_FIELDS[String(actionData.action).toUpperCase()])
         return buildVirtual(String(actionData.action).toUpperCase(), normalizeParamKeys(actionData));
     if (actionData && actionData.action) {
@@ -172,22 +187,45 @@ function computeVerdict(findings) {
 // Bound the elapsed clock without a bare Date.now sprinkled everywhere.
 function nowMs() { return Date.now(); }
 
+// What the shared-report key names for a normalized input. A ParsedAction the caller
+// built is passed through untouched, so its actionString alone does not say what Tier 2
+// will read from it; a digest of the fields the checks read joins the key, which keeps two
+// objects that share a string but differ in params or validation from sharing a report.
+// Every other input form is derived from its string, which therefore identifies it. Null
+// means the object cannot be serialized, so it is never coalesced.
+function coalesceIdentity(parsed, actionData) {
+    if (parsed !== actionData) return parsed.actionString;
+    let body;
+    try {
+        body = JSON.stringify([parsed.action, parsed.version, parsed.params, parsed.commands, parsed.validation]);
+    } catch (e) { return null; }
+    if (typeof body !== 'string') return null;
+    return String(parsed.actionString) + '#' + crypto.createHash('sha256').update(body).digest('hex');
+}
+
 async function runPreflight(sdk, actionData, opts = {}) {
     const mode = resolveMode(opts.preflight, sdk._preflightMode);
     if (mode === false) return null;
 
     const started = nowMs();
     const parsed = normalizeInput(actionData, sdk.actions);
+    const identity = coalesceIdentity(parsed, actionData);
 
     const chain = opts.chain || opts.chainId || (sdk.config && sdk.config.network) || null;
     const timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
 
-    const producer = () => produceReport({ sdk, parsed, opts, mode, timeoutMs, started });
+    // The producer is shared by every coalesced joiner, so it must not run
+    // under the signal of whichever caller happened to create it: that
+    // caller's abort would downgrade every other joiner's report. Each caller's
+    // own signal is applied by the coalescer to that caller's view only.
+    const sharedOpts = Object.assign({}, opts, { signal: undefined });
+    const producer = () => produceReport({ sdk, parsed, opts: sharedOpts, mode, timeoutMs, started });
 
     const report = await sdk._preflightCoalescer.run({
-        chainId: chain, actionString: parsed.actionString, source: opts.source,
+        chainId: chain, actionString: identity, source: opts.source,
         localDeltas: opts.localDeltas,
-        signal: opts.signal, bypass: opts.bypassCache === true,
+        mode, feeMode: opts.feeMode, encoding: opts.encoding, timeoutMs,
+        signal: opts.signal, bypass: opts.bypassCache === true || identity === null,
     }, producer);
 
     if (mode === 'enforce' && report.verdict === 'fail') {
@@ -201,7 +239,11 @@ async function runPreflight(sdk, actionData, opts = {}) {
 // precedence folds into the findings, and the verdict is taken from the result.
 async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
     // Tier 1 (skipped entirely in 'local' mode) and Tier 2 run
-    // concurrently against the shared timeout budget.
+    // concurrently against the shared timeout budget. timeoutMs is the budget
+    // for the WHOLE run, so both tiers work to one deadline: Tier 2's reads are
+    // sequential, and a per-read timer let a stalled explorer hold the run for
+    // a multiple of the budget.
+    const deadlineAt = started + timeoutMs;
     const tier1Promise = mode === 'local'
         ? Promise.resolve({ kind: 'no-verdict', reason: 'local-only mode' })
         // `feeMode` rides through to the network dry run: the verdict differs
@@ -209,7 +251,7 @@ async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
         // as a coin output, and a caller that has already chosen must not be
         // judged against the chain default (see runTier1).
         : runTier1({ sdk, parsed, source: opts.source, feeMode: opts.feeMode,
-            signal: opts.signal, timeoutMs })
+            signal: opts.signal, timeoutMs: Math.max(1, deadlineAt - nowMs()) })
             .catch(e => ({ kind: 'unavailable', reason: e && e.message ? e.message : String(e) }));
 
     // A no-verdict response may still identify the block it evaluated. Tier 2 may use that
@@ -221,7 +263,7 @@ async function produceReport({ sdk, parsed, opts, mode, timeoutMs, started }) {
     });
     const ctx = new CheckContext({
         sdk, parsed, source: opts.source, mode,
-        signal: opts.signal, timeoutMs, localDeltas: opts.localDeltas,
+        signal: opts.signal, timeoutMs, deadlineAt, localDeltas: opts.localDeltas,
         feeMode: opts.feeMode,
     });
     ctx.targetHeight = targetHeight;

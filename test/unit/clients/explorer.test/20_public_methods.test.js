@@ -43,7 +43,7 @@ describe('ExplorerClient', function () {
             'getDestroys', 'getDispensers', 'getDispenses',
             'getDispenserCancels', 'getDispenserCloses', 'getDispenserExpires', 'getDispenserEdits',
             'getDividends', 'getFees',
-            'getFiles', 'getGatedFiles', 'getLinks', 'getLists', 'getMessages', 'getMints', 'getOrders',
+            'getFiles', 'getGatedFiles', 'getFileAssembly', 'getLinks', 'getLists', 'getMessages', 'getMints', 'getOrders',
             'getOrderCancels', 'getOrderEdits', 'getOrderExpires', 'getOrderMatches',
             'getSends', 'getSleeps', 'getSwaps',
             'getSwapCancels', 'getSwapEdits', 'getSwapExpires', 'getSweeps',
@@ -68,24 +68,11 @@ describe('ExplorerClient', function () {
             });
         }
 
-        it('has 134 public methods', function () {
-            // 113 = 112 + getPreflight (validity-first pre-flight proxy).
-            // 117 = 113 + the four BET reads: getBetFeeds, getBetFeed,
-            // getBets, getOracleStats.
-            // 118 = 117 + getOracleFeeQuote (dispenser oracle usage fee).
-            // 119 = 118 + freshness (the explorer's per-response tip marker).
-            // 121 = 119 + the two batch reads: getBalancesBatch,
-            // getCoinpayObligationsBatch.
-            // 123 = 121 + the two non-throwing token existence reads:
-            // findToken, tokenExists.
-            // 133 = 123 + the ten transport and read helpers that dropped their
-            // underscore: buildClient, deriveCoinPrefix, buildParams, get, post,
-            // recordFreshness, handleError, assertBatchAddresses, assertBatchBody,
-            // siblingCoin.
-            // 134 = 133 + getGatedFiles.
+        it('has 135 public methods', function () {
+            // 135 = the prior 134-method surface plus getFileAssembly.
             let publicMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(client))
                 .filter(m => !m.startsWith('_') && m !== 'constructor');
-            expect(publicMethods).to.have.length(134);
+            expect(publicMethods).to.have.length(135);
         });
     });
 });

@@ -16,7 +16,10 @@ const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checko
 const { FINDING_CODES } = require('../../../../src/preflight/constants.js');
 const { declareAmountRepresentability } = require('../../../../src/preflight/checks/dispenser/amount_rules.js');
 
-const INDEXER = path.join(__dirname, '..', '..', '..', '..', '..', 'xchain-indexer', 'src', 'protocol_changes');
+// The checkout the run was pointed at wins, exactly as the other indexer readers resolve it.
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '..', '..', '..', '..', '..');
+const INDEXER = path.resolve(process.env.XCHAIN_INDEXER_PATH || process.env.XCHAIN_INDEXER_DIR
+    || path.join(SIBLING_ROOT, 'xchain-indexer'), 'src', 'protocol_changes');
 let indexerDir = null;
 const read = (f) => fs.readFileSync(path.join(indexerDir, f), 'utf8');
 
@@ -33,6 +36,24 @@ function batchRowColumns(name) {
         const literal = new RegExp(`const ${c} = (\\d+);`).exec(flags);
         expect(literal, `${name} column ${c} resolves to a literal in flag_times_batch_fees.js`).to.not.equal(null);
         return Number(literal[1]);
+    });
+}
+
+// Resolve one time-table row of `file`, which may span lines, to its six columns; an identifier
+// column resolves through its literal in flag_times.js, where UNARMED stays 'UNARMED'.
+function changeRowColumns(file, name) {
+    const src = read(file);
+    const parts = src.split(`['${name}',`);
+    expect(parts, `the ${name} row appears exactly once in ${file}`).to.have.length(2);
+    const cols = parts[1].split('],')[0].split(',').map((c) => c.trim()).filter(Boolean).slice(1);
+    expect(cols, `${name} carries mainnet/testnet/regtest time and block columns`).to.have.length(6);
+    const flags = read('flag_times.js');
+    return cols.map((c) => {
+        if (/^\d+$/.test(c)) return Number(c);
+        if (c === 'UNARMED') return 'UNARMED';
+        const literal = new RegExp(`const ${c} = (\\d+|UNARMED);`).exec(flags);
+        expect(literal, `${name} column ${c} resolves to a literal in flag_times.js`).to.not.equal(null);
+        return literal[1] === 'UNARMED' ? 'UNARMED' : Number(literal[1]);
     });
 }
 
@@ -88,12 +109,18 @@ function indexerRowsSuite() {
                 .to.deep.equal([0, 0, 0]);
         }
     });
+
+    it('the ORDER GET_ADDRESS coin time row matches the pinned table, with no block gate', function () {
+        const [mainnet, testnet, regtest, ...blocks] = changeRowColumns('changes_5.js', 'ORDER_GET_ADDRESS_COIN');
+        expect({ mainnet, testnet, regtest }).to.deep.equal(DISCLOSURE_MIRRORS.ORDER_GET_ADDRESS_COIN.table);
+        expect(blocks).to.deep.equal([0, 0, 0]);
+    });
 }
 
 describe('pre-flight activation splits are mirrored, not hard-coded', function () {
     it('pins the cumulative-cap and batch time rows; representability is a drift-gated activation row', function () {
         expect(Object.keys(DISCLOSURE_MIRRORS)).to.have.members(
-            ['ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', 'BATCH_ISSUANCE_LIMITS', 'BATCH_COST_WEIGHTING']);
+            ['ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', 'BATCH_ISSUANCE_LIMITS', 'BATCH_COST_WEIGHTING', 'ORDER_GET_ADDRESS_COIN']);
         expect(ACTIVATION_MIRRORS).to.have.property('AMOUNT_REPRESENTABILITY');
     });
 

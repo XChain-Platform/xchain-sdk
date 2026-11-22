@@ -25,6 +25,10 @@ The server starts read-only. Write tools are listed only when BOTH are set:
 
 Every submitted action is evaluated against the policy; out-of-policy actions are refused unsigned. Policies requiring human confirmation (`confirmAbove`) are rejected outright, since a stdio server has no human in the loop.
 
+The server also refuses to start unless every allowed action has a spend ceiling that binds every token: a `'*'` entry in its `maxPerAction` table, or one in `maxPerWindow.perTick`. A cap that names only some ticks leaves every other token unbounded, because the evaluator treats a tick with no entry as uncapped. To allow only the ticks you name, add `'*': '0'` beside them, for example `{ "allowedActions": ["SEND"], "maxPerAction": { "SEND": { "TOK": "5", "*": "0" } } }`.
+
+Actions whose spend cannot be derived from their own parameters are refused at startup while an amount ceiling is required. This includes `BATCH`, `EXECUTE`, `CALLBACK`, `SWEEP`, `AIRDROP`, and `DIVIDEND`; writing a cap for one of them does not make that cap binding.
+
 ## License
 
 AGPL-3.0-or-later. A commercial license (without AGPL source-disclosure terms) is available: contact legal@dankest.llc.

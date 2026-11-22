@@ -80,6 +80,21 @@ function validateActionCaps(config) {
                     `co-signer cannot read, so the cap would be silently inert. Remove the cap ` +
                     `(the output gate + maxFeeSats bound ${action}), or disallow the action.`);
     }
+    const win = config.policy.maxPerWindow;
+    if (win) validateWindowStoreHours(config.windowStore, win.hours);
+}
+
+function validateWindowStoreHours(store, policyHours) {
+    const storeHours = store && Number.isFinite(store.hours) ? store.hours
+        : (store && Number.isFinite(store['_hours']) ? store['_hours'] : null);
+    if (storeHours === null)
+        throw new Error('windowStore must declare the hours it uses for policy.maxPerWindow pruning');
+    if (storeHours !== policyHours) {
+        const err = new Error(`windowStore prunes after ${storeHours}h but policy.maxPerWindow `
+            + `reports ${policyHours}h; a shorter store window would multiply the effective ceiling`);
+        err.code = 'WINDOW_HOURS_MISMATCH';
+        throw err;
+    }
 }
 
 // G3: the taproot tweak is DERIVED here, never accepted from the caller.

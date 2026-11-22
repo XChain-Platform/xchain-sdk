@@ -17,7 +17,7 @@
  ********************************************************************/
 
 const { expect } = require('chai');
-const { withRetry, isRetryable, getDelay } = require('../../../src/utils/retry.js');
+const { withRetry, isRetryable, isPreDispatchRetryable, getDelay } = require('../../../src/utils/retry.js');
 
 
 function registerIsRetryableTests() {
@@ -174,6 +174,19 @@ function registerWithRetryTests() {
     describe('withRetry()', () => {
         registerRetrySuccessTests();
         registerRetryFailureTests();
+
+        it('honors a per-call retry predicate', async () => {
+            let callCount = 0;
+            const err = new Error('service unavailable');
+            err.response = { status: 503 };
+            try {
+                await withRetry(async () => { callCount++; throw err; },
+                    { maxRetries: 3, baseDelay: 1, isRetryable: () => false });
+            } catch (e) {
+                expect(e).to.equal(err);
+            }
+            expect(callCount).to.equal(1);
+        });
     });
 }
 
@@ -184,5 +197,16 @@ describe('retry utility', () => {
     registerIsRetryableTests();
     registerDelayTests();
     registerWithRetryTests();
+
+    describe('isPreDispatchRetryable()', () => {
+        it('accepts only HTTP 429 and refused connections', () => {
+            expect(isPreDispatchRetryable({ response: { status: 429 } })).to.equal(true);
+            expect(isPreDispatchRetryable({ code: 'ECONNREFUSED' })).to.equal(true);
+            for (const status of [502, 503, 504])
+                expect(isPreDispatchRetryable({ response: { status } }), String(status)).to.equal(false);
+            for (const code of ['ECONNABORTED', 'ECONNRESET', 'EPIPE'])
+                expect(isPreDispatchRetryable({ code }), code).to.equal(false);
+        });
+    });
 
 });

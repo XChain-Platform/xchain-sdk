@@ -111,8 +111,9 @@ function extractInlineActionString(psbtOrHex, opts = {}) {
 
     const body = plain.subarray(MAGIC_WORD.length);
 
-    // P2SH/P2WSH funding tx: the OP_RETURN carries only the tag; the action
-    // params live in the separate reveal tx, not in this PSBT.
+    // P2SH/P2WSH reveal tx: the OP_RETURN carries only the tag; the action
+    // params live in the redeem or witness scripts of this tx's inputs, which
+    // this output-only decode does not read.
     if (body.equals(P2SH_TAG) || body.equals(P2WSH_TAG)) return fail('P2SH_P2WSH_UNSUPPORTED');
     if (body.length > MAX_ACTION_DATA_LENGTH) return fail('OVERSIZED');
 
@@ -127,7 +128,7 @@ function extractInlineActionString(psbtOrHex, opts = {}) {
     try { actionString = new TextDecoder('utf-8', { fatal: true }).decode(decompiled[0]); }
     catch (e) { return fail('NOT_UTF8'); }
 
-    return { ok: true, actionString };
+    return { ok: true, actionString, pushes: decompiled };
 }
 
 /*

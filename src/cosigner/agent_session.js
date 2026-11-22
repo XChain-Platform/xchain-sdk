@@ -21,7 +21,7 @@
  * rather than silently resetting the window.
  *
  *   let agent = sdk.agentSession(wif, {
- *       allowedActions: ['SEND', 'EXECUTE'],
+ *       allowedActions: ['SEND', 'MINT'],
  *       allowedDestinations: ['bc1q...'],                  // optional
  *       maxPerAction: { SEND: { MYTOKEN: '100', '*': '10' } },
  *       maxPerWindow: { hours: 24, perTick: { MYTOKEN: '500' }, maxActions: 50 },
@@ -50,7 +50,9 @@ const { SDKPolicyError } = require('../utils/errors.js');
 // The pure policy verdict is shared with the co-signer daemon so both
 // enforcement points run identical logic. AgentSession adds the throw +
 // observer + file-backed window store around it.
-const { evaluatePolicy, addDecimal, hasEnforceableCap, UNRESOLVED_TICK_BUCKET } = require('./policy_evaluator.js');
+const {
+    evaluatePolicy, canonicalizeParams, addDecimal, hasEnforceableCap, UNRESOLVED_TICK_BUCKET,
+} = require('./policy_evaluator.js');
 
 function validatePolicy(policy) {
     if (!Array.isArray(policy.allowedActions) || policy.allowedActions.length === 0)
@@ -90,24 +92,9 @@ function validatePolicy(policy) {
     return win;
 }
 function authorizeSubmission(session, evaluation, submitOpts) {
-    // Record the window entry on AUTHORIZATION, before the irreversible broadcast,
-    // then patch in the real txid on success. Mirrors coSigner.recordBudget /
-    // windowStore ("consume the budget on authorization"): submitInner can throw
-    // AFTER the money has moved (a CONFIRMATION_TIMEOUT on the 120s indexer wait, a
-    // P2SH phase-2 failure, a lost broadcast ACK), and if usage were recorded only
-    // afterward that throw would leave the spend on-chain with the window un-consumed
-    // and the cap silently under-counting -- exactly the case a retrying agent hits.
-    // A pre-broadcast failure (createTx/signPsbt) conservatively burns budget too;
-    // that is the deliberate fail-closed trade the co-signer already makes, and it
-    // keeps this from being the one guardrail whose ceiling stops binding on error.
-    // At-most-once on the automated rail. When the caller supplies a stable
-    // idempotencyKey, a retry after a post-broadcast throw is REFUSED rather
-    // than re-broadcast: submitInner can throw after the tx already landed
-    // (CONFIRMATION_TIMEOUT on the indexer wait, a lost ACK), and a naive
-    // agent retry would otherwise build and pay a SECOND transaction. The
-    // refusal carries the prior txid (when known) so the agent can resume
-    // waiting on the existing payment instead of re-sending. Opt-in: absent a
-    // key, behavior is unchanged. Fail-closed and needs no indexer to hold.
+    // Consume budget on authorization because a later throw may follow broadcast.
+    // Proven pre-broadcast failures keep that row but release its key. Ambiguous
+    // failures keep the key, preventing a lost acknowledgement from paying twice.
     const idempotencyKey = submitOpts && submitOpts.idempotencyKey;
     // BREAKING: the key is REQUIRED rather than honored when offered.
     // Opt-in idempotency protects only the callers who already knew to
@@ -122,14 +109,20 @@ function authorizeSubmission(session, evaluation, submitOpts) {
             { action: evaluation.action });
     if (idempotencyKey !== undefined && idempotencyKey !== null) {
         const keyStr = String(idempotencyKey);
-        const prior = session.pruned().entries.find((e) => e.key === keyStr);
-        if (prior)
-            session.deny('POLICY_DUPLICATE_SUBMIT',
-                `a submission with idempotencyKey ${keyStr} was already recorded` +
-                ` (keys are remembered for ${session.policy.idempotencyHours}h)` +
-                (prior.txid ? ` (txid ${prior.txid})` : '') +
-                '; not broadcasting again. Resume the existing payment instead of retrying.',
-                { idempotencyKey: keyStr, txid: prior.txid || null });
+        const keyCutoff = Date.now() - session.policy.idempotencyHours * 3600 * 1000;
+        const prior = session.pruned().entries.find((e) => e.key === keyStr && e.t >= keyCutoff);
+        if (prior) {
+            const txid = prior.txid || null;
+            const message = txid
+                ? `a submission with idempotencyKey ${keyStr} was already recorded (keys are remembered for `
+                    + `${session.policy.idempotencyHours}h) (txid ${txid}); not broadcasting again. `
+                    + 'Resume the existing payment instead of retrying.'
+                : `a submission with idempotencyKey ${keyStr} was recorded without a txid; its outcome is unknown. `
+                    + 'Check this address\'s recent transactions before choosing a new idempotency key.';
+            const details = { idempotencyKey: keyStr, txid };
+            if (!txid) details.outcomeUnknown = true;
+            session.deny('POLICY_DUPLICATE_SUBMIT', message, details);
+        }
     }
     return session.recordUsage(evaluation, null, idempotencyKey);
 }
@@ -238,21 +231,15 @@ class AgentSession extends WalletSession {
         return this._usage;
     }
 
-    // Two cutoffs, because a spend window and an at-most-once record answer
-    // different questions. An idempotency key that dies with the window lets an
-    // identical retry one window later re-broadcast and pay a SECOND time, against a
-    // submit_action that advertises at-most-once without qualification. A keyed row
-    // therefore outlives its window, COMPACTED to { t, key, txid }: action, tick and
-    // amount are dropped so an aged-out row can never be summed into a spend cap
-    // even if some future caller sums the raw list. computeWindowUsage() filters by the
-    // window cutoff regardless, which is the belt to this brace.
+    // The key horizon applies to every policy. With a spend window, older keyed
+    // rows remain compact until that horizon; without one, it is the only retention.
     pruned() {
         const usage = this.loadUsage();
         const win = this.policy.maxPerWindow;
+        const now = Date.now();
+        const keyCutoff = now - this.policy.idempotencyHours * 3600 * 1000;
         if (win) {
-            const now = Date.now();
             const windowCutoff = now - win.hours * 3600 * 1000;
-            const keyCutoff = now - this.policy.idempotencyHours * 3600 * 1000;
             const kept = [];
             for (const e of usage.entries) {
                 if (e.t >= windowCutoff) { kept.push(e); continue; }
@@ -260,7 +247,7 @@ class AgentSession extends WalletSession {
                     kept.push({ t: e.t, key: e.key, txid: e.txid === undefined ? null : e.txid });
             }
             usage.entries = kept;
-        }
+        } else usage.entries = usage.entries.filter((e) => e.t >= keyCutoff);
         return usage;
     }
 
@@ -358,7 +345,15 @@ class AgentSession extends WalletSession {
         if (halt)
             this.deny('POLICY_HALTED', `AgentSession is halted: ${halt}`, { killSwitchFile: this._killSwitchFile });
 
-        const evaluation = this.evaluate(actionData);
+        const canonical = canonicalizeParams(actionData && actionData.params);
+        if (canonical.collisions.length) {
+            const collision = canonical.collisions[0];
+            this.deny('POLICY_PARAM_KEY_COLLISION',
+                `${collision.path} contains keys ${collision.keys.join(' and ')} that both compose as ${collision.canonical}`,
+                { collisions: canonical.collisions });
+        }
+        const preparedActionData = Object.assign({}, actionData, { params: canonical.params });
+        const evaluation = this.evaluate(preparedActionData);
 
         if (evaluation.needsConfirmation) {
             const ok = await this.policy.confirmAbove.handler({
@@ -374,14 +369,16 @@ class AgentSession extends WalletSession {
         const entry = authorizeSubmission(this, evaluation, submitOpts);
         let result;
         try {
-            result = await super.submitInner(actionData, encoderOpts, this.policy.allowedDestinations
+            result = await super.submitInner(preparedActionData, encoderOpts, this.policy.allowedDestinations
                 && ['MINT', 'MESSAGE', 'SWEEP'].includes(evaluation.action)
                 ? Object.assign({}, submitOpts, { skipAddressCompaction: true }) : submitOpts);
         } catch (err) {
-            // A throw AFTER broadcast carries the txid (e.g. CONFIRMATION_TIMEOUT).
-            // Patch it onto the provisional entry so the audit record is not left
-            // with txid:null and a later duplicate-key refusal can return it.
-            if (err && err.details && err.details.txid) this.patchUsageTxid(entry, err.details.txid);
+            const txid = err && ((err.details && err.details.txid) || err.txid);
+            const spent = err && Object.prototype.hasOwnProperty.call(err, 'spentInputs');
+            if (err && err.preBroadcast === true && !txid && !spent) {
+                delete entry.key;
+                this.persistUsage(this._usage);
+            } else if (txid) this.patchUsageTxid(entry, txid);
             throw err;
         }
         this.patchUsageTxid(entry, result && result.txid);
@@ -397,4 +394,4 @@ class AgentSession extends WalletSession {
     }
 }
 
-module.exports = AgentSession;
+module.exports = Object.assign(AgentSession, { validatePolicy });

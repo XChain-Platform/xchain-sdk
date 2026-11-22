@@ -29,6 +29,7 @@ const XChainSDK  = require('../XChainSDK');
 const { safeTokenEqual } = require('../utils/safe_compare.js');
 const { parseCorsOrigin } = require('../utils/cors_origin.js');
 const Config = require('../config.js');
+const { SDKError } = require('../utils/errors.js');
 // Request guards live in their own module so the shipped middleware has exactly
 // one implementation: the guard tests mount src/utils/api_guards.js directly and
 // pin, from the router stack of the app createApp builds, that it wires the same
@@ -39,6 +40,7 @@ const {
     resolveRateLimit,
     resolveRateWindowMs,
     batchCapMiddleware,
+    batchShapeMiddleware,
     rateLimitMiddleware,
     authGateMiddleware
 } = require('../utils/api_guards.js');
@@ -46,7 +48,7 @@ const { getLogger } = require('../observability/logger.js');
 const log = getLogger('xchain-sdk:api');
 
 // Parse in .env config data
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // Parse in the environmental variables
 const SDK_API_PORT = Config.env.sdkApiPort() || 3005;
@@ -93,6 +95,22 @@ function configureBaseMiddleware(app) {
     // Use Helmet to increase security
     app.use(helmet());
 
+    // Per-credential (falling back to per-IP) request-rate limit, ahead of the body
+    // parser, the batch cap, the auth gate and the router: a request those refuse
+    // (malformed JSON, an over-cap batch) must still spend the caller's budget, or an
+    // anonymous source sends them at any rate with no 429. The limiter reads only the
+    // Authorization header and req.ip, so it needs nothing from the body. The API key
+    // stops ANONYMOUS use; it does nothing about sustained traffic from a valid, shared
+    // or leaked credential, and the batch cap bounds one request's fan-out rather than
+    // the request rate. Only the configured key earns its own bucket: an unvalidated
+    // token is counted against the source address, so a rotating junk token cannot mint
+    // a fresh bucket each time.
+    app.use(rateLimitMiddleware({
+        limit: SDK_API_RATE_LIMIT,
+        windowMs: SDK_API_RATE_WINDOW_MS,
+        isCredential: (token) => !!SDK_API_KEY && safeTokenEqual(token, SDK_API_KEY)
+    }));
+
     // Allow JSON requests
     app.use(bodyParser.json());
 
@@ -109,6 +127,7 @@ function configureBaseMiddleware(app) {
     app.use(batchCapMiddleware(SDK_API_MAX_BATCH));
 }
 
+// The controller has a null prototype: the router validates a method with `method in controller`, true for inherited Object.prototype names (constructor, toString, __proto__), so only the own methods dispatch and the rest answer -32601.
 // Builds System, Action Methods, Encoder Methods, Hub Methods, Explorer Balance and Address, Tokens, Transactions and History, ACTION-Specific Queries, Markets, and Utility groups synchronously so startup introduces no extra yield points.
 function createController(sdk) {
     const controller = {
@@ -164,7 +183,74 @@ function createController(sdk) {
         async get_status() { return sdk.getStatus(); },
         async search(params) { return sdk.search(params.query, params.type); }
     };
-    return controller;
+    // Every handler runs inside rpcMethod: params are shape-checked before the handler reads them,
+    // and whatever it throws leaves as an integer JSON-RPC code with a fixed or SDK-authored message.
+    for (const name of Object.keys(controller))
+        controller[name] = rpcMethod(name, controller[name]);
+    return Object.setPrototypeOf(controller, null);
+}
+
+// JSON-RPC error codes this server answers with (spec section 5.1; -32000 is the
+// implementation-defined server-error range).
+const RPC_INVALID_PARAMS = -32602;
+const RPC_INTERNAL_ERROR = -32603;
+const RPC_SERVER_ERROR   = -32000;
+// Methods whose params may be omitted or null (get_markets lists every market then).
+const OPTIONAL_PARAMS = new Set(['get_markets']);
+// Upstream client errors carry the upstream URL and socket text in their message,
+// so they answer a fixed message per service instead.
+const UPSTREAM_MESSAGES = {
+    SDKExplorerError: 'Explorer request failed',
+    SDKEncoderError: 'Encoder request failed',
+    SDKHubError: 'Hub request failed',
+    SDKRateLimitedError: 'Upstream service rate limited'
+};
+
+// The router answers Number(err.code || err.status || -32603) and err.message, so
+// an SDKError (string code) went out as code null, and a TypeError from a bad
+// params shape went out with its internal text. This builds the error the router
+// sees: always an integer code, the SDK's string code in data.
+function toRpcError(err) {
+    if (err && Number.isInteger(err.code))
+        return err;
+    if (err instanceof SDKError) {
+        const data = { code: err.code };
+        if (err.name === 'SDKValidationError' || err.name === 'SDKFormatError')
+            return rpcError(RPC_INVALID_PARAMS, err.message, data);
+        if (Object.prototype.hasOwnProperty.call(UPSTREAM_MESSAGES, err.name)) {
+            log.warn('SDK API: upstream error %s: %s', err.code, err.message);
+            if (err.name === 'SDKRateLimitedError') data.retryAfterSeconds = err.retryAfterSeconds;
+            return rpcError(RPC_SERVER_ERROR, UPSTREAM_MESSAGES[err.name], data);
+        }
+        return rpcError(RPC_SERVER_ERROR, err.message, data);
+    }
+    log.warn('SDK API: unhandled method error: %s', err && err.message);
+    return rpcError(RPC_INTERNAL_ERROR, 'Internal error');
+}
+
+function rpcError(code, message, data) {
+    const e = new Error(message);
+    e.code = code;
+    if (data) e.data = data;
+    return e;
+}
+
+// Wraps one controller handler. The handlers take named params, so a handler that
+// declares a params argument gets a plain object or a -32602 answer: null, an
+// array, a string or a number never reaches a params.x dereference.
+function rpcMethod(name, handler) {
+    const takesParams = handler.length > 0;
+    const optional = OPTIONAL_PARAMS.has(name);
+    return async function (params) {
+        if (takesParams && !(optional && params == null) &&
+            (params === null || typeof params !== 'object' || Array.isArray(params)))
+            throw rpcError(RPC_INVALID_PARAMS, 'Invalid params: ' + name + ' takes a params object');
+        try {
+            return await handler(params);
+        } catch (err) {
+            throw toRpcError(err);
+        }
+    };
 }
 
 // Loads documentation during startup so requests never perform filesystem access.
@@ -184,6 +270,25 @@ function loadOpenRpcSpec() {
     }
 }
 
+// Maps a body-parser or router failure to a JSON-RPC error with a fixed
+// message: the error's own text, stack and paths never reach the client.
+// Four parameters are what make Express treat this as an error handler.
+function jsonRpcErrorHandler(err, req, res, next) {
+    if (res.headersSent) return next(err);
+    const raw = err && (err.status || err.statusCode);
+    const status = Number.isInteger(raw) && raw >= 400 && raw < 600 ? raw : 500;
+    let code = -32603, message = 'Internal error', out = 500;
+    if (status === 413) {
+        code = -32600; message = 'Request body too large'; out = 413;
+    } else if (status < 500) {
+        out = status;
+        code = err.type === 'entity.parse.failed' ? -32700 : -32600;
+        message = code === -32700 ? 'Parse error' : 'Invalid request';
+    }
+    if (out === 500) log.warn('SDK API: unhandled request error: %s', err && err.message);
+    res.status(out).json({ jsonrpc: '2.0', id: null, error: { code, message } });
+}
+
 // Builds the express app around an initialised SDK: every guard, the controller
 // and the routes, in the security order the guard tests pin. Synchronous and
 // listener-free, so a consumer can mount the result under its own server.
@@ -191,17 +296,11 @@ function createApp(sdk) {
     const app = express();
     configureBaseMiddleware(app);
 
-    // Apply a per-credential (falling back to per-IP) request-rate limit ahead of the auth gate so an anonymous ping flood is bounded. The API key stops ANONYMOUS use;
-    // it does nothing about sustained traffic from a valid, shared or leaked credential, and the batch cap above bounds one request's fan-out rather than the request rate. The two are complementary and neither substitutes for the other.
-    // Only the configured key earns its own bucket: an unvalidated token is counted against the source address, so a per-request rotating junk token cannot mint a fresh bucket each time.
-    app.use(rateLimitMiddleware({
-        limit: SDK_API_RATE_LIMIT,
-        windowMs: SDK_API_RATE_WINDOW_MS,
-        isCredential: (token) => !!SDK_API_KEY && safeTokenEqual(token, SDK_API_KEY)
-    }));
     // Enforce the API key for all methods except ping and fail closed when unset: every non-ping method is rejected, never left open.
     // Keep batch-smuggling and non-string-method rules in the shared guard so tests exercise this exact middleware.
     app.use(authGateMiddleware({ apiKey: SDK_API_KEY }));
+    // Reject non-object batch elements ([null], [1]) before the router: it would orphan a rejected promise on them and crash the process.
+    app.use(batchShapeMiddleware());
     const controller = createController(sdk);
     const openrpcSpec = loadOpenRpcSpec();
     app.get('/openrpc.json', (req, res) => {
@@ -220,6 +319,10 @@ function createApp(sdk) {
     app.use((req, res, next) => { if (req.body === undefined) req.body = {}; next(); });
     // Allow JSON-RPC requests
     app.use(jsonRouter({ methods: controller }));
+    // Last in the chain: anything the parsers or the router raise answers a
+    // JSON-RPC envelope, never Express's default HTML page (which carries the
+    // stack and absolute paths outside production).
+    app.use(jsonRpcErrorHandler);
     return app;
 }
 

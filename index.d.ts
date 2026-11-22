@@ -152,7 +152,7 @@ export interface SDKOptions {
     /**
      * Compact ticker names to their smaller `^<id>` wire form before encoding,
      * to shrink the on-chain payload (default: `true`). Best-effort: an existing
-     * token's immutable numeric id is resolved via the explorer and cached; on
+     * token's numeric id is looked up via the explorer for each action; on
      * any miss (token not yet indexed, explorer offline) the supplied name is
      * used. The defining `TICK` of an `ISSUE` is never compacted. Set `false` to
      * always emit ticker names verbatim.
@@ -181,6 +181,12 @@ export interface CustomOutput {
     [key: string]: any;
 }
 
+export interface EncoderFeeQuote {
+    address: string;
+    amount: number | bigint | string;
+    [key: string]: any;
+}
+
 export interface EncoderOptions {
     /** Sender's public key or address (required when encoding to a PSBT) */
     pubkey: string;
@@ -206,6 +212,29 @@ export interface EncoderOptions {
     customOutputs?: CustomOutput[];
     /** Raw binary data appended after the ACTION string (used by the FILE action) */
     rawData?: string | Buffer;
+    /** Attach full previous transactions so segwit input amounts can be verified */
+    attachPrevTx?: boolean;
+    /** Protocol fee output quoted by the hub */
+    feeQuote?: EncoderFeeQuote;
+    /** Enable or disable transparent payload compression */
+    compress?: boolean;
+    /** Per-call encoder capabilities and funding-selection controls */
+    options?: Record<string, any>;
+    /** Funding address used for SDK-side UTXO selection */
+    sourceAddress?: string;
+    /** Override whether submitAction and estimateFees attach the native-coin protocol fee output */
+    payFeeInNativeCoin?: boolean;
+    /**
+     * Local miner-fee ceiling for submitAction, estimateFees and message signing.
+     * Applied to each transaction separately, not accumulated across an action.
+     * Submit opts wins; unsigned builders that return ActionResult ignore it.
+     */
+    maxFeeSats?: number | bigint | string;
+    /**
+     * Local shaped-funding ceiling for submitAction and estimateFees.
+     * Submit opts wins; unsigned builders that return ActionResult ignore it.
+     */
+    maxPhaseFundingSats?: number | bigint | string;
     /** Projected inclusion height used by BatchBuilder for height-gated weight rules */
     targetHeight?: number;
 }
@@ -378,13 +407,15 @@ export interface PreflightReport {
     /**
      * When the engine stamped this report (`nowMs()`), for staleness.
      *
-     * Underscore-led and still part of the returned surface: the SDK's own
+     * Underscore-led and still part of the returned surface: the reference
      * `isStale(report, { now, knownTip })` in src/preflight/lifecycle.js reads
-     * it to decide whether a report is too old to sign against, and
-     * test/unit/preflight/lifecycle.test.js pins that behaviour. Every report
-     * the engine returns carries it, so a tarball consumer writing its own
-     * Approve-time re-check has it to read; omitting it from this declaration
-     * would describe a report the engine does not produce.
+     * it, and test/unit/preflight/lifecycle.test.js pins that behaviour. The
+     * engine does not call `isStale`, the package entry does not export it,
+     * and the in-tree wallet ages a report from its own receipt time, so no
+     * signing path reads this field. Every report the engine returns carries
+     * it, so a tarball consumer writing its own Approve-time re-check has it
+     * to read; omitting it from this declaration would describe a report the
+     * engine does not produce.
      */
     _stampedAt: number;
 }
@@ -781,8 +812,8 @@ export interface NetworkSummary {
         block: number;
         /** Unix time of the tip block (0 when the chain is empty) */
         time: number;
-        /** Unconfirmed XChain-carrying transactions (0 when the decoder is unreachable) */
-        unconfirmed: number;
+        /** Unconfirmed XChain-carrying transactions; null when a configured decoder endpoint cannot answer, which is unknown and not an empty mempool */
+        unconfirmed: number | null;
         /** The coin node's TOTAL mempool count, XChain or not; null when no decoder API resolves */
         unconfirmed_node?: number | null;
     };
@@ -861,7 +892,8 @@ export interface ExplorerStatus {
     chain_lag_blocks?: { [coin: string]: number | null };
     /**
      * The decoder's own health verdict: 'healthy', 'unhealthy', 'reorg-halt-parked', 'reorg-halted',
-     * 'node-stale', 'unconfigured' or 'unreachable'. Typed as string because the explorer passes the decoder's own word through
+     * 'node-stale', 'unconfigured', 'unreachable' or 'rate-limited' (a transient 429 with no earlier good reading).
+     * Typed as string because the explorer passes the decoder's own word through; treat an unlisted value as unknown
      */
     decoder_health?: { [coin: string]: string };
     /** Server-side render time */
@@ -1346,14 +1378,14 @@ export declare const AttestationHelpers: {
 
 /*
  *  GatedFileUtils: AES-256-GCM encryption / key-handoff (de)serialization
- *  for FILE v1 token-gated content.
+ *  for token-gated FILE content (format 0).
  *  Spec: protocol/token-gated-content.md
  */
 
 export interface GenerateKeyResult {
     /** 32-byte symmetric key */
     key: Buffer;
-    /** hex sha256(key), matches the FILE v1 KEY_HASH field */
+    /** hex sha256(key), matches the gated FILE KEY_HASH field */
     keyHash: string;
 }
 
@@ -1388,9 +1420,9 @@ export interface EncryptPackResult {
  * present only while the coin's indexed tip is behind (never `false`); WELCOME
  * also repeats it as `data.stale`.
  */
-export interface WsFrameEnvelope {
+export interface WsFrameEnvelope<T = any> {
     type: string;
-    data: any;
+    data: T;
     chain?: string;
     network?: string;
     timestamp?: number;
@@ -1400,10 +1432,37 @@ export interface WsFrameEnvelope {
     stale?: true;
 }
 
+export interface WsNewBlockData {
+    block_index: string;
+    block_hash: string | null;
+    block_time: string | null;
+    tx_count: string;
+    action_count: string;
+}
+
+export interface WsNetworkStatsData {
+    block_height: string;
+    total_actions: string;
+}
+
+export interface WsNewActionData {
+    action_index: string;
+    action: string | null;
+    tx_hash: string | null;
+    block_index: string | null;
+    source: string | null;
+    status: string | null;
+    destinations: string[];
+}
+
+export type WsNewBlockFrame = WsFrameEnvelope<WsNewBlockData> & { type: 'NEW_BLOCK' };
+export type WsNetworkStatsFrame = WsFrameEnvelope<WsNetworkStatsData> & { type: 'NETWORK_STATS' };
+export type WsNewActionFrame = WsFrameEnvelope<WsNewActionData> & { type: 'NEW_ACTION' };
+
 /** The `data` of the events the WebSocket client emits after a reconnect catch-up. */
 export interface WsCatchUpEvents {
     /** The replay was refused or went unanswered: backfill these channels over REST. */
-    resync_required: { code: string | null; message: string | null; channels: string[]; since_action_index: string };
+    resync_required: { code: string | null; message: string | null; channels: string[]; since_action_index: string; fork_block_index?: string; first_invalid_action_index?: string };
     /** Lifecycle types no replay carries: backfill them over REST. */
     not_replayed: { types: string[]; channels: string[]; since_action_index: string };
     /** The replay came from a replica whose tip is behind; it ends at latest_action_index. */
@@ -1420,7 +1479,7 @@ declare class WebSocketClient {
         explorerPort?: number;
         websocketProtocol?: string;
         network?: string;
-        hooks?: { onWsConnect?: (info: { url: string }) => void; onWsDisconnect?: (info: { code: number }) => void; onWsReconnect?: (info: { attempt: number; delay: number }) => void; onWsMessage?: (msg: any) => void; onWsSchemaMismatch?: (info: { serverSchemaVersion: number; clientSchemaVersion: number }) => void };
+        hooks?: { onWsConnect?: (info: { url: string }) => void; onWsDisconnect?: (info: { code: number }) => void; onWsReconnect?: (info: { attempt: number; delay: number }) => void; onWsMessage?: (msg: WsFrameEnvelope) => void; onWsSchemaMismatch?: (info: { serverSchemaVersion: number; clientSchemaVersion: number }) => void };
         retry?: RetryConfig | false;
         /** Ping interval in milliseconds (default: 25000) */
         pingInterval?: number;
@@ -1476,6 +1535,9 @@ declare class WebSocketClient {
      * server's frame types, the client emits `resync_required`, `not_replayed`
      * and `stale_replay` after a reconnect catch-up (WsCatchUpEvents).
      */
+    on(eventType: 'NEW_BLOCK', callback: (msg: WsNewBlockFrame) => void): void;
+    on(eventType: 'NETWORK_STATS', callback: (msg: WsNetworkStatsFrame) => void): void;
+    on(eventType: 'NEW_ACTION', callback: (msg: WsNewActionFrame) => void): void;
     on(eventType: string, callback: (msg: any) => void): void;
 
     /** Remove a previously registered handler */
@@ -1723,6 +1785,13 @@ export declare class ContractClient {
  *  XChainSDK class
  */
 
+export interface DecoderApi {
+    [key: string]: any;
+    rawDataMatches(pushes: unknown[], rawData: string | Buffer | null | undefined, rawDataCompressed?: boolean): boolean;
+}
+
+export const decoder: DecoderApi;
+
 export declare class XChainSDK {
 
     /** Package version string */
@@ -1733,6 +1802,8 @@ export declare class XChainSDK {
     readonly options: SDKOptions;
     /** Low-level encoder service client, when an encoder endpoint is configured. */
     encoder: EncoderClient | null;
+    /** Browser-safe action and PSBT decoding helpers. */
+    readonly decoder: DecoderApi;
 
     constructor(options?: SDKOptions);
 
@@ -2047,10 +2118,14 @@ export declare class XChainSDK {
     /** Get a list of contracts, optionally filtered by owner address */
     getContracts(query?: string, type?: string, opts?: QueryOptions): Promise<ListEnvelope<ContractInfo>>;
 
-    /** Get contract state entries (all keys or a specific key) */
+    /**
+     * Get contract state entries (all keys or a specific key). A keyed read walks the explorer's
+     * pages until the key is found and throws CONTRACT_READ_TRUNCATED when the contract holds more
+     * keys than it will walk without finding it.
+     */
     getContractState(contractActionIndex: number | string, key?: string): Promise<ListEnvelope<ContractStateEntry>>;
 
-    /** Get contract token balances */
+    /** Get contract token balances (all ticks or one tick, walked the same way as getContractState) */
     getContractBalance(contractActionIndex: number | string, tick?: string): Promise<ListEnvelope<ContractBalanceEntry>>;
 
     /** Get one execution by its ACTION_INDEX, inside the list envelope: read `data[0]` */
@@ -2132,6 +2207,14 @@ export declare class XChainSDK {
 
     /** Raw bytes of a gated FILE action (token-gated content). */
     getGatedFileRaw(actionIndex: number | string, coin?: string): Promise<any>;
+    /** Multi-part FILE assembly state, or null when the action is not a multi-part manifest. */
+    getFileAssembly(actionIndex: number | string, coin?: string): Promise<{
+        file_hash: string;
+        total_parts: number;
+        parts_received: number;
+        total_bytes: number;
+        status: 'pending' | 'complete' | 'mismatch';
+    } | null>;
     /** Build the raw-content URL for a gated FILE action (no request issued). */
     fileRawUrl(actionIndex: number | string, coin?: string): string;
 
@@ -2313,12 +2396,12 @@ export declare class XChainSDK {
     disconnectWs(): void;
 
     /** Subscribe to new blocks. Returns an unsubscribe function. */
-    onBlock(callback: (msg: any) => void): () => void;
+    onBlock(callback: (msg: WsNewBlockFrame) => void): () => void;
 
     /** Subscribe to new actions with optional type/status/tick filters. */
-    onAction(callback: (msg: any) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
+    onAction(callback: (msg: WsNewActionFrame) => void, opts?: { types?: string[]; ticks?: string[] }): () => void;
 
-    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, DISPENSER_EDIT, DISPENSER_CANCEL, BET, BET_EXPIRED, BET_CLOSED, BET_EDIT, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
+    /** Subscribe to all events touching an address: NEW_ACTION, ADDRESS_UPDATE, MEMPOOL_ACTION, MEMPOOL_REMOVED, ORDER_MATCH, ORDER_EXPIRED, COINPAY_REQUIRED/FULFILLED/EXPIRED, SWAP_MATCH, SWAP_EXPIRED, CROSS_SETTLE, DISPENSE, DISPENSER_CLOSED, DISPENSER_EXPIRED, DISPENSER_EDIT, DISPENSER_CANCEL, BET, BET_EXPIRED, BET_CLOSED, BET_EDIT, XCALL_COMPLETED, XCALL_EXPIRED, ATTESTATION_REQUEST, ATTESTATION_RESPONSE. */
     onAddress(address: string, callback: (msg: any) => void, opts?: { types?: string[]; snapshot?: boolean }): () => void;
 
     /**
@@ -2350,7 +2433,7 @@ export declare class XChainSDK {
     /** Subscribe to updates for a dispenser (by its action index). */
     onDispenser(actionIndex: number | string, callback: (msg: any) => void): () => void;
 
-    /** Subscribe to one betting market by its feed action index: BET (branch on data.action_format), BET_EXPIRED, BET_CLOSED and the initial SNAPSHOT. */
+    /** Subscribe to one betting market by its feed action index: BET (branch on data.action_format), BET_EDIT, BET_EXPIRED, BET_CLOSED and the initial SNAPSHOT. */
     onBetFeed(feedActionIndex: number | string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to one cross-chain call by its 64-hex call_id: XCALL_COMPLETED, XCALL_EXPIRED and the initial SNAPSHOT. The id is lower-cased before it is sent, because the explorer normalizes case at subscribe time. */
@@ -2366,7 +2449,7 @@ export declare class XChainSDK {
     onOrderMatch(address: string, callback: (msg: any) => void): () => void;
 
     /** Subscribe to network-statistics updates. */
-    onNetworkStats(callback: (msg: any) => void): () => void;
+    onNetworkStats(callback: (msg: WsNetworkStatsFrame) => void): () => void;
 
 
     /*
@@ -2422,7 +2505,7 @@ export declare class XChainSDK {
     readonly controller: ControllerHelpers;
 
     /**
-     * AES-256-GCM encryption / key-handoff utilities for FILE v1 token-gated content.
+     * AES-256-GCM encryption / key-handoff utilities for token-gated FILE content (format 0).
      * Spec: protocol/token-gated-content.md
      */
     readonly gatedFile: GatedFileUtils;
@@ -2526,8 +2609,16 @@ export interface UTXOEntry {
 
 export interface ChallengeOptions {
     appId?: string;
+    /** Override the generated nonce. A custom message binds this value only through {nonce}. */
     nonce?: string;
+    /**
+     * Custom message. The placeholders {nonce}, {address}, {timestamp} and
+     * {expiresAt} are filled; the rest is signed as-is. A caller-supplied nonce
+     * is bound only through {nonce}, never by a literal or substring match.
+     */
     message?: string;
+    /** Throw CHALLENGE_UNBOUND instead of returning a custom challenge whose nonce is not bound. */
+    requireNonce?: boolean;
     expiresInMs?: number;
 }
 
@@ -2536,6 +2627,11 @@ export interface ChallengeResult {
     nonce: string;
     timestamp: string;
     expiresAt: string;
+    /**
+     * True when the SDK filled {nonce}, or when an SDK-generated nonce appears
+     * as a whole delimited token. Caller-supplied literal matches do not bind.
+     */
+    bound: boolean;
 }
 
 export interface SignMessageOptions {
@@ -2657,6 +2753,23 @@ export interface SubmitActionOpts {
      * indexer executes them against the contract.
      */
     strictStatus?: boolean;
+    /** Refuse stale explorer data before encoding or signing */
+    strictFreshness?: boolean;
+    /** Workflow-level override for the native-coin protocol fee output */
+    payFeeInNativeCoin?: boolean;
+    /** Skip address-resolver compaction of action parameters */
+    skipAddressCompaction?: boolean;
+    /** Per-call halt gate mode; omitted uses the SDK-wide mode */
+    preflight?: false | 'off' | 'warn' | 'report' | 'local' | 'enforce';
+    /** Sign the reconciled PSBT instead of using wallet.signPsbt */
+    signer?: (psbtHex: string, context: { encoding: string }) => Promise<SignPsbtResult>;
+    /**
+     * Local miner-fee ceiling for each transaction separately, not the action total.
+     * Wins over encoderOpts.maxFeeSats. Malformed values are refused.
+     */
+    maxFeeSats?: number | bigint | string;
+    /** Local shaped-funding ceiling; wins over encoderOpts. Malformed values are refused. */
+    maxPhaseFundingSats?: number | bigint | string;
     /**
      * Gate on the CONTRACT'S OWN state before resolving, the only signal that
      * cannot race the indexer. The state gate runs when key or match is given,

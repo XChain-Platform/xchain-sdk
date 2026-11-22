@@ -37,7 +37,7 @@ const bitcoin = require('bitcoinjs-lib');
 const { SDKActionError } = require('../utils/errors.js');
 const { decodeActionStringFromPsbt, extractEnvelopeActionString } = require('../cosigner/psbt_action_decode.js');
 const { deriveEnvelopeCommit, envelopeLeafFromPsbtInput } = require('../cosigner/envelope.js');
-const { verifyCarrierScripts, rawDataMatches } = require('./verify_carrier_scripts.js');
+const { verifyCarrierScripts, rawDataMatches, committedScriptFor } = require('./verify_carrier_scripts.js');
 const CompressionUtils = require('../protocol/compression.js');
 const { COMPRESSION_CODE_DEFLATE_RAW } = require('../protocol/constants.js');
 const { isBytes, bytesEqual } = require('../utils/bytes');
@@ -48,8 +48,11 @@ const compressionUtils = new CompressionUtils();
 const CHUNK_ENCODINGS = ['P2SH', 'P2WSH'];
 
 // Decode failures that mean the transaction holds no inline action carrier: no
-// OP_RETURN at all, an OP_RETURN that is not ours, or the chunk reveal's tag.
-const NO_INLINE_CARRIER_REASONS = new Set(['NO_OP_RETURN', 'NO_MAGIC_WORD', 'P2SH_P2WSH_UNSUPPORTED']);
+// OP_RETURN at all, or an OP_RETURN that is not ours. The chunk reveal's tag is
+// not one of them: it tells the decoder to read the payload from every input of
+// this transaction, so it passes only where the caller opts in (allowRevealTag).
+const NO_INLINE_CARRIER_REASONS = new Set(['NO_OP_RETURN', 'NO_MAGIC_WORD']);
+const REVEAL_TAG_REASON = 'P2SH_P2WSH_UNSUPPORTED';
 
 // The encoder answers in PSBT HEX, so every entry point here takes either form.
 // A string that will not parse yields null, and each caller decides what that
@@ -154,20 +157,32 @@ function mismatch(code, label, details) {
  * P2SH/P2WSH reveal's tag marker, which carries "XCHNp2sh"/"XCHNp2wsh" and no
  * params. MULTISIGN, the chunk funding transaction and the envelope commit emit
  * no OP_RETURN whatsoever. So a decode that recovers an action string must
- * match, the tag is skipped, and everything else fails closed. MULTISIGN does
+ * match, and everything else fails closed. The tag passes only on the phase-2
+ * reveal, whose caller opts in with allowRevealTag and then binds the reveal's
+ * inputs with assertRevealInputsBound; anywhere else it is refused, because the
+ * decoder would read an action out of that transaction's inputs, which nothing
+ * here has bound. MULTISIGN does
  * emit bare-multisig carrier outputs the decoder reads; with no read-back for
  * them here, assertCarrierBinding refuses any such output before this rule runs.
  */
-function assertInlineCarrier({ psbt, actionString, encoding, network, label }) {
+function assertInlineCarrier({ psbt, actionString, rawData, network, label, allowRevealTag }) {
     const decoded = decodeActionStringFromPsbt(psbt, network ? { network } : {});
     if (decoded.ok) {
         if (!carriedActionMatches(decoded.actionString, actionString))
             throw mismatch('CARRIER_ACTION_MISMATCH', label,
                 { submitted: actionString, carried: decoded.actionString });
+        if (!Array.isArray(decoded.pushes))
+            throw mismatch('CARRIER_UNREADABLE', label,
+                { submitted: actionString, reason: 'INLINE_PUSHES_MISSING' });
+        const rawDataCompressed = decoded.actionString !== actionString;
+        if (!rawDataMatches(decoded.pushes, rawData, rawDataCompressed))
+            throw mismatch('CARRIER_ACTION_MISMATCH', label,
+                { submitted: actionString, reason: 'RAW_DATA_MISMATCH' });
         return;
     }
     // Pass only the reasons that mean no inline action carrier is present.
     if (NO_INLINE_CARRIER_REASONS.has(decoded.reason)) return;
+    if (decoded.reason === REVEAL_TAG_REASON && allowRevealTag === true) return;
     // Deny every other failure, a second carrier included. Once the magic word
     // matches, the decoder treats the output as a carrier, and it sizes only the
     // leading push and decodes invalid UTF-8 leniently, so a body this SDK cannot
@@ -187,11 +202,13 @@ function assertInlineCarrier({ psbt, actionString, encoding, network, label }) {
  * @param {string|Buffer|null} [args.rawData] the rawData sent to the encoder (null: none sent)
  * @param {object}   [args.network]       bitcoinjs network
  * @param {string}   [args.label]         which transaction this is, for the error
+ * @param {boolean}  [args.allowRevealTag] accept the P2SH/P2WSH reveal tag; only the
+ *   phase-2 reveal passes true, and it must then call assertRevealInputsBound
  * @throws {SDKActionError} CARRIER_ACTION_MISMATCH / CARRIER_UNREADABLE (a bare-multisig
  *   carrier output is always CARRIER_UNREADABLE, reason MULTISIG_CARRIER_UNSUPPORTED)
  */
 function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, rawData, network,
-                                callerIdentities, label = 'transaction' }) {
+                                callerIdentities, label = 'transaction', allowRevealTag = false }) {
     if (typeof actionString !== 'string' || actionString.length === 0)
         throw new SDKActionError('CARRIER_BIND_MISSING_ACTION',
             `${label}: cannot bind a carrier without the caller's action string`);
@@ -202,7 +219,7 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ra
         throw mismatch('CARRIER_UNREADABLE', label,
             { submitted: actionString, reason: 'MULTISIG_CARRIER_UNSUPPORTED' });
 
-    assertInlineCarrier({ psbt, actionString, encoding, network, label });
+    assertInlineCarrier({ psbt, actionString, rawData, network, label, allowRevealTag });
 
     // The chunk lanes carry the LARGEST payloads inside redeem scripts, so no
     // PSBT-only check can see them. verifyCarrierScripts hashes the scripts the
@@ -237,6 +254,26 @@ function assertCarrierBinding({ psbt, actionString, encoding, carrierScripts, ra
     // is not "checked", so the absent evidence fails the binding rather than passing it.
     throw mismatch('CARRIER_ACTION_MISMATCH', label,
         { submitted: actionString, encoding: enc, reason: verified ? verified.reason : 'NO_RESULT' });
+}
+
+// Bind every shape-authorized funding leg after the carrier scripts pass their spend-gate check.
+function assertPhaseFundingBound({ phaseFunding, carrierScripts, encoding, network,
+                                   label = 'transaction' } = {}) {
+    const enc = String(encoding || '').toUpperCase();
+    if (!CHUNK_ENCODINGS.includes(enc) || !Array.isArray(phaseFunding) || !phaseFunding.length) return;
+    const available = (Array.isArray(carrierScripts) ? carrierScripts : []).map((hex) => {
+        try { return committedScriptFor(enc, Buffer.from(String(hex), 'hex'), network); }
+        catch (e) { return null; }
+    }).filter(Boolean);
+    for (const leg of phaseFunding) {
+        const script = leg && leg.script ? Buffer.from(leg.script) : Buffer.alloc(0);
+        const match = available.findIndex((candidate) => bytesEqual(candidate, script));
+        if (match < 0)
+            throw new SDKActionError('UNBOUND_PHASE_FUNDING_LEG',
+                `${label}: a phase-funding output is not bound to a verified caller-gated carrier`,
+                { script: script.toString('hex'), value: leg && leg.value != null ? String(leg.value) : null });
+        available.splice(match, 1);
+    }
 }
 
 /*
@@ -286,8 +323,23 @@ function equalValue(a, b) {
 
 // Re-derive the single-leaf output from the caller key and bind it to both
 // halves of the encoder response before either transaction can be signed.
+// signedCommitHex: a two-step build signs the commit before the reveal is built, and a
+// legacy (P2PKH, P2SH) input's scriptSig changes the txid, so the reveal spends the
+// signed commit's txid; its outputs must still be the unsigned PSBT's.
+function commitTxOf(commit, signedCommitHex, label) {
+    if (!signedCommitHex) return commit.__CACHE && commit.__CACHE.__TX;
+    let signed;
+    try { signed = bitcoin.Transaction.fromHex(signedCommitHex); }
+    catch (e) { throw envelopeCommitMismatch(label, 'SIGNED_COMMIT_PARSE_FAILED', e.message); }
+    const outs = commit.txOutputs;
+    const same = signed.outs.length === outs.length && signed.outs.every((out, i) =>
+        bytesEqual(out.script, outs[i].script) && equalValue(out.value, outs[i].value));
+    if (!same) throw envelopeCommitMismatch(label, 'SIGNED_COMMIT_OUTPUTS_MISMATCH');
+    return signed;
+}
+
 function assertEnvelopeCommitBinding({ commitPsbt, revealPsbt, callerXOnly, network,
-                                       label = 'envelope commit' }) {
+                                       signedCommitHex, label = 'envelope commit' }) {
     const commit = asPsbt(commitPsbt, network);
     const reveal = asPsbt(revealPsbt, network);
     if (!commit || !reveal) throw envelopeCommitMismatch(label, 'PSBT_PARSE_FAILED');
@@ -305,7 +357,7 @@ function assertEnvelopeCommitBinding({ commitPsbt, revealPsbt, callerXOnly, netw
         throw envelopeCommitMismatch(label, 'CONTROL_BLOCK_MISMATCH');
     if (input0.tapInternalKey && !bytesEqual(input0.tapInternalKey, callerXOnly))
         throw envelopeCommitMismatch(label, 'INTERNAL_KEY_MISMATCH');
-    const tx = commit.__CACHE && commit.__CACHE.__TX;
+    const tx = commitTxOf(commit, signedCommitHex, label);
     const prevout = reveal.txInputs[0];
     if (!tx || !prevout || !bytesEqual(prevout.hash, tx.getHash()))
         throw envelopeCommitMismatch(label, 'COMMIT_TXID_MISMATCH');
@@ -321,6 +373,7 @@ function assertEnvelopeCommitBinding({ commitPsbt, revealPsbt, callerXOnly, netw
 
 module.exports = {
     assertCarrierBinding,
+    assertPhaseFundingBound,
     assertEnvelopeCarrierBinding,
     assertEnvelopeCommitBinding,
     carriedActionMatches,

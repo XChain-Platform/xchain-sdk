@@ -85,8 +85,12 @@ module.exports = {
         // WebSocket follows explorer URL/port unless an explicit websocketUrl is given.
         let websocketUrl  = resolved.websocketUrl  || this.options.websocketUrl  || config.env.websocketUrl();
         let websocketPort = resolved.websocketPort || this.options.websocketPort || config.env.websocketPort();
+        // A websocketPort option given alone skips the public host, as the other port options do:
+        // the client drops a port once the URL has a scheme.
+        let wsPortOption  = resolved.websocketPort || this.options.websocketPort;
+        let wsHostDefault = wsPortOption ? (resolved.explorerUrl || config.env.explorerUrl()) : explorerUrl;
         if (network && (websocketUrl || websocketPort || explorerUrl || explorerPort)) {
-            let wsUrl  = websocketUrl  || explorerUrl;
+            let wsUrl  = websocketUrl  || wsHostDefault;
             let wsPort = websocketPort ? parseInt(websocketPort) : (explorerPort ? parseInt(explorerPort) : undefined);
             if (!this.ws || this.ws.baseUrl !== wsUrl || this.ws.port !== wsPort) {
                 if (this.ws) this.ws.disconnect();
@@ -96,6 +100,7 @@ module.exports = {
                     websocketPort: wsPort,
                     hooks:         hooks,
                     retry:         retry,
+                    pool:          pool,
                     readyHook:     readyHook
                 });
             }
@@ -133,17 +138,20 @@ module.exports = {
         return this._readyPromise;
     },
 
-    // One-shot hub discovery + endpoint overlay (+ start polling). Guarded so
-    // init() and the lazy gate share a single in-flight fetch. May throw (init()
-    // inspects the error; ensureReady() swallows it).
+    // Share one in-flight fetch and cache a successful discovery. A failed
+    // attempt is dropped so an explicit later init() can retry.
     discover() {
         if (this._discovering) return this._discovering;
-        this._discovering = (async () => {
+        const attempt = (async () => {
             await this.hub.getDiscoveryConfig();
             this.applyEndpoints();
             this.startPollingOnce();
         })();
-        return this._discovering;
+        this._discovering = attempt;
+        attempt.catch(() => {
+            if (this._discovering === attempt) this._discovering = null;
+        });
+        return attempt;
     },
 
     // Overlay hub-discovered endpoints onto the live clients (mutating, not
@@ -179,13 +187,13 @@ module.exports = {
             }
         }
 
-        // Follow the explorer endpoint with the WebSocket unless a websocket URL or the explorer was pinned
-        if (!this.options.websocketUrl && !this.options.explorerUrl && !this.options.explorerPort && endpoints.explorerUrl) {
+        // Follow the explorer endpoint with the WebSocket unless a websocket URL or port or the explorer was pinned
+        if (!this.options.websocketUrl && !this.options.websocketPort && !this.options.explorerUrl && !this.options.explorerPort && endpoints.explorerUrl) {
             if (this.ws) {
                 if (!this.isDowngrade('websocket', this.ws, endpoints.explorerUrl))
                     this.ws.setBase(endpoints.explorerUrl, endpoints.explorerPort);
             } else if (network) {
-                this.ws = new WebSocketClient({ network, websocketUrl: endpoints.explorerUrl, websocketPort: endpoints.explorerPort, hooks, retry, readyHook });
+                this.ws = new WebSocketClient({ network, websocketUrl: endpoints.explorerUrl, websocketPort: endpoints.explorerPort, hooks, retry, pool, readyHook });
             }
         }
     },

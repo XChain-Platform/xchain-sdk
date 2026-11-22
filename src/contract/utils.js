@@ -194,7 +194,7 @@ installMethods(ContractUtils.prototype, require('./utils/exported_meta.js'));
 
 module.exports = Object.assign(ContractUtils, {
     // Re-export so parity/drift guards can assert this entry point rides the same
-    // (validator-sourced) cap; see test/unit/protocol_size_caps.test.js.
+    // (validator-sourced) cap; see test/unit/contract/protocol_size_caps.test.js.
     MAX_CODE_SIZE,
 
     // The frozen CONTRACT_MANIFEST meta strings and the client-side grammar, exported

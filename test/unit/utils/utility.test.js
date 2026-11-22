@@ -62,6 +62,24 @@ describe('Utility.isValidAmountFormat (indexer parity)', function () {
         assert.strictEqual(utils.isValidAmountFormat(2, '1.123'), false);
     });
 
+    it('refuses an amount wider than the 250-character column, as the indexer does', function () {
+        const atLimit = '0'.repeat(249) + '1';
+        const overLimit = '0'.repeat(250) + '1';
+        assert.strictEqual(utils.isValidAmountFormat(8, atLimit), true);
+        assert.strictEqual(utils.isValidAmountFormat(8, overLimit), false);
+        // A third positional, the indexer's blockTime, never switches the width rule off.
+        assert.strictEqual(utils.isValidAmountFormat(8, overLimit, 1700000000), false);
+        assert.strictEqual(utils.isValidAmountFormat(8, overLimit, true), false);
+    });
+
+    it('keeps the merge-leg shape rule off the public Utility surface', function () {
+        const numberFormat = require('../../../src/utils/utility/number_format.js');
+        const overLimit = '0'.repeat(250) + '1';
+        assert.strictEqual('isValidAmountMergeFormat' in utils, false);
+        assert.strictEqual(numberFormat.isValidAmountMergeFormat.call(utils, 8, overLimit), true);
+        assert.strictEqual(numberFormat.isValidAmountMergeFormat.call(utils, 2, '1.123'), false);
+    });
+
     // Multi-dot reject: destructuring the split dropped every segment past the
     // second, so "1.2.3" read as int="1"/sats="2" and cleared the divisible branch.
     it('rejects multi-dot amounts (parity with the indexer guard)', function () {
@@ -93,6 +111,27 @@ describe('Utility.isInteger (indexer parity, #2393)', function () {
         assert.strictEqual(utils.isInteger('abc'), false);
         assert.strictEqual(utils.isInteger(NaN), false);
         assert.strictEqual(utils.isInteger(Infinity), false);
+    });
+});
+
+describe('Utility.isFloat past the int32 range', function () {
+
+    let utils;
+
+    beforeEach(function () {
+        utils = new Utility();
+    });
+
+    it('is false for whole numbers of any magnitude', function () {
+        for (const v of [0, 5, 2147483647, 2147483648, 3000000000, 4294967296, -2147483649, 9007199254740991])
+            assert.strictEqual(utils.isFloat(v), false, String(v));
+    });
+
+    it('is true only for a finite number carrying a fraction', function () {
+        for (const v of [1.5, -0.25, 3000000000.5])
+            assert.strictEqual(utils.isFloat(v), true, String(v));
+        for (const v of ['1.5', NaN, Infinity, -Infinity, null, undefined, 10n])
+            assert.strictEqual(utils.isFloat(v), false, String(v));
     });
 });
 

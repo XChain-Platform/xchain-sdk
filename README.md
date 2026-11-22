@@ -5,7 +5,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/%40dankest-llc%2Fxchain-sdk" alt="npm version">
-  <img src="https://img.shields.io/badge/tests-6%2C690%2B%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-7%2C716%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
@@ -34,7 +34,7 @@ Developer-facing SDK for the [XChain Platform](https://xchain.io/): generate XCh
 - **Batch builder**: fluent API: `await sdk.batch().send({...}).mint({...}).build()` (`build()` is async)
 - **Real-time events**: WebSocket streaming with automatic reconnection and catch-up via `onBlock()`, `onAction()`, `onAddress()`, `onToken()`, `onMarket()`, `onDispenser()`, `onBetFeed()`, `onXcall()`, `onAttestation()`, and more; `sdk.ws` exposes the low-level client (`subscribe()`, `on()`, `listSubscriptions()`, ...) directly
 - **Encrypted messaging**: ECIES, ECDH, and AES encryption for MESSAGE actions; `messaging.send()` accepts a `Buffer` payload and `getMessages()` exposes `msg.bytes` for binary ECIES
-- **Token-gated file publishing**: `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for FILE v1 gated content; key handoff as a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See [Token-Gated Content](https://docs.xchain.io/protocol/token-gated-content)
+- **Token-gated file publishing**: `sdk.gatedFile.encryptFileBytes()` and `sdk.gatedFile.encryptPack()` produce AES-256-GCM ciphertext + key for gated FILE content (format 0); key handoff uses a compact 33-byte binary payload via `serializeKeyPayload()` / `parseKeyPayload()` (sent through ECIES in binary mode). See the Token-Gated Content protocol page.
 - **Attestation envelope helpers**: `AttestationHelpers.llm({...})` builds the JSON envelope a VM contract passes to `xchain.attestation.request(...)` with provider_id `'llm'`; `AttestationHelpers.httpGet({url})` validates the URL and returns the payload string for `'http_get'`; `AttestationHelpers.requestOptions({redundancy, deadlineBlocks})` builds the gateway options object. By design these are envelope builders only: there is no user-submittable ATTEST action. ATTEST v0 (request) and v1 (response) are VM-emitted: a contract calls `xchain.attestation.request(...)` and validators emit the on-chain attestation. So the SDK helps you shape the request a contract makes, and you read the results via `getAttestations()`. It does not (and cannot) encode an ATTEST action directly, the same way XCALL is VM-emission-only.
 - **Token-ownership trading helpers**: `ORDER`/`SWAP`/`DISPENSER` v0 carry `GIVE_OWNERSHIP` / `GET_OWNERSHIP` flags; `SWEEP` carries independent `ORDERS` / `SWAPS` / `DISPENSERS` flags (was a single `ESCROWS` flag)
 - **HTTP 402 payments**: `X402Client` and `X402Gateway` implement an XChain-native, x402-shaped pay-per-call flow over on-chain SEND actions, with `xchain-send` (pay-per-call), `xchain-dispenser` (hold-to-access), and `xchain-deposit` (metered spend ledger) schemes; the client pays only ticks given a per-tick `maxAmount` ceiling and refuses every offer when none is set. See [x402 Payments](https://github.com/XChain-Platform/xchain-documentation/blob/master/protocol/x402-payments.md)
@@ -205,20 +205,20 @@ await sdk.findToken('MYTOKEN');     // the unwrapped info record, or null
 | `SDK_API_MAX_BATCH` | No | `20` | Maximum JSON-RPC calls in one array (batch) body. Anything other than a positive whole number (`1e3`, `50abc`, `0`, `-5`) falls back to `20` and logs a warning at startup; no value disables the cap |
 | `SDK_API_RATE_LIMIT` | No | `300` | Requests per window per credential (per source address when unauthenticated). A non-numeric or negative value falls back to `300`; an explicit `0` disables the limiter and is the only way to turn it off |
 | `SDK_API_RATE_WINDOW_MS` | No | `60000` | Length of the fixed rate-limit window, in milliseconds. Anything other than a positive whole number of milliseconds (`60s`, `1e5`, `1.5`, `0`) falls back to `60000` and logs a warning at startup |
-| `EXPLORER_URL` / `EXPLORER_PORT` | No | `127.0.0.1` / `8080` | xchain-explorer location. An `explorerPort` option given without a URL points the explorer and its WebSocket at `localhost` on every network and pins them against hub discovery. The helper API and the REPL pass `EXPLORER_PORT` in as that option, so there, on mainnet and testnet, `EXPLORER_PORT` without `EXPLORER_URL` points at `localhost`; in library use, `EXPLORER_PORT` alone leaves the public explorer in place |
-| `ENCODER_URL` / `ENCODER_PORT` | No | `127.0.0.1` / `3003` | xchain-encoder location |
+| `EXPLORER_URL` / `EXPLORER_PORT` | No | `https://explorer.xchain.io` on mainnet and testnet; `localhost:8080` on regtest | xchain-explorer location. An `explorerPort` option given without a URL points the explorer and its WebSocket at `localhost` on every network and pins them against hub discovery. The helper API and the REPL pass `EXPLORER_PORT` in as that option, so there, on mainnet and testnet, `EXPLORER_PORT` without `EXPLORER_URL` points at `localhost`; in library use, `EXPLORER_PORT` alone leaves the public explorer in place |
+| `ENCODER_URL` / `ENCODER_PORT` | No | `https://encoder.xchain.io/<COIN>` on mainnet and testnet; none on regtest unless configured, with port `3003` for a bare host | xchain-encoder location |
 | `ENCODER_API_KEY` | No | (none) | API key sent as `x-api-key` to an xchain-encoder whose operator set `API_KEY`; also settable per instance as the `encoderApiKey` option. Only an `encoderUrl` or `encoderPort` constructor option pins the encoder: without one, hub discovery can repoint the encoder client and the key then goes to whatever encoder host the hub names. An `encoderPort` option given without a URL points the encoder at `localhost` on every network. The helper API (`npm run api`) and the REPL (`npm run repl`) pass `ENCODER_URL` and `ENCODER_PORT` in as those options, so there either one pins; in library use, the variables alone do not. Treat as a credential |
 | `HUB_URL` | No | (none) | Full xchain-hub URL read only by the REPL (`npm run repl`), where it takes precedence over `HUB_API_HOST`; the library and the helper API ignore it |
 | `HUB_API_HOST` / `HUB_PORT` | No | `https://hub.xchain.io/<COIN>` on mainnet and testnet; no hub on regtest | xchain-hub location read by the library and the helper API. Takes a bare host (joined with `HUB_PORT`, default `10000`) or a full `http://` or `https://` URL, in which case `HUB_PORT` is ignored. The helper API passes `HUB_PORT` in as the `hubPort` option, so there, on mainnet and testnet, `HUB_PORT` without `HUB_API_HOST` points at a hub on `localhost`; in library use, `HUB_PORT` alone leaves the public hub in place |
 | `HUB_API_KEY` | No | (none) | API key for `getallconfigs` against keyed hubs; public zero-config discovery should use the hub's chain-registry endpoint instead |
-| `WEBSOCKET_URL` / `WEBSOCKET_PORT` | No | `127.0.0.1` / `3007` | Explorer WebSocket endpoint for live updates. A bare host is joined with `WEBSOCKET_PORT`; a full `ws://` or `wss://` URL is used as given, and a full `http://` or `https://` URL becomes `ws://` or `wss://`, with no port added in either case |
+| `WEBSOCKET_URL` / `WEBSOCKET_PORT` | No | Follows the explorer URL and port (`wss://explorer.xchain.io` on mainnet and testnet); none on regtest unless a WebSocket or explorer URL or port is configured, with unset parts using `localhost:8080` | Explorer WebSocket endpoint for live updates. A bare host is joined with `WEBSOCKET_PORT`; a full `ws://` or `wss://` URL is used as given, and a full `http://` or `https://` URL becomes `ws://` or `wss://`, with no port added in either case |
 
 ## Scripts
 
 | Command | Description |
 |---|---|
 | `npm run api` | Start JSON-RPC server (port from `SDK_API_PORT`, default 3005) |
-| `npm test` | Run unit tests (6,351 tests) |
+| `npm test` | Run unit tests (7,358 tests) |
 | `npm run repl` | Start interactive REPL with a pre-configured SDK instance |
 | `npm run build` | Production browser bundle -> `dist/xchain_sdk.min.js` |
 | `npm run build:dev` | Development browser bundle -> `dist/xchain_sdk.js` |

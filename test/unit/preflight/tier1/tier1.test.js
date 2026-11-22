@@ -12,8 +12,10 @@ const { expect } = require('chai');
 const { runTier1 } = require('../../../../src/preflight/tier1.js');
 const { parse } = require('../../../../src/decoder/parse.js');
 
-function sdkWith(getFeeQuote) {
-    return { explorer: { getFeeQuote: async (a) => getFeeQuote(a) } };
+// Answers from /preflight, which classifies every response shape the same way the
+// legacy /feequote fallback does, except that only /preflight honours the fee mode.
+function sdkWith(answer) {
+    return { explorer: { getPreflight: async (a) => answer(a) } };
 }
 
 async function tier1For(wire, quote) {
@@ -161,7 +163,7 @@ describe('pre-flight Tier 1 classification', function () {
                 getFeeQuote: async () => { usedFeeQuote = true; return { supported: true, valid: true, status: 'valid' }; },
             } };
             const parsed = parse('SEND|0|JDOG|1|addr', { validate: false });
-            const out = await runTier1({ sdk, parsed, source: 's', timeoutMs: 1000 });
+            const out = await runTier1({ sdk, parsed, source: 's', feeMode: 'native', timeoutMs: 1000 });
             expect(usedFeeQuote).to.equal(true);
             expect(out.kind).to.equal('verdict');
         });

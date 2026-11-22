@@ -41,6 +41,42 @@ async function barrier() {
 describe('XChainSDK – WebSocket convenience methods', function () {
     registerHooks();
     describe('onBetFeed', function () {
+        it('fires on BET_EDIT for the subscribed feed', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onBetFeed(7, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'BET_EDIT', data: { action_index: 803, feed_action_index: 7, action_format: 0 }
+            }));
+            await waitForCalls(spy);
+
+            expect(spy.firstCall.args[0].type).to.equal('BET_EDIT');
+        });
+    });
+});
+
+describe('XChainSDK – WebSocket convenience methods', function () {
+    registerHooks();
+    describe('onBetFeed', function () {
+        it('does not fire on BET_EDIT for a different feed', async function () {
+            await sdk.connectWs();
+            const spy = sinon.spy();
+            sdk.onBetFeed(7, spy);
+
+            server._lastClient.send(JSON.stringify({
+                type: 'BET_EDIT', data: { action_index: 803, feed_action_index: 8, action_format: 0 }
+            }));
+            await barrier();
+
+            expect(spy.called).to.be.false;
+        });
+    });
+});
+
+describe('XChainSDK – WebSocket convenience methods', function () {
+    registerHooks();
+    describe('onBetFeed', function () {
 it('fires on BET, BET_EXPIRED and BET_CLOSED for the subscribed feed', async function () {
             await sdk.connectWs();
             const spy = sinon.spy();
@@ -136,6 +172,9 @@ it('unsubscribe removes every handler it registered, SNAPSHOT included', async f
             }));
             server._lastClient.send(JSON.stringify({
                 type: 'SNAPSHOT', data: { channel: 'bet_feed', action_index: 7 }
+            }));
+            server._lastClient.send(JSON.stringify({
+                type: 'BET_EDIT', data: { action_index: 803, feed_action_index: 7 }
             }));
             await barrier();
 

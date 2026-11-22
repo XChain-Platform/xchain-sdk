@@ -149,10 +149,10 @@ describe('SPV §7.3: a rotation-followed checkpoint must match the attested step
     for (const field of Object.keys(FORGED)) {
         it('verifyBalance refuses a served checkpoint whose ' + field + ' differs from the attested step', async function () {
             const launch = rsigner(), s1 = rsigner();
-            const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 110);
+            const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
             const cp0 = cpAt({ block_index: 100, snapshot_block: 100, checkpoint_seq: 0, state_root: vs.stateRoot, block_merkle_root: 'aa'.repeat(32) });
             const bal = buildBalanceProof(ADDR_A, TICK, '42', 110);
-            const cp1 = signCp(cpAt({ block_index: 110, snapshot_block: 110, state_root: bal.stateRoot }), [s1]);
+            const cp1 = signCp(cpAt({ block_index: 110, snapshot_block: 106, state_root: bal.stateRoot }), [s1]);
             const served = Object.assign({}, cp1, { [field]: FORGED[field] });
             const f = spyFetch([['/api/proof/balance/', { proof: bal.proof, checkpoint: served }],
                 ['/api/checkpoints/range', { checkpoints: [cp1] }], ['/api/proof/validator-set', { proof: vs.proof }]]);
@@ -166,10 +166,10 @@ describe('SPV §7.3: a rotation-followed checkpoint must match the attested step
 
     it('verifyAction refuses a served checkpoint whose block_hash differs from the attested step', async function () {
         const launch = rsigner(), s1 = rsigner();
-        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 210);
+        const vs = buildStakesProof([{ pubkey: s1.pubkey, source: 'R1', weight: '100' }], '100', 100);
         const cp0 = cpAt({ block_index: 100, snapshot_block: 100, checkpoint_seq: 0, state_root: vs.stateRoot, block_merkle_root: 'aa'.repeat(32) });
         const act = buildActionProof(210);
-        const cp1 = signCp(cpAt({ block_index: 210, snapshot_block: 210, state_root: 'cc'.repeat(32), block_merkle_root: act.blockMerkleRoot }), [s1]);
+        const cp1 = signCp(cpAt({ block_index: 210, snapshot_block: 106, state_root: 'cc'.repeat(32), block_merkle_root: act.blockMerkleRoot }), [s1]);
         const f = spyFetch([['/api/proof/action/', { proof: act.proof, checkpoint: Object.assign({}, cp1, { block_hash: FORGED.block_hash }) }],
             ['/api/checkpoints/range', { checkpoints: [cp1] }], ['/api/proof/validator-set', { proof: vs.proof }]]);
         const r = await light.verifyAction({ explorerUrl: 'https://x', coin: COIN, actionIndex: 11,

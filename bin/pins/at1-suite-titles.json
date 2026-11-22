@@ -13,6 +13,16 @@
       "ExplorerClient buildParams keyset cursors forwards a before cursor to the wire instead of dropping it",
       "ExplorerClient buildParams keyset cursors forwards an after cursor to the wire instead of dropping it"
     ],
+    "008c21e34ee03944": [
+      "multipart FILE planning accepts fixture-shaped part objects",
+      "multipart FILE planning checks multipart bounds using numbers without allocating cap-sized buffers",
+      "multipart FILE planning compresses before gated encryption and round-trips the original bytes",
+      "multipart FILE planning exports the protocol caps and activation map",
+      "multipart FILE planning plans 10,000,000 zero bytes as 26 equal-capacity envelope parts plus the last",
+      "multipart FILE planning plans a real 40-part Standard file",
+      "multipart FILE planning reproduces every documentation vector digest and FILE_HASH",
+      "multipart FILE planning uses the exact envelope and Standard part capacities"
+    ],
     "009976a3263b836f": [
       "CoSigner (MuSig2 hard-enforcement service) a foreign-prevout denial does NOT consume velocity-window budget",
       "CoSigner (MuSig2 hard-enforcement service) denies a foreign witnessUtxo.script with PREVOUT_NOT_OUR_ACCOUNT, before checkOutputs would otherwise pass it",
@@ -53,21 +63,6 @@
       "XChainSDK WebSocket methods waitForContractBalance creates ActionWaiter and gates on the contract balance",
       "XChainSDK WebSocket methods waitForContractState creates ActionWaiter and gates on contract state"
     ],
-    "0138b0971cdb0d1d": [
-      "WebSocketClient reconnect catch-up: a stale replica emits no stale_replay for a replay closed fresh",
-      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay for a replay closed stale, and still advances the cursor to the rows delivered",
-      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay once for a stale replay continued past a truncated round",
-      "WebSocketClient reconnect catch-up: continuation and refusal continues a truncated replay from where the server stopped",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits no not_replayed event when the list is absent or empty",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits not_replayed with the lifecycle types a completed replay could not carry",
-      "WebSocketClient reconnect catch-up: continuation and refusal emits resync_required for a refused catch-up and still replays the next subscription",
-      "WebSocketClient reconnect catch-up: continuation and refusal reports an unanswered catch-up as a gap once its timeout passes",
-      "WebSocketClient reconnect catch-up: sequencing replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused",
-      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription through the catch-up queue, so it hears NEW_BLOCK is not replayed",
-      "WebSocketClient reconnect catch-up: which frames move the cursor a CATCH_UP_COMPLETE outside a replay still advances the cursor",
-      "WebSocketClient reconnect catch-up: which frames move the cursor a replay notes NEW_ACTION and CATCH_UP_COMPLETE but not entity ids",
-      "WebSocketClient reconnect catch-up: which frames move the cursor an idle client ignores entity ids and still advances on NEW_ACTION"
-    ],
     "020365551f310273": [
       "FormatSelector.select(): a pinned version never silently drops a field (#3918) STAKE v1 and v2 (identical field lists) still both select for a fitting payload",
       "FormatSelector.select(): a pinned version never silently drops a field (#3918) STAKE v1 has no slot for TARGET_CONTRACT_INDEX/TICK, so pinning it throws",
@@ -103,6 +98,12 @@
       "ExplorerClient fileRawUrl() builds the absolute raw FILE URL for the configured explorer",
       "ExplorerClient fileRawUrl() resolves a sibling-chain coin at the same network tier",
       "ExplorerClient fileRawUrl() respects an http(s) baseUrl and strips trailing slashes"
+    ],
+    "0366f235c81fe49f": [
+      "API malformed body answers JSON and logs no stack answers an oversize body 413 as JSON",
+      "API malformed body answers JSON and logs no stack answers every malformed body 400 with a JSON-RPC -32700 envelope",
+      "API malformed body answers JSON and logs no stack still lets a valid request reach the router",
+      "API malformed body answers JSON and logs no stack writes no stack trace to stderr for 20 malformed requests"
     ],
     "036b3389dcc3412c": [
       "observability/logger default sink parity exposes exactly the console methods the SDK routes through it",
@@ -220,6 +221,21 @@
       "Actions \u2013 introspection getActionFormats(\"UNKNOWN\") returns null",
       "Actions \u2013 introspection getActions() contains all expected action names",
       "Actions \u2013 introspection getActions() returns an array of exactly 32 action names"
+    ],
+    "072ce2f068ba15e8": [
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the AIRDROP native fee tally gate review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the AIRDROP zero leg, DIVIDEND empty allow list and equal-price ORDER reviews",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the BATCH probe sub-verdict match snapshot review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the DISPENSER and DISPENSE amount positivity gate retirement review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the ISSUE caret TICK canonical id review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the ISSUE prefixed mint window review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the ISSUE, DISPENSER, ORDER, SWAP and BET prefixed integer review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the ISSUE, PRICE v1 and BET column-width review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the ORDER and SWAP same-token offer refusal review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND gated handoff reference gate retirement review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND, DESTROY and MINT gas balance read review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND, DESTROY and STAKE NOT NULL amount width review",
+      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews the live dispenser pin is the end of the review-log pin chain"
     ],
     "07433a2c14a8b8be": [
       "pre-flight numeric semantics 16+ significant-digit fractional comparison is exact",
@@ -561,6 +577,16 @@
       "pre-flight Tier-2 per-action matrix SEND localDeltas (pending) reduce the effective balance",
       "pre-flight Tier-2 per-action matrix SEND multi-leg SEND sums per tick",
       "pre-flight Tier-2 per-action matrix SEND sufficient balance does not error on balance"
+    ],
+    "11b7b67f5cf804a6": [
+      "API body parse errors (NODE_ENV unset) invalid JSON answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV unset) null body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV unset) oversize body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV unset) string body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV=production) invalid JSON answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV=production) null body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV=production) oversize body answers a JSON-RPC error with no stack or path",
+      "API body parse errors (NODE_ENV=production) string body answers a JSON-RPC error with no stack or path"
     ],
     "121815bf45a0311e": [
       "vendored lint_core: LINT_GLOBAL_ALIAS rules accepts globalThis self-reference to Math with the epoch off (pre-activation verdict)",
@@ -1181,6 +1207,11 @@
       "AddressResolver LIST items leaves items untouched when the threshold is above tip plus one",
       "AddressResolver LIST items reuses successful item lookups from the permanent address cache"
     ],
+    "1e2de6fb2e101851": [
+      "reconcileFee unreadable input values denies an uncomputable fee with or without a valid cap",
+      "reconcileFee unreadable input values preserves computable fee accounting",
+      "reconcileFee unreadable input values validates a malformed cap before denying an uncomputable fee"
+    ],
     "1e7588fa483ef64a": [
       "BET compose composes a create with every field populated, in slot order",
       "BET compose composes cancel, place, and resolve to their own versions",
@@ -1306,18 +1337,6 @@
       "HubConnector extractServiceEndpoints() supports all 9 networks",
       "HubConnector extractServiceEndpoints() uses service_port when present (overrides port)"
     ],
-    "23b9250519eb6892": [
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the AIRDROP native fee tally gate review",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the AIRDROP zero leg, DIVIDEND empty allow list and equal-price ORDER reviews",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the BATCH probe sub-verdict match snapshot review",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the DISPENSER and DISPENSE amount positivity gate retirement review",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the ISSUE caret TICK canonical id review",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the ORDER and SWAP same-token offer refusal review",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND gated handoff reference gate retirement review",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND, DESTROY and MINT gas balance read review",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews pins and records the SEND, DESTROY and STAKE NOT NULL amount width review",
-      "pre-flight constants + registry drift map (\u00a78.5) gate retirement reviews the live dispenser pin is the end of the review-log pin chain"
-    ],
     "243d72ce8bf06c71": [
       "ExplorerClient utility methods getMempool returns result",
       "ExplorerClient utility methods getNetwork returns result",
@@ -1407,6 +1426,13 @@
       "SPV merkle byte layer: consensus twin @regression src/merkle/primitives.js is byte-identical to the xchain-explorer copy",
       "SPV merkle byte layer: consensus twin @regression src/merkle/primitives.js is byte-identical to the xchain-indexer copy",
       "SPV merkle byte layer: consensus twin @regression src/merkle/primitives.js is byte-identical to the xchain-sync copy"
+    ],
+    "26a2fe788a424f2f": [
+      "reconcileTransaction caps in encoder options caps in submit options only still refuse (control)",
+      "reconcileTransaction caps in encoder options encoderOpts.maxFeeSats refuses an over-cap fee before signing",
+      "reconcileTransaction caps in encoder options encoderOpts.maxPhaseFundingSats refuses over-cap phase funding",
+      "reconcileTransaction caps in encoder options no caps anywhere: the same fixtures pass the cap checks",
+      "reconcileTransaction caps in encoder options submit options win when both slots are set"
     ],
     "26dbe28a48e2c854": [
       "protocol size-cap parity (SDK drift guard) chunkHelper carries the canonical action/chunk caps",
@@ -1609,6 +1635,12 @@
       "Actions - top-level version reaches version-dependent validation rejects an incomplete VOTE v0 spelled top-level, as it does spelled in params",
       "Actions - top-level version reaches version-dependent validation serializes a complete payload identically under either spelling"
     ],
+    "2f5768fdb8d62480": [
+      "pre-flight timeout is one overall budget a Tier 2 read timeout is not reported as a Tier 1 timeout",
+      "pre-flight timeout is one overall budget a read due after the budget is spent is unverified at once and never sent",
+      "pre-flight timeout is one overall budget a stalled explorer returns within the budget, not once per sequential read",
+      "pre-flight timeout is one overall budget with the default budget (fake clock) the default 4000ms budget bounds the whole run, not each read"
+    ],
     "2f68255d54f48477": [
       "Actions \u2013 partial unstake/claim optional AMOUNT COLLECT with amount appends the trailing field",
       "Actions \u2013 partial unstake/claim optional AMOUNT COLLECT without amount stays byte-identical to the legacy wire",
@@ -1700,6 +1732,11 @@
       "checkpoint supersession @regression @tier1 maps absent and null supersession fields to null",
       "checkpoint supersession @regression @tier1 normalizes string fields from explorer JSON without mutating the row",
       "checkpoint supersession @regression @tier1 refuses a superseded row when opts is missing without mutating it"
+    ],
+    "314c0cba4575ca96": [
+      "estimateFees envelope reveal reconciliation accepts both legs when each fee is at the cap",
+      "estimateFees envelope reveal reconciliation applies maxFeeSats to the reveal as well as the commit",
+      "estimateFees envelope reveal reconciliation refuses an unauthorized reveal output"
     ],
     "3151828024be21f7": [
       "custody handler map rows accepts pins matching the bytes of both flat handlers",
@@ -1957,6 +1994,33 @@
       "ISSUE coin-qualified tick prefix pre-flight passes a colon whose prefix is not a coin root",
       "ISSUE coin-qualified tick prefix pre-flight passes an existing coin-qualified tick",
       "ISSUE coin-qualified tick prefix pre-flight passes the same prefixes while the gate is unarmed on mainnet"
+    ],
+    "3aaa1f0f0b24f6ff": [
+      "API JSON-RPC prototype member dispatch a real method still dispatches",
+      "API JSON-RPC prototype member dispatch authenticated __defineGetter__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated __defineSetter__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated __lookupGetter__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated __lookupSetter__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated __proto__ answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated constructor answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated hasOwnProperty answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated isPrototypeOf answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated propertyIsEnumerable answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated toLocaleString answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated toString answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch authenticated valueOf answers -32601 and no result",
+      "API JSON-RPC prototype member dispatch unauthenticated __defineGetter__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated __defineSetter__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated __lookupGetter__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated __lookupSetter__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated __proto__ still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated constructor still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated hasOwnProperty still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated isPrototypeOf still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated propertyIsEnumerable still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated toLocaleString still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated toString still answers 401 / -32001",
+      "API JSON-RPC prototype member dispatch unauthenticated valueOf still answers 401 / -32001"
     ],
     "3ae5f32ea7d65053": [
       "ISSUE coin-qualified tick verdict declares an unavailable token lookup",
@@ -3081,6 +3145,36 @@
       "AgentSession (policy-bounded wallet) refuses construction without allowedActions (fail-closed)",
       "AgentSession (policy-bounded wallet) validates window hours and confirm handler at construction"
     ],
+    "5c8a3afda4fd453c": [
+      "full-address fields use the network-aware checksum check SDK validateAction (repro) accepts a ^id address reference DESTINATION",
+      "full-address fields use the network-aware checksum check SDK validateAction (repro) accepts a checksum-valid regtest DESTINATION",
+      "full-address fields use the network-aware checksum check SDK validateAction (repro) refuses a case-flipped base58 DESTINATION on bitcoin-regtest",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest DESTINATION accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest DESTINATION refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest DESTINATION refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest GET_ADDRESS accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest GET_ADDRESS refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest GET_ADDRESS refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER_SUPPLY accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER_SUPPLY refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network bitcoin-regtest TRANSFER_SUPPLY refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network regtest DESTINATION accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network regtest DESTINATION refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network regtest DESTINATION refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network regtest GET_ADDRESS accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network regtest GET_ADDRESS refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network regtest GET_ADDRESS refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER_SUPPLY accepts checksum-valid regtest base58 and bech32 values and ^id refs",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER_SUPPLY refuses a mainnet address on a regtest validator",
+      "full-address fields use the network-aware checksum check validator with network regtest TRANSFER_SUPPLY refuses checksum-invalid base58 and bech32 values",
+      "full-address fields use the network-aware checksum check validator with no network keeps the length heuristic fallback"
+    ],
     "5e5931771714f2f9": [
       "Actions \u2013 edge cases ADDRESS with feePreference and requireMemo serializes correctly",
       "Actions \u2013 edge cases BROADCAST with message and value uses v0 format",
@@ -3320,6 +3414,15 @@
       "HubConnector getAllConfig() treats a regressed hub watermark as a hub reset: alarms, drops the cache and re-fetches the full tree @regression",
       "HubConnector getAllConfig() tries next endpoint when first fails (multi-endpoint)"
     ],
+    "63c882a4f986d928": [
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
+      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
+    ],
     "63ee40d9ec379a48": [
       "pre-flight BATCH fee budget: priced classes beyond ISSUE PINNED: MINT refuses to price - an all-MINT no-gas batch raises no fee verdict",
       "pre-flight BATCH fee budget: priced classes beyond ISSUE PINNED: XEXEC refuses to price - it cannot even be encoded client-side",
@@ -3355,18 +3458,6 @@
       "MESSAGE (PLAINTEXT_MESSAGE) length boundary accepts PLAINTEXT_MESSAGE of exactly 1,048,575 characters (one below limit)",
       "MESSAGE (PLAINTEXT_MESSAGE) length boundary accepts PLAINTEXT_MESSAGE of exactly 1,048,576 characters (1 MiB limit)",
       "MESSAGE (PLAINTEXT_MESSAGE) length boundary rejects PLAINTEXT_MESSAGE of exactly 1,048,577 characters (one above limit)"
-    ],
-    "6496075e070ad57c": [
-      "pre-flight lifecycle coalescing a caller-supplied signal aborts only that view; shared work survives",
-      "pre-flight lifecycle coalescing bypassCache always runs a fresh producer",
-      "pre-flight lifecycle coalescing different chainId does not collide",
-      "pre-flight lifecycle coalescing different localDeltas do NOT collide (reservation netting)",
-      "pre-flight lifecycle coalescing identical (chainId, actionString, source) share one producer",
-      "pre-flight lifecycle coalescing identical localDeltas still share one producer",
-      "pre-flight lifecycle staleness a fresh report is not stale",
-      "pre-flight lifecycle staleness a report older than the window is stale",
-      "pre-flight lifecycle staleness degraded detects verdict worsening only",
-      "pre-flight lifecycle staleness stateHeight behind the known tip is stale"
     ],
     "64c81298274bf5fa": [
       "Validator \u2013 VM action rules BATCH accepts exactly one DEPLOY",
@@ -3483,6 +3574,49 @@
       "retry: the 429 path parseRateLimitReset() / getRateLimitDelay() / getRetryAfterSeconds() parseRateLimitReset returns null for absent or unparseable values",
       "retry: the 429 path parseRateLimitReset() / getRateLimitDelay() / getRetryAfterSeconds() parseRateLimitReset turns whole seconds into milliseconds"
     ],
+    "6820516bbded4c78": [
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields agrees with the amount-format verdict where the representability rule is armed",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields judges a BATCH sub-command the same way",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps an ISSUE CALLBACK_BLOCK literal reading zero, which the tokens row binds as 0",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal BET 0 DEADLINE spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal BET 0 REFUND_WINDOW spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal BET 2 OUTCOME spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal BET 3 OUTCOME spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal DISPENSER 0 EXPIRATION spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal DISPENSER 2 EXPIRATION spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal ISSUE 0 CALLBACK_BLOCK spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal ISSUE 0 MINT_START_BLOCK spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal ISSUE 0 MINT_STOP_BLOCK spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal ISSUE 2 MINT_START_BLOCK spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal ISSUE 2 MINT_STOP_BLOCK spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal ISSUE 4 CALLBACK_BLOCK spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal ORDER 0 EXPIRATION spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal ORDER 2 EXPIRATION spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal SWAP 0 EXPIRATION spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keeps the verdict of a decimal SWAP 2 EXPIRATION spelling",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields keepsPrefixedSpelling answers true only for an unsigned radix literal inside the column",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields leaves a literal past the column range to normalization, which stores it as NULL",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields pins the fields and column bounds the indexer refuses prefixed literals in",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses BET 0 DEADLINE written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses BET 0 REFUND_WINDOW written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses BET 2 OUTCOME written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses BET 3 OUTCOME written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses DISPENSER 0 EXPIRATION written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses DISPENSER 2 EXPIRATION written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses ISSUE 0 CALLBACK_BLOCK written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses ISSUE 0 MINT_START_BLOCK written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses ISSUE 0 MINT_STOP_BLOCK written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses ISSUE 2 MINT_START_BLOCK written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses ISSUE 2 MINT_STOP_BLOCK written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses ISSUE 4 CALLBACK_BLOCK written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses ORDER 0 EXPIRATION written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses ORDER 2 EXPIRATION written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses SWAP 0 EXPIRATION written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses SWAP 2 EXPIRATION written as a hexadecimal, binary or octal literal",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses a mint window literal reading zero, which the tokens row binds as carried",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses it on mainnet, where the amount-representability rule does not",
+      "pre-flight universal: hexadecimal, binary and octal integer wire fields refuses nothing in a field or format the indexer does not judge this way"
+    ],
     "685d3f3e90f34d90": [
       "EncoderClient createTx omits undefined optional params",
       "EncoderClient createTx passes all optional params",
@@ -3498,6 +3632,9 @@
       "co-signer: the envelope on a 2-of-3 account the composed commit tree keeps leafHash the TAPLEAF hash once the tree has more than one leaf",
       "co-signer: the envelope on a 2-of-3 account the composed commit tree puts the envelope leaf and both account recovery leaves in one tree",
       "co-signer: the envelope on a 2-of-3 account the composed commit tree refuses a recovery pair that is not two distinct leaves"
+    ],
+    "688401629629e20c": [
+      "pre-flight shared producer and caller abort aborting the first joiner leaves the second joiner with the full Tier-1 report"
     ],
     "6884dd369d2b3316": [
       "MuSig2AgentSession denies an out-of-local-policy action BEFORE encoding (fast pre-flight)",
@@ -3710,6 +3847,28 @@
       "pre-flight BATCH issuance-fee budget native fee mode raises nothing and says why",
       "pre-flight BATCH issuance-fee budget one non-ISSUE command disables the whole-batch collapse, exactly as it does on-chain"
     ],
+    "70cacf5314cdd116": [
+      "pre-flight lifecycle coalescing a caller-supplied signal aborts only that view; shared work survives",
+      "pre-flight lifecycle coalescing across caller options Coalescer.key differs when only mode, feeMode or encoding differs",
+      "pre-flight lifecycle coalescing across caller options Coalescer.run keeps callers that differ in mode, feeMode or encoding apart",
+      "pre-flight lifecycle coalescing across caller options a local caller and a report caller get separate reports; only the report caller reaches Tier 1",
+      "pre-flight lifecycle coalescing across caller options encoding OP_RETURN and P2SH callers do not share a report",
+      "pre-flight lifecycle coalescing across caller options feeMode native and xchain callers each get their own verdict",
+      "pre-flight lifecycle coalescing across caller options identical options still coalesce onto one producer run",
+      "pre-flight lifecycle coalescing across the run budget Coalescer.key differs when only timeoutMs differs",
+      "pre-flight lifecycle coalescing across the run budget Coalescer.run keeps callers that differ only in timeoutMs apart",
+      "pre-flight lifecycle coalescing across the run budget sdk.preflight callers with different timeoutMs each run their own producer",
+      "pre-flight lifecycle coalescing across the run budget sdk.preflight callers with the same explicit timeoutMs still coalesce",
+      "pre-flight lifecycle coalescing bypassCache always runs a fresh producer",
+      "pre-flight lifecycle coalescing different chainId does not collide",
+      "pre-flight lifecycle coalescing different localDeltas do NOT collide (reservation netting)",
+      "pre-flight lifecycle coalescing identical (chainId, actionString, source) share one producer",
+      "pre-flight lifecycle coalescing identical localDeltas still share one producer",
+      "pre-flight lifecycle staleness a fresh report is not stale",
+      "pre-flight lifecycle staleness a report older than the window is stale",
+      "pre-flight lifecycle staleness degraded detects verdict worsening only",
+      "pre-flight lifecycle staleness stateHeight behind the known tip is stale"
+    ],
     "716ed5524dd1870f": [
       "G5: window-store single-writer lock a released lock can be taken by the next store",
       "G5: window-store single-writer lock does not delete a lock that now belongs to a successor",
@@ -3819,6 +3978,12 @@
       "MuSig2 partial sig verification verifyPartial accepts a valid partial signature",
       "MuSig2 partial sig verification verifyPartial rejects a tampered partial signature",
       "MuSig2 sortKeys returns keys in byte-lexicographic order"
+    ],
+    "7473b82052054d25": [
+      "tier1 withAbort listener cleanup aborting after cleanup causes no stray rejection, and abort before settle still rejects",
+      "tier1 withAbort listener cleanup detaches when aborted mid-flight",
+      "tier1 withAbort listener cleanup returns to zero listeners after resolved, rejected and timed-out calls",
+      "tier1 withAbort listener cleanup works without a timeout and still detaches"
     ],
     "74b233f48de6a823": [
       "mainnet prelaunch refusal allows a payment-only submit and non-mainnet networks before launch",
@@ -4356,6 +4521,27 @@
       "FIAT_AMOUNT format boundary accepts FIAT_AMOUNT '999999.99' (large valid amount)",
       "FIAT_AMOUNT format boundary rejects FIAT_AMOUNT '1.000' (three decimal places)"
     ],
+    "8649344eb17496b8": [
+      "WebSocketClient reconnect catch-up: a drop in the middle of a replay delivers every row once on the actions channel, resuming after the row already dispatched",
+      "WebSocketClient reconnect catch-up: a drop in the middle of a replay delivers every row once on the address channel, resuming after the row already dispatched",
+      "WebSocketClient reconnect catch-up: a drop in the middle of a replay drops a replayed row the subscription already dispatched when the server sends it again",
+      "WebSocketClient reconnect catch-up: a stale replica emits no stale_replay for a replay closed fresh",
+      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay for a replay closed stale, and still advances the cursor to the rows delivered",
+      "WebSocketClient reconnect catch-up: a stale replica emits stale_replay once for a stale replay continued past a truncated round",
+      "WebSocketClient reconnect catch-up: continuation and refusal continues a truncated replay from where the server stopped",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits no not_replayed event when the list is absent or empty",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits not_replayed with the lifecycle types a completed replay could not carry",
+      "WebSocketClient reconnect catch-up: continuation and refusal emits resync_required for a refused catch-up and still replays the next subscription",
+      "WebSocketClient reconnect catch-up: continuation and refusal reports an unanswered catch-up as a gap once its timeout passes",
+      "WebSocketClient reconnect catch-up: rows a replay mark must not hide delivers a replacement row again after a REORG voids a row the replay dispatched",
+      "WebSocketClient reconnect catch-up: rows a replay mark must not hide raises no replay mark from a row arriving after a catch-up timed out",
+      "WebSocketClient reconnect catch-up: rows a replay mark must not hide still delivers rows never dispatched before the drop",
+      "WebSocketClient reconnect catch-up: sequencing replays two action subscriptions one at a time from the pre-disconnect cursor, with none refused",
+      "WebSocketClient reconnect catch-up: sequencing resubscribes a blocks subscription through the catch-up queue, so it hears NEW_BLOCK is not replayed",
+      "WebSocketClient reconnect catch-up: which frames move the cursor a CATCH_UP_COMPLETE outside a replay still advances the cursor",
+      "WebSocketClient reconnect catch-up: which frames move the cursor a replay notes NEW_ACTION and CATCH_UP_COMPLETE but not entity ids",
+      "WebSocketClient reconnect catch-up: which frames move the cursor an idle client ignores entity ids and still advances on NEW_ACTION"
+    ],
     "86e209190552c399": [
       "ExplorerClient readyHook awaits readyHook before each GET request"
     ],
@@ -4587,6 +4773,16 @@
       "ExplorerClient token methods getIssues returns result",
       "ExplorerClient token methods getTokens returns result"
     ],
+    "8d397439f9118b42": [
+      "API request-rate limit under a many-address flood caps anonymous buckets and refuses a new address at the cap with 429",
+      "API request-rate limit under a many-address flood gives cap slots back once anonymous buckets expire",
+      "API request-rate limit under a many-address flood never refuses a credential bucket because of the anonymous cap",
+      "API request-rate limit under a many-address flood prunes from the front and stops at the first live bucket",
+      "API request-rate limit under a many-address flood still serves an address that already holds a bucket when the cap is reached",
+      "API request-rate window a truncatable junk window falls back to the default instead of shrinking to milliseconds",
+      "API request-rate window the shipped limiter still bites when the window env value was junk",
+      "API request-rate window warns at load when the window setting was unusable, and stays quiet on a good one"
+    ],
     "8d6c9af21ad60dd2": [
       "LifecycleManager submitAction(): waitForIndexer=true defaults waitForIndexer to true and calls ActionWaiter",
       "LifecycleManager submitAction(): waitForIndexer=true fires confirmed progress step after indexer confirms",
@@ -4685,25 +4881,6 @@
       "G8: unresolved-tick window accumulation the reserved bucket lies outside the protocol tick charset",
       "wire collapse: a single request/response shape a single-input approval returns a one-element signatures array, not a bare sig",
       "wire collapse: a single request/response shape refuses the legacy single-input request shape"
-    ],
-    "909cd7807a8cef9e": [
-      "vendored deploy-lint: banned-with banned-with is a consensus rule",
-      "vendored deploy-lint: banned-with clean code has no banned-with finding",
-      "vendored deploy-lint: banned-with does not flag the word with in identifiers, properties, strings or comments",
-      "vendored deploy-lint: banned-with flags a with statement with its line",
-      "vendored deploy-lint: banned-with flags every with statement, nested ones included",
-      "vendored deploy-lint: banned-with lintSource emits an error-severity finding carrying the line",
-      "vendored deploy-lint: banned-with yields no hits for unparseable source",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/nesting_depth.js matches xchain-vm/src/lint-core/nesting_depth.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
-      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
     ],
     "90eae5e9ed3d466d": [
       "BATCH pre-flight (Tier 1 sub-command verdicts) oracle fees are disclosed, not judged a per-oracle total becomes an info finding naming the amount and address",
@@ -4811,9 +4988,21 @@
       "LifecycleManager submitAction(): contract actions reads the contract index off the upper-case wire form too",
       "LifecycleManager submitAction(): contract actions refuses a gate with no contract to read"
     ],
+    "92bc11ccc6389098": [
+      "pre-flight balance read against a stale explorer mirror control: a fresh empty listing is still an authoritative zero",
+      "pre-flight balance read against a stale explorer mirror control: a stale marker with a matching row still returns the row quantity",
+      "pre-flight balance read against a stale explorer mirror does not fail the verdict when Tier 1 is rate limited",
+      "pre-flight balance read against a stale explorer mirror does not throw in enforce mode",
+      "pre-flight balance read against a stale explorer mirror treats a missing row on a stale listing as unverified, not zero"
+    ],
     "936e694dd2ad90a4": [
       "SDK create_tx passthrough forwards encoding AUTO, compress and the options bag",
       "SDK create_tx passthrough omits all three when the caller says nothing, so the encoder default applies"
+    ],
+    "94800f3e81d96c56": [
+      "submitAction option declarations declares runtime submit controls and both local caps",
+      "submitAction option declarations fails its field check when a cap declaration is absent",
+      "submitAction option declarations keeps EncoderOptions aligned with every forwarded createTx field"
     ],
     "9481a25a83b3f20c": [
       "vendored lint core: ObjectPattern flag composition composes aliases and optional chains only under their own flags",
@@ -5225,30 +5414,21 @@
     "9f8bf7a383946aa2": [
       "WalletUtils deriveAddress() - extended should throw INVALID_ADDRESS_TYPE for unknown type"
     ],
-    "a119099cfeb183c6": [
-      "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
-      "API request-rate limit adds no runtime dependency for the limiter",
-      "API request-rate limit allows requests up to the limit and rejects the next one with 429",
-      "API request-rate limit an explicit 0 disables the limiter and nothing else does",
-      "API request-rate limit an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address",
-      "API request-rate limit bounds the unauthenticated path too (keyed on the source address)",
-      "API request-rate limit counts per credential, so one hot key cannot starve another",
-      "API request-rate limit falls back to safe defaults on a junk env value",
-      "API request-rate limit keeps ONE implementation of the limiter: api.js holds no inline copy",
-      "API request-rate limit never holds a raw credential as a map key",
-      "API request-rate limit prunes expired buckets so the map cannot grow without bound",
-      "API request-rate limit src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount",
-      "API request-rate limit the shipped limiter still bites when the env value was junk",
-      "API request-rate limit the window rolls over and the caller is allowed again",
-      "API request-rate limit under a many-address flood caps anonymous buckets and refuses a new address at the cap with 429",
-      "API request-rate limit under a many-address flood gives cap slots back once anonymous buckets expire",
-      "API request-rate limit under a many-address flood never refuses a credential bucket because of the anonymous cap",
-      "API request-rate limit under a many-address flood prunes from the front and stops at the first live bucket",
-      "API request-rate limit under a many-address flood still serves an address that already holds a bucket when the cap is reached",
-      "API request-rate limit with no isCredential predicate every caller is bucketed by source address",
-      "API request-rate window a truncatable junk window falls back to the default instead of shrinking to milliseconds",
-      "API request-rate window the shipped limiter still bites when the window env value was junk",
-      "API request-rate window warns at load when the window setting was unusable, and stays quiet on a good one"
+    "9f9e95207a9df5fd": [
+      "vendored deploy-lint: banned-with banned-with is a consensus rule",
+      "vendored deploy-lint: banned-with clean code has no banned-with finding",
+      "vendored deploy-lint: banned-with does not flag the word with in identifiers, properties, strings or comments",
+      "vendored deploy-lint: banned-with flags a with statement with its line",
+      "vendored deploy-lint: banned-with flags every with statement, nested ones included",
+      "vendored deploy-lint: banned-with lintSource emits an error-severity finding carrying the line",
+      "vendored deploy-lint: banned-with yields no hits for unparseable source",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
+      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
+      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
     ],
     "a13f37baf43851b0": [
       "CoSignerClient (agent side) msg-to-PSBT binding sign() throws COSIGNER_MSG_MISMATCH before signing when the returned msg is not the PSBT sighash",
@@ -5754,6 +5934,14 @@
       "LifecycleManager submitAction(): feeQuote on a chunked reveal forwards the quote to the P2WSH reveal and accepts its fee output",
       "LifecycleManager submitAction(): feeQuote on a chunked reveal refuses a reveal fee output the caller never quoted",
       "LifecycleManager submitAction(): feeQuote on a chunked reveal sends no feeQuote to the reveal when the caller quoted none"
+    ],
+    "b08573c165a8e31f": [
+      "pre-flight native balance read against a stale explorer mirror a stale zero does not raise BALANCE_INSUFFICIENT; the check lands unverified",
+      "pre-flight native balance read against a stale explorer mirror control: a fresh zero native balance is still an authoritative zero",
+      "pre-flight native balance read against a stale explorer mirror control: a fresh zero still fails the balance check as an error",
+      "pre-flight native balance read against a stale explorer mirror control: a stale marker with a positive native balance still returns it",
+      "pre-flight native balance read against a stale explorer mirror control: no freshness marker leaves a zero native balance authoritative",
+      "pre-flight native balance read against a stale explorer mirror treats a zero native balance on a stale mirror as unverified, not zero"
     ],
     "b19c8819979a472d": [
       "MessagingUtils @crypto @regression getMessages(): encrypted without wif exposes coin/chain/block/txid fields from raw message",
@@ -6273,6 +6461,14 @@
       "serialize() refuses a flat field map on a repeated format every repeated format refuses a flat map",
       "serialize() refuses a flat field map on a repeated format parallel arrays in flat fields are refused, not comma-joined into one slot"
     ],
+    "c18de397210c12b4": [
+      "Regression: an error after the commit broadcast carries what was broadcast CHUNK_REVEAL_BROADCAST_FAILED carries broadcast, txid and spentInputs",
+      "Regression: an error after the commit broadcast carries what was broadcast ENVELOPE_REVEAL_BROADCAST_FAILED carries broadcast, txid and spentInputs",
+      "Regression: an error after the commit broadcast carries what was broadcast a session drops the commit's inputs from its cache when the chunk reveal fails",
+      "Regression: an error after the commit broadcast carries what was broadcast a session drops the envelope commit's inputs and keeps its change when the reveal fails",
+      "Regression: any failure after a broadcast is tagged, and none before it a failure before any broadcast is not tagged as broadcast and leaves the cache alone",
+      "Regression: any failure after a broadcast is tagged, and none before it an indexer refusal carries the spent inputs to the cache, not the in-flight flag"
+    ],
     "c1a216842cf0b824": [
       "SDK/indexer fee payment mode parity covers the same registered coins",
       "SDK/indexer fee payment mode parity requires native fees exactly where the indexer registry declares them"
@@ -6317,6 +6513,11 @@
       "x402 parseActionString rejects non-numeric and non-positive amounts",
       "x402 parseActionString returns empty outputs for non-SEND actions and null for garbage",
       "x402 parseActionString v2 pairs per-output ticks; v3 pairs per-group memos"
+    ],
+    "c2372318dbd5ef1e": [
+      "pre-flight numeric storage parity with xchain-indexer value_checks.js matches exceedsUnsignedColumn across integer, fractional, exponent and radix spellings",
+      "pre-flight numeric storage parity with xchain-indexer value_checks.js matches keepsPrefixedSpelling across radix, sign, case, whitespace and range spellings",
+      "pre-flight numeric storage parity with xchain-indexer value_checks.js pins the storesAsNull width and radix-prefix refusals mirrored by pre-flight"
     ],
     "c2bfde69194070bf": [
       "pre-flight Tier-2 per-action matrix ISSUE (existence != reject; ownership gate) a fractional MAX_SUPPLY on a CREATE with DECIMALS 0 is an error",
@@ -6384,6 +6585,11 @@
       "HubConnector getCapabilityThresholds() returns null when result lacks a thresholds array",
       "HubConnector getCapabilityThresholds() returns the thresholds array when the hub responds",
       "HubConnector getCapabilityThresholds() tries next endpoint on failure (multi-endpoint)"
+    ],
+    "c63821d0c7f3142a": [
+      "WebSocketClient reconnect retry emits connection_lost exactly once after maxRetries failed attempts",
+      "WebSocketClient reconnect retry keeps retrying after one failed attempt and reconnects once the server is back",
+      "WebSocketClient reconnect retry schedules no further attempt after an intentional disconnect"
     ],
     "c6b023f9a3fab63a": [
       "LifecycleManager submitAction(): the reveal exists before the commit is broadcast broadcasts nothing when the reveal would be refused as a full burn",
@@ -6800,6 +7006,10 @@
       "BATCH pre-flight (Tier 1 sub-command verdicts) the trap: a valid BATCH does NOT mean its commands succeed an invalid sub-command under valid:true is an ERROR, so the verdict fails",
       "BATCH pre-flight (Tier 1 sub-command verdicts) the trap: a valid BATCH does NOT mean its commands succeed the DRYRUN_VALID headline says the batch was accepted but not every command"
     ],
+    "d9e609dba4301d2a": [
+      "WalletSession submit() after a broadcast whose indexer wait timed out drops the broadcast inputs, keeps its change, and the next submit spends only that",
+      "WalletSession submit() after a broadcast whose indexer wait timed out through the real lifecycle, the next build is handed none of the broadcast inputs"
+    ],
     "da3a6cdfc5f1fe1f": [
       "bin/sync-templates (static contract) is syntactically valid JavaScript (compiles without executing)",
       "bin/sync-templates (static contract) performs no network I/O (template sync is offline)",
@@ -6949,6 +7159,10 @@
       "pre-flight Tier-2 per-action matrix OP_RETURN carrier cap parity with the compose-time gate a 76-byte action string: pre-flight and compose agree (both reject)",
       "pre-flight Tier-2 per-action matrix OP_RETURN carrier cap parity with the compose-time gate a 77-byte action string: pre-flight and compose agree (both reject)"
     ],
+    "dfd1dd0d1956b09e": [
+      "publishMultipartFile funding waves funds 250 STANDARD parts in three confirmed, bounded waves",
+      "publishMultipartFile funding waves resumes after wave one with only original waves two and three"
+    ],
     "e00c86e682cfea08": [
       "comment-insensitive digest changes the digest for edits inside string and template literals",
       "comment-insensitive digest changes the digest when executable code changes",
@@ -6992,6 +7206,25 @@
       "ANCHOR bundle ordering after enforcement refuses sections that are not CHAIN-ascending",
       "ANCHOR bundle ordering before enforcement accepts section signature pairs that are not PUBKEY-ascending",
       "ANCHOR bundle ordering before enforcement accepts sections that are not CHAIN-ascending"
+    ],
+    "e0931a79421d79af": [
+      "API request-rate limit a zero-prefixed junk value is junk, not the off switch",
+      "API request-rate limit adds no runtime dependency for the limiter",
+      "API request-rate limit allows requests up to the limit and rejects the next one with 429",
+      "API request-rate limit an explicit 0 disables the limiter and nothing else does",
+      "API request-rate limit an unvalidated token does not mint its own bucket: a rotating junk token is capped per source address",
+      "API request-rate limit answers 429 to requests the body parser and the batch cap refuse once the budget is spent",
+      "API request-rate limit bounds the unauthenticated path too (keyed on the source address)",
+      "API request-rate limit counts per credential, so one hot key cannot starve another",
+      "API request-rate limit falls back to safe defaults on a junk env value",
+      "API request-rate limit keeps ONE implementation of the limiter: api.js holds no inline copy",
+      "API request-rate limit mounts the limiter ahead of the body parser and the batch cap, which refuse requests themselves",
+      "API request-rate limit never holds a raw credential as a map key",
+      "API request-rate limit prunes expired buckets so the map cannot grow without bound",
+      "API request-rate limit src/api.js mounts the limiter BEFORE the auth gate and the jsonRouter mount",
+      "API request-rate limit the shipped limiter still bites when the env value was junk",
+      "API request-rate limit the window rolls over and the caller is allowed again",
+      "API request-rate limit with no isCredential predicate every caller is bucketed by source address"
     ],
     "e0bbb7220258d523": [
       "FormatSelector.getFormatFields() repeating-field formats include duplicates in the array",
@@ -7329,18 +7562,6 @@
       "FormatSelector.select(): explicit VERSION must be a canonical integer still rejects a well-shaped version the action does not define",
       "FormatSelector.select(): explicit VERSION must be a canonical integer the error names the value it refused, so the caller can see what it sent"
     ],
-    "e76d44ec1ed903fd": [
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core.js matches xchain-vm/src/lint-core.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_globals.js matches xchain-vm/src/lint-core/banned_globals.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_syntax.js matches xchain-vm/src/lint-core/banned_syntax.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/banned_with.js matches xchain-vm/src/lint-core/banned_with.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/constants.js matches xchain-vm/src/lint-core/constants.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/contract_analysis.js matches xchain-vm/src/lint-core/contract_analysis.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/nesting_depth.js matches xchain-vm/src/lint-core/nesting_depth.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/result_composition.js matches xchain-vm/src/lint-core/result_composition.js",
-      "vendored deploy-lint: pinned lint-core byte parity src/contract/lint-core/scope_analysis.js matches xchain-vm/src/lint-core/scope_analysis.js",
-      "vendored deploy-lint: sibling location stays with the run no test module assigns an XCHAIN_ sibling directory, path or root variable"
-    ],
     "e79b34ecf9c11e4a": [
       "MessagingUtils @crypto @regression send(): validation guards encodes a real MESSAGE v2 action and returns txid on a successful ECIES send",
       "MessagingUtils @crypto @regression send(): validation guards encrypts a binary payload with AES method (round-trips via aesDecryptBytes)",
@@ -7619,6 +7840,10 @@
       "co-signer: the envelope on a 2-of-3 account both halves derive the tree, neither is told it makes a 2-of-2-shaped client and a 2-of-3 daemon disagree rather than half-agree",
       "co-signer: the envelope on a 2-of-3 account both halves derive the tree, neither is told it rejects a client whose configured tweaks disagree with the derived tree"
     ],
+    "f08fbea1bf5f78d6": [
+      "WebSocketClient disconnect cancels a pending reconnect does not open a socket or resubscribe when disconnect() runs while the attempt awaits the readiness hook",
+      "WebSocketClient disconnect cancels a pending reconnect does not reconnect or resubscribe when disconnect() runs during the backoff delay"
+    ],
     "f0f6f09db9f32df0": [
       "WebSocketClient WS_SCHEMA_VERSION is exposed as a static on the client class",
       "WebSocketClient WS_SCHEMA_VERSION matches the explorer sibling schema version when checked out (cross-repo drift guard)",
@@ -7771,6 +7996,12 @@
       "BET formats exposes the list edit format through normal format discovery",
       "BET formats registers all five formats with the field order BET.md declares"
     ],
+    "f6cf1827fd13f8f0": [
+      "API non-object batch elements answers a non-5xx -32600 for non-object elements, with and without a token",
+      "API non-object batch elements does not let a null element bypass the 401 for an authenticated method",
+      "API non-object batch elements leaves a valid batch of pings unchanged",
+      "API non-object batch elements survives every malformed batch with no unhandled rejection"
+    ],
     "f7e5931142d6202d": [
       "cosigner/recovery buildRecoverySpend a >2^53 output overspend is caught, not rounded into a zero fee",
       "cosigner/recovery buildRecoverySpend a fractional or negative satoshi value is refused outright",
@@ -7858,6 +8089,22 @@
       "co-signer: the envelope on a 2-of-3 account the property the composition exists for lets agent+recovery sweep a commit output the daemon can no longer co-sign",
       "co-signer: the envelope on a 2-of-3 account the property the composition exists for would strand that same output if the leaves were left out (what the old refusal meant)"
     ],
+    "fc75c57245fb14df": [
+      "API JSON-RPC error codes are integers create_action:array params answers -32602 before the handler reads them",
+      "API JSON-RPC error codes are integers create_action:missing answers -32602 with the SDK message and its string code in data",
+      "API JSON-RPC error codes are integers create_action:no-action answers -32602 with the SDK message and its string code in data",
+      "API JSON-RPC error codes are integers create_action:null params answers -32602 before the handler reads them",
+      "API JSON-RPC error codes are integers create_action:number params answers -32602 before the handler reads them",
+      "API JSON-RPC error codes are integers create_action:string params answers -32602 before the handler reads them",
+      "API JSON-RPC error codes are integers every error response, single and batched, has an integer code",
+      "API JSON-RPC params check keeps valid calls working a batch answers per-element integer codes beside a success",
+      "API JSON-RPC params check keeps valid calls working a params-free method ignores params, and get_markets still accepts null",
+      "API JSON-RPC upstream and unexpected errors hide internal text a rate-limited upstream answers an integer code with its wait in data",
+      "API JSON-RPC upstream and unexpected errors hide internal text an encoder failure answers the same way",
+      "API JSON-RPC upstream and unexpected errors hide internal text an unexpected exception answers -32603 Internal error with no internal text",
+      "API JSON-RPC upstream and unexpected errors hide internal text get_market with params null answers -32602, never the TypeError text",
+      "API JSON-RPC upstream and unexpected errors hide internal text get_status with an unreachable explorer answers an integer code and no host, port or socket text"
+    ],
     "fcab45f9ea01ffb3": [
       "WalletSession estimateFees() calls sdk.estimateFees with merged pubkey/change",
       "WalletSession estimateFees() merges caller-provided encoderOpts"
@@ -7880,8 +8127,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 591,
-      "titleCount": 6257,
+      "fileCount": 615,
+      "titleCount": 6461,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -7944,8 +8191,14 @@
         "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "4aab71cfb0d09588",
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
         "test/unit/api/api_batch_cap.test.js": "6abb57b79a51e287",
+        "test/unit/api/api_body_parse_errors.test.js": "11b7b67f5cf804a6",
+        "test/unit/api/api_error_codes.test.js": "fc75c57245fb14df",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
-        "test/unit/api/api_rate_limit.test.js": "a119099cfeb183c6",
+        "test/unit/api/api_null_batch_element.test.js": "f6cf1827fd13f8f0",
+        "test/unit/api/api_parse_error_json.test.js": "0366f235c81fe49f",
+        "test/unit/api/api_prototype_dispatch.test.js": "3aaa1f0f0b24f6ff",
+        "test/unit/api/api_rate_limit.test.js": "e0931a79421d79af",
+        "test/unit/api/api_rate_limit_window.test.js": "8d397439f9118b42",
         "test/unit/api/cors_origin.test.js": "47a8c7aec5cc3398",
         "test/unit/api/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/carrier/bind_action_carrier.test.js": "4f58c716b835a2da",
@@ -7962,6 +8215,7 @@
         "test/unit/carrier/lifecycle_manager.test/08_submit_action_contract_actions.test.js": "92ad9ac971489ae6",
         "test/unit/carrier/lifecycle_manager.test/09_submit_action_reveal_before_commit_broadcast.test.js": "c6b023f9a3fab63a",
         "test/unit/carrier/lifecycle_manager.test/fee_quote_authorized_output.test.js": "b053b50995136354",
+        "test/unit/carrier/lifecycle_manager_encoder_opts_fee_caps.test.js": "26a2fe788a424f2f",
         "test/unit/carrier/mainnet_prelaunch_refusal.test.js": "74b233f48de6a823",
         "test/unit/carrier/reconcile_encoded.test.js": "f03ae31623c0d806",
         "test/unit/carrier/reconcile_encoded.test/01_reconcile_encoded_funding_leg_pins.test.js": "99d3e354f4a12b66",
@@ -8046,7 +8300,7 @@
         "test/unit/clients/websocket/websocket.test/03_emit_and_connection_lost.test.js": "c6c38104ad45ec9a",
         "test/unit/clients/websocket/websocket.test/04_latest_action_index_tracking.test.js": "a66187140aa93ab9",
         "test/unit/clients/websocket/websocket_bundler_interop.test.js": "34f473d0e384ae26",
-        "test/unit/clients/websocket/websocket_catch_up.test.js": "0138b0971cdb0d1d",
+        "test/unit/clients/websocket/websocket_catch_up.test.js": "8649344eb17496b8",
         "test/unit/clients/websocket/websocket_convenience.test.js": "deec5a095c8b2024",
         "test/unit/clients/websocket/websocket_convenience.test/01_on_block.test.js": "2daae22e85db73d7",
         "test/unit/clients/websocket/websocket_convenience.test/02_on_action.test.js": "1624ce0c406b2282",
@@ -8064,8 +8318,10 @@
         "test/unit/clients/websocket/websocket_convenience.test/14_unsubscribe_return_value.test.js": "0b7e25d1390e869c",
         "test/unit/clients/websocket/websocket_convenience.test/15_statuses_filter_is_not_advertised_regression.test.js": "54d6dc19b052776a",
         "test/unit/clients/websocket/websocket_detached_subscribe.test.js": "5ab9d4769345672e",
+        "test/unit/clients/websocket/websocket_disconnect_cancels_reconnect.test.js": "f08fbea1bf5f78d6",
         "test/unit/clients/websocket/websocket_feed_correctness.test.js": "0458710d35d1cff4",
         "test/unit/clients/websocket/websocket_full_url.test.js": "a8181a088edcff2f",
+        "test/unit/clients/websocket/websocket_reconnect_retry.test.js": "c63821d0c7f3142a",
         "test/unit/coins/address_parity.test.js": "392b6e06020fd4b3",
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/coins_no_filesystem.test.js": "606950257bf479c5",
@@ -8089,7 +8345,7 @@
         "test/unit/contract/chunk_helper/code_size.test.js": "80b9bd007d2ac9ff",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
         "test/unit/contract/contract_lint_banned_with.test.js": "f48a98be337a65d6",
-        "test/unit/contract/contract_lint_banned_with_parity.test.js": "e76d44ec1ed903fd",
+        "test/unit/contract/contract_lint_banned_with_parity.test.js": "63c882a4f986d928",
         "test/unit/contract/contract_lint_destructure.test.js": "9481a25a83b3f20c",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
         "test/unit/contract/contract_lint_optional_chain.test.js": "ddd6f2464ac1217e",
@@ -8241,6 +8497,7 @@
         "test/unit/preflight/checks/checks.test/18_stake_amount_column_width.test.js": "cc7aeac5f7e1bbac",
         "test/unit/preflight/checks/checks.test/19_issue_caret_tick_normalize.test.js": "a4f1b3f60d13ae87",
         "test/unit/preflight/checks/dividend.test.js": "0ce9655dbccee3a6",
+        "test/unit/preflight/checks/prefixed_integer_fields.test.js": "6820516bbded4c78",
         "test/unit/preflight/checks/trading_same_token_offer.test.js": "530e4fdce7ecacd9",
         "test/unit/preflight/conformance/offrail_conformance.test.js": "50763c8b34df1c5f",
         "test/unit/preflight/constants/constants.test.js": "3e30426312edb6cc",
@@ -8249,7 +8506,7 @@
         "test/unit/preflight/constants/constants.test/03_mirrored_regex_rules.test.js": "7700fa0166072669",
         "test/unit/preflight/constants/constants.test/04_mirrored_indexer_lists.test.js": "2bd0dbe3142ca315",
         "test/unit/preflight/constants/constants.test/05_mirrored_activation_rows.test.js": "0ca1b00c01b003b6",
-        "test/unit/preflight/constants/constants.test/06_drift_map_gate_retirement_reviews.test.js": "23b9250519eb6892",
+        "test/unit/preflight/constants/constants.test/06_drift_map_gate_retirement_reviews.test.js": "072ce2f068ba15e8",
         "test/unit/preflight/custody/custody_guard_notes.test.js": "24e5aec18c560612",
         "test/unit/preflight/custody/custody_map_rows.test.js": "3151828024be21f7",
         "test/unit/preflight/drift_gate/drift_gate_handler_dirs.test.js": "e00c86e682cfea08",
@@ -8260,16 +8517,19 @@
         "test/unit/preflight/engine/engine.test/02_report_shape_4_2.test.js": "8290eb0cf8465d4f",
         "test/unit/preflight/engine/engine.test/03_tier_precedence_4_2.test.js": "7f4c85dadc6049c6",
         "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js": "4e313fdc96be7c4f",
+        "test/unit/preflight/engine/engine.test/05_shared_producer_ignores_first_callers_signal.test.js": "688401629629e20c",
         "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
         "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
-        "test/unit/preflight/lifecycle.test.js": "6496075e070ad57c",
+        "test/unit/preflight/lifecycle.test.js": "70cacf5314cdd116",
         "test/unit/preflight/list/list_note_refusals.test.js": "287b43aeb58106c1",
         "test/unit/preflight/list/list_set_meta_note.test.js": "1866e9c807f637eb",
         "test/unit/preflight/list/list_share_notes.test.js": "e8ec9e9a4fce2709",
         "test/unit/preflight/numeric.test.js": "07433a2c14a8b8be",
         "test/unit/preflight/representability/amount_representability.test.js": "c9446a3add4b6b4f",
         "test/unit/preflight/representability/expiration_representability.test.js": "9733098639c235c8",
+        "test/unit/preflight/representability/indexer_value_checks_parity.test.js": "c2372318dbd5ef1e",
+        "test/unit/preflight/stale_balance_unverified.test.js": "92bc11ccc6389098",
         "test/unit/preflight/tier1/batch_tier1.test.js": "ba5b7ebd9b68484b",
         "test/unit/preflight/tier1/batch_tier1.test/01_a_refused_sub_action_is_a_clear_answer.test.js": "dbd9896b91a6fb71",
         "test/unit/preflight/tier1/batch_tier1.test/02_normalizing_the_arbiter_sub_command_list.test.js": "39fe2ed29221c6ad",
@@ -8281,6 +8541,8 @@
         "test/unit/preflight/tier1/batch_tier1.test/08_an_invalid_batch_header.test.js": "bf50e8fa4f7240a2",
         "test/unit/preflight/tier1/tier1.test.js": "b4e0c153ab38b699",
         "test/unit/preflight/tier1/tier1_findings.test.js": "9d3c1858a0fa93eb",
+        "test/unit/preflight/tier1/with_abort_listener_cleanup.test.js": "7473b82052054d25",
+        "test/unit/preflight/timeout_budget.test.js": "2f5768fdb8d62480",
         "test/unit/protocol/action_manifest_conformance.test.js": "bbe06c991f6d2e58",
         "test/unit/protocol/anchor_order_reason_helpers.test.js": "adbd90fd0833e8dd",
         "test/unit/protocol/batch/batch_builder_cost_weight.test.js": "60c202249e718c1e",
@@ -8371,6 +8633,7 @@
         "test/unit/protocol/validator/validator.test/04_validator_vote_escrow_decimal_places.test.js": "7c6b04c01fd6ffb2",
         "test/unit/protocol/validator/validator.test/05_validator_unknown_action.test.js": "6e36ec22e329a960",
         "test/unit/protocol/validator/validator.test/06_validator_file_gate_min_amount_pc_29.test.js": "a84228d650a20881",
+        "test/unit/protocol/validator_destination_checksum.test.js": "5c8a3afda4fd453c",
         "test/unit/protocol/vote.test.js": "13081fe0727f25f4",
         "test/unit/protocol/wire/issue_tick_ref.test.js": "97719469e6fa9e29",
         "test/unit/protocol/wire/tick_ref_fields.test.js": "89913b10df49648b",
@@ -8469,17 +8732,24 @@
         "test/unit/wallet/wallet_session.test/04_action_convenience_methods.test.js": "255990478c67aa1f",
         "test/unit/wallet/wallet_session.test/05_explorer_convenience_methods.test.js": "7b9d130534cd030b",
         "test/unit/wallet/wallet_session.test/06_estimate_fees.test.js": "fcab45f9ea01ffb3",
+        "test/unit/wallet/wallet_session.test/07_submit_after_broadcast_timeout.test.js": "d9e609dba4301d2a",
         "test/unit/wallet/x402.test.js": "c1f23d83c7fe1108",
         "test/unit/wallet/x402.test/01_x402_gateway.test.js": "a390a388a8cd0d37",
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
         "test/unit/wallet/x402.test/03_x402_client.test.js": "0f442213605187b8",
         "test/unit/wallet/x402.test/04_x402_client_per_tick_ceiling.test.js": "6557483e59be3df6",
-        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1"
+        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1",
+        "test/unit/carrier/reconcile_encoded.test/09_uncomputable_fee_fails_closed.test.js": "1e2de6fb2e101851",
+        "test/unit/preflight/stale_native_balance_unverified.test.js": "b08573c165a8e31f",
+        "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
+        "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96",
+        "test/unit/file_multipart.test.js": "008c21e34ee03944",
+        "test/unit/file/file_multipart_waves.test.js": "dfd1dd0d1956b09e"
       }
     },
     "test:all": {
-      "fileCount": 630,
-      "titleCount": 6586,
+      "fileCount": 655,
+      "titleCount": 6796,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -8519,6 +8789,7 @@
         "test/regression/amount_precision.test.js": "e562bc7f8db5236d",
         "test/regression/cosigner_decoder_parity.test.js": "4f80fc0ee1434d73",
         "test/regression/golden_sibling_load_attribution.test.js": "1739ad83e81f04c3",
+        "test/regression/post_broadcast_error_shape.test.js": "c18de397210c12b4",
         "test/security/input_attack.test.js": "57c02fa02715eab7",
         "test/smoke/smoke.test.js": "b9b36666cde9f484",
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
@@ -8582,8 +8853,14 @@
         "test/unit/actions/workflows.test/10_deploy_contract_native_fee.test.js": "4aab71cfb0d09588",
         "test/unit/api/api_auth_gate.test.js": "63619a72a6a85671",
         "test/unit/api/api_batch_cap.test.js": "6abb57b79a51e287",
+        "test/unit/api/api_body_parse_errors.test.js": "11b7b67f5cf804a6",
+        "test/unit/api/api_error_codes.test.js": "fc75c57245fb14df",
         "test/unit/api/api_listener.test.js": "42d0222dd88f5616",
-        "test/unit/api/api_rate_limit.test.js": "a119099cfeb183c6",
+        "test/unit/api/api_null_batch_element.test.js": "f6cf1827fd13f8f0",
+        "test/unit/api/api_parse_error_json.test.js": "0366f235c81fe49f",
+        "test/unit/api/api_prototype_dispatch.test.js": "3aaa1f0f0b24f6ff",
+        "test/unit/api/api_rate_limit.test.js": "e0931a79421d79af",
+        "test/unit/api/api_rate_limit_window.test.js": "8d397439f9118b42",
         "test/unit/api/cors_origin.test.js": "47a8c7aec5cc3398",
         "test/unit/api/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
         "test/unit/carrier/bind_action_carrier.test.js": "4f58c716b835a2da",
@@ -8600,6 +8877,7 @@
         "test/unit/carrier/lifecycle_manager.test/08_submit_action_contract_actions.test.js": "92ad9ac971489ae6",
         "test/unit/carrier/lifecycle_manager.test/09_submit_action_reveal_before_commit_broadcast.test.js": "c6b023f9a3fab63a",
         "test/unit/carrier/lifecycle_manager.test/fee_quote_authorized_output.test.js": "b053b50995136354",
+        "test/unit/carrier/lifecycle_manager_encoder_opts_fee_caps.test.js": "26a2fe788a424f2f",
         "test/unit/carrier/mainnet_prelaunch_refusal.test.js": "74b233f48de6a823",
         "test/unit/carrier/reconcile_encoded.test.js": "f03ae31623c0d806",
         "test/unit/carrier/reconcile_encoded.test/01_reconcile_encoded_funding_leg_pins.test.js": "99d3e354f4a12b66",
@@ -8684,7 +8962,7 @@
         "test/unit/clients/websocket/websocket.test/03_emit_and_connection_lost.test.js": "c6c38104ad45ec9a",
         "test/unit/clients/websocket/websocket.test/04_latest_action_index_tracking.test.js": "a66187140aa93ab9",
         "test/unit/clients/websocket/websocket_bundler_interop.test.js": "34f473d0e384ae26",
-        "test/unit/clients/websocket/websocket_catch_up.test.js": "0138b0971cdb0d1d",
+        "test/unit/clients/websocket/websocket_catch_up.test.js": "8649344eb17496b8",
         "test/unit/clients/websocket/websocket_convenience.test.js": "deec5a095c8b2024",
         "test/unit/clients/websocket/websocket_convenience.test/01_on_block.test.js": "2daae22e85db73d7",
         "test/unit/clients/websocket/websocket_convenience.test/02_on_action.test.js": "1624ce0c406b2282",
@@ -8702,8 +8980,10 @@
         "test/unit/clients/websocket/websocket_convenience.test/14_unsubscribe_return_value.test.js": "0b7e25d1390e869c",
         "test/unit/clients/websocket/websocket_convenience.test/15_statuses_filter_is_not_advertised_regression.test.js": "54d6dc19b052776a",
         "test/unit/clients/websocket/websocket_detached_subscribe.test.js": "5ab9d4769345672e",
+        "test/unit/clients/websocket/websocket_disconnect_cancels_reconnect.test.js": "f08fbea1bf5f78d6",
         "test/unit/clients/websocket/websocket_feed_correctness.test.js": "0458710d35d1cff4",
         "test/unit/clients/websocket/websocket_full_url.test.js": "a8181a088edcff2f",
+        "test/unit/clients/websocket/websocket_reconnect_retry.test.js": "c63821d0c7f3142a",
         "test/unit/coins/address_parity.test.js": "392b6e06020fd4b3",
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
         "test/unit/coins/coins_no_filesystem.test.js": "606950257bf479c5",
@@ -8726,7 +9006,7 @@
         "test/unit/contract/chunk_helper.test.js": "e22290dc42295659",
         "test/unit/contract/chunk_helper/code_size.test.js": "80b9bd007d2ac9ff",
         "test/unit/contract/contract_client.test.js": "30dca91fc67eac4d",
-        "test/unit/contract/contract_lint_banned_with.test.js": "909cd7807a8cef9e",
+        "test/unit/contract/contract_lint_banned_with.test.js": "9f9e95207a9df5fd",
         "test/unit/contract/contract_lint_destructure.test.js": "9481a25a83b3f20c",
         "test/unit/contract/contract_lint_global_alias.test.js": "121815bf45a0311e",
         "test/unit/contract/contract_lint_optional_chain.test.js": "ddd6f2464ac1217e",
@@ -8878,6 +9158,7 @@
         "test/unit/preflight/checks/checks.test/18_stake_amount_column_width.test.js": "cc7aeac5f7e1bbac",
         "test/unit/preflight/checks/checks.test/19_issue_caret_tick_normalize.test.js": "a4f1b3f60d13ae87",
         "test/unit/preflight/checks/dividend.test.js": "0ce9655dbccee3a6",
+        "test/unit/preflight/checks/prefixed_integer_fields.test.js": "6820516bbded4c78",
         "test/unit/preflight/checks/trading_same_token_offer.test.js": "530e4fdce7ecacd9",
         "test/unit/preflight/conformance/offrail_conformance.test.js": "50763c8b34df1c5f",
         "test/unit/preflight/constants/constants.test.js": "3e30426312edb6cc",
@@ -8886,7 +9167,7 @@
         "test/unit/preflight/constants/constants.test/03_mirrored_regex_rules.test.js": "7700fa0166072669",
         "test/unit/preflight/constants/constants.test/04_mirrored_indexer_lists.test.js": "2bd0dbe3142ca315",
         "test/unit/preflight/constants/constants.test/05_mirrored_activation_rows.test.js": "0ca1b00c01b003b6",
-        "test/unit/preflight/constants/constants.test/06_drift_map_gate_retirement_reviews.test.js": "23b9250519eb6892",
+        "test/unit/preflight/constants/constants.test/06_drift_map_gate_retirement_reviews.test.js": "072ce2f068ba15e8",
         "test/unit/preflight/custody/custody_guard_notes.test.js": "24e5aec18c560612",
         "test/unit/preflight/custody/custody_map_rows.test.js": "3151828024be21f7",
         "test/unit/preflight/drift_gate/drift_gate_handler_dirs.test.js": "e00c86e682cfea08",
@@ -8897,16 +9178,19 @@
         "test/unit/preflight/engine/engine.test/02_report_shape_4_2.test.js": "8290eb0cf8465d4f",
         "test/unit/preflight/engine/engine.test/03_tier_precedence_4_2.test.js": "7f4c85dadc6049c6",
         "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js": "4e313fdc96be7c4f",
+        "test/unit/preflight/engine/engine.test/05_shared_producer_ignores_first_callers_signal.test.js": "688401629629e20c",
         "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
         "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
-        "test/unit/preflight/lifecycle.test.js": "6496075e070ad57c",
+        "test/unit/preflight/lifecycle.test.js": "70cacf5314cdd116",
         "test/unit/preflight/list/list_note_refusals.test.js": "287b43aeb58106c1",
         "test/unit/preflight/list/list_set_meta_note.test.js": "1866e9c807f637eb",
         "test/unit/preflight/list/list_share_notes.test.js": "e8ec9e9a4fce2709",
         "test/unit/preflight/numeric.test.js": "07433a2c14a8b8be",
         "test/unit/preflight/representability/amount_representability.test.js": "c9446a3add4b6b4f",
         "test/unit/preflight/representability/expiration_representability.test.js": "9733098639c235c8",
+        "test/unit/preflight/representability/indexer_value_checks_parity.test.js": "c2372318dbd5ef1e",
+        "test/unit/preflight/stale_balance_unverified.test.js": "92bc11ccc6389098",
         "test/unit/preflight/tier1/batch_tier1.test.js": "ba5b7ebd9b68484b",
         "test/unit/preflight/tier1/batch_tier1.test/01_a_refused_sub_action_is_a_clear_answer.test.js": "dbd9896b91a6fb71",
         "test/unit/preflight/tier1/batch_tier1.test/02_normalizing_the_arbiter_sub_command_list.test.js": "39fe2ed29221c6ad",
@@ -8918,6 +9202,8 @@
         "test/unit/preflight/tier1/batch_tier1.test/08_an_invalid_batch_header.test.js": "bf50e8fa4f7240a2",
         "test/unit/preflight/tier1/tier1.test.js": "b4e0c153ab38b699",
         "test/unit/preflight/tier1/tier1_findings.test.js": "9d3c1858a0fa93eb",
+        "test/unit/preflight/tier1/with_abort_listener_cleanup.test.js": "7473b82052054d25",
+        "test/unit/preflight/timeout_budget.test.js": "2f5768fdb8d62480",
         "test/unit/protocol/action_manifest_conformance.test.js": "bbe06c991f6d2e58",
         "test/unit/protocol/anchor_order_reason_helpers.test.js": "adbd90fd0833e8dd",
         "test/unit/protocol/batch/batch_builder_cost_weight.test.js": "60c202249e718c1e",
@@ -9008,6 +9294,7 @@
         "test/unit/protocol/validator/validator.test/04_validator_vote_escrow_decimal_places.test.js": "7c6b04c01fd6ffb2",
         "test/unit/protocol/validator/validator.test/05_validator_unknown_action.test.js": "6e36ec22e329a960",
         "test/unit/protocol/validator/validator.test/06_validator_file_gate_min_amount_pc_29.test.js": "a84228d650a20881",
+        "test/unit/protocol/validator_destination_checksum.test.js": "5c8a3afda4fd453c",
         "test/unit/protocol/vote.test.js": "13081fe0727f25f4",
         "test/unit/protocol/wire/issue_tick_ref.test.js": "97719469e6fa9e29",
         "test/unit/protocol/wire/tick_ref_fields.test.js": "89913b10df49648b",
@@ -9106,12 +9393,19 @@
         "test/unit/wallet/wallet_session.test/04_action_convenience_methods.test.js": "255990478c67aa1f",
         "test/unit/wallet/wallet_session.test/05_explorer_convenience_methods.test.js": "7b9d130534cd030b",
         "test/unit/wallet/wallet_session.test/06_estimate_fees.test.js": "fcab45f9ea01ffb3",
+        "test/unit/wallet/wallet_session.test/07_submit_after_broadcast_timeout.test.js": "d9e609dba4301d2a",
         "test/unit/wallet/x402.test.js": "c1f23d83c7fe1108",
         "test/unit/wallet/x402.test/01_x402_gateway.test.js": "a390a388a8cd0d37",
         "test/unit/wallet/x402.test/02_x402_gateway_payer_signature_binding.test.js": "f3d9fadc8597c800",
         "test/unit/wallet/x402.test/03_x402_client.test.js": "0f442213605187b8",
         "test/unit/wallet/x402.test/04_x402_client_per_tick_ceiling.test.js": "6557483e59be3df6",
-        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1"
+        "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1",
+        "test/unit/carrier/reconcile_encoded.test/09_uncomputable_fee_fails_closed.test.js": "1e2de6fb2e101851",
+        "test/unit/preflight/stale_native_balance_unverified.test.js": "b08573c165a8e31f",
+        "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
+        "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96",
+        "test/unit/file_multipart.test.js": "008c21e34ee03944",
+        "test/unit/file/file_multipart_waves.test.js": "dfd1dd0d1956b09e"
       }
     },
     "test:boundary": {
@@ -9178,12 +9472,13 @@
       }
     },
     "test:regression": {
-      "fileCount": 3,
-      "titleCount": 28,
+      "fileCount": 4,
+      "titleCount": 34,
       "files": {
         "test/regression/amount_precision.test.js": "e562bc7f8db5236d",
         "test/regression/cosigner_decoder_parity.test.js": "4f80fc0ee1434d73",
-        "test/regression/golden_sibling_load_attribution.test.js": "1739ad83e81f04c3"
+        "test/regression/golden_sibling_load_attribution.test.js": "1739ad83e81f04c3",
+        "test/regression/post_broadcast_error_shape.test.js": "c18de397210c12b4"
       }
     },
     "test:security": {

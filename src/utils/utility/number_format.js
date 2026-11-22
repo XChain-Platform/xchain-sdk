@@ -19,6 +19,45 @@
  ********************************************************************/
 
 const mathjs = require('mathjs');
+const { SDKValidationError } = require('../errors.js');
+
+// The amount shape rule without the stored-width refusal: the indexer's
+// isValidAmountMergeFormat, which judges a raw SEND or DESTROY leg before legs sharing
+// a key are summed. Runs with `this` bound to a Utility. It is attached below as a
+// non-enumerable property, so installMethods leaves it off Utility.prototype and the
+// public method set does not change.
+function isValidAmountMergeFormat(decimals, amount){
+    // Reject objects that can't be safely converted to string (mirrors indexer).
+    if(amount !== null && amount !== undefined && typeof amount === 'object' && this.safeToString(amount) === null)
+        return false;
+    // Reject negative amounts (mirrors the consensus-authoritative indexer guard).
+    if(String(amount).startsWith('-'))
+        return false;
+    let divisible   = (parseInt(decimals)==0) ? false : true;
+    let parts       = String(amount).split('.');
+    let [int, sats] = parts;
+    //<MULTI-DOT-REJECT> reject an amount carrying more than one decimal
+    // point. Destructuring keeps only the first two segments, so "1.2.3" reads as
+    // int="1"/sats="2" and clears the divisible branch below, letting the SDK build an
+    // amount the consensus-authoritative indexer would choke on. Mirrors the identical
+    // guard in xchain-indexer/src/utility.js.
+    if(parts.length > 2)
+        return false;
+    //</MULTI-DOT-REJECT>
+    if(!divisible && this.isNumeric(int) && int==amount)
+        return true;
+    //<FRACTIONAL-PRECISION-CAP> an amount must not carry more fractional
+    // digits than the tick's decimals. This mirrors the consensus-authoritative cap in
+    // xchain-indexer/src/utility.js so the SDK rejects over-precise amounts client-side
+    // before they are submitted. Parity is asserted in test/unit/utility.test.js.
+    if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats))){
+        if(!this.isNull(sats) && String(sats).length > parseInt(decimals))
+            return false;
+        return true;
+    }
+    //</FRACTIONAL-PRECISION-CAP>
+    return false;
+}
 
 module.exports = {
     isNumeric(value){
@@ -26,7 +65,7 @@ module.exports = {
     },
 
     isFloat(value){
-        return value === +value && value !== (value|0);
+        return typeof value === 'number' && Number.isFinite(value) && !Number.isInteger(value);
     },
 
     isInteger(value){
@@ -111,46 +150,14 @@ module.exports = {
         return false;
     },
 
-    // Two arguments on purpose. The consensus-authoritative indexer copy takes an
-    // optional third one, the including block's consensus timestamp, which opts that
-    // call into its flag-day AMOUNT-REPRESENTABILITY gate (an amount must be a plain
-    // decimal numeral that denotes the number the ledger credits, so '5e-19' no longer
-    // validates and then credits 1e-18). This copy is the legacy two-argument rule, the
-    // path the indexer preserves byte-for-byte below the threshold and on mainnet, where
-    // the gate is unarmed. Parity with the indexer copy is asserted in
-    // test/unit/utility.test.js. Pre-flight applies the gate where it is armed through
-    // src/preflight/numeric.js isValidAmountFormatWhere.
+    // The indexer's two-argument verdict: amount columns are VARCHAR(250), so text or a
+    // number wider than 250 code points is refused before the shape rule below. Any other
+    // value keeps the shape verdict. The representability gate is applied only in
+    // pre-flight (src/preflight/numeric.js isValidAmountFormatWhere).
     isValidAmountFormat(decimals, amount){
-        // Reject objects that can't be safely converted to string (mirrors indexer).
-        if(amount !== null && amount !== undefined && typeof amount === 'object' && this.safeToString(amount) === null)
+        if((typeof amount === 'string' || typeof amount === 'number') && Array.from(String(amount)).length > 250)
             return false;
-        // Reject negative amounts (mirrors the consensus-authoritative indexer guard).
-        if(String(amount).startsWith('-'))
-            return false;
-        let divisible   = (parseInt(decimals)==0) ? false : true;
-        let parts       = String(amount).split('.');
-        let [int, sats] = parts;
-        //<MULTI-DOT-REJECT> reject an amount carrying more than one decimal
-        // point. Destructuring keeps only the first two segments, so "1.2.3" reads as
-        // int="1"/sats="2" and clears the divisible branch below, letting the SDK build an
-        // amount the consensus-authoritative indexer would choke on. Mirrors the identical
-        // guard in xchain-indexer/src/utility.js.
-        if(parts.length > 2)
-            return false;
-        //</MULTI-DOT-REJECT>
-        if(!divisible && this.isNumeric(int) && int==amount)
-            return true;
-        //<FRACTIONAL-PRECISION-CAP> an amount must not carry more fractional
-        // digits than the tick's decimals. This mirrors the consensus-authoritative cap in
-        // xchain-indexer/src/utility.js so the SDK rejects over-precise amounts client-side
-        // before they are submitted. Parity is asserted in test/unit/utility.test.js.
-        if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats))){
-            if(!this.isNull(sats) && String(sats).length > parseInt(decimals))
-                return false;
-            return true;
-        }
-        //</FRACTIONAL-PRECISION-CAP>
-        return false;
+        return isValidAmountMergeFormat.call(this, decimals, amount);
     },
 
     isValidFiatFormat(decimals, amount){
@@ -203,14 +210,18 @@ module.exports = {
                 // needing MORE than that was rounded too. Strings and BigInt are
                 // untouched. A fraction rounded onto a short value (1.000000000000000001
                 // parses to 1) cannot be detected here; send such amounts as strings.
+                // The refusal is a caller input fault, so it is an SDKValidationError:
+                // the API maps that to -32602 with this guidance, and validateAction
+                // reports it as {valid:false} instead of throwing.
                 if(typeof value === 'number'
                     && ((Number.isInteger(value) && !Number.isSafeInteger(value))
                         || this.significantDigits(value) > 15))
-                    throw new RangeError(
+                    throw new SDKValidationError('UNSAFE_JS_NUMBER',
                         name + ' was supplied as a JS number beyond what a double holds ' +
                         'exactly (above Number.MAX_SAFE_INTEGER or more than 15 significant ' +
                         'digits), so its value may have been already rounded before the SDK ' +
-                        'saw it; send an amount of this size as a decimal string');
+                        'saw it; send an amount of this size as a decimal string',
+                        { field: name });
                 data[name] = mathjs.format(mathjs.bignumber(String(value).trim()), { notation: 'fixed' });
             }
         }
@@ -228,3 +239,7 @@ module.exports = {
         return mantissa.replace(/^0+/,'').replace(/0+$/,'').length;
     }
 };
+
+Object.defineProperty(module.exports, 'isValidAmountMergeFormat', {
+    value: isValidAmountMergeFormat, enumerable: false, writable: false, configurable: false,
+});

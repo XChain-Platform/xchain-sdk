@@ -28,7 +28,8 @@ const OUTCOME_MAX = '4294967295';
 const FIELD_MAX = Object.freeze({
     EXPIRATION: EXPIRATION_MAX, DEADLINE: EXPIRATION_MAX, REFUND_WINDOW: EXPIRATION_MAX,
     CALLBACK_BLOCK: EXPIRATION_MAX, MINT_START_BLOCK: EXPIRATION_MAX, MINT_STOP_BLOCK: EXPIRATION_MAX,
-    OUTCOME: OUTCOME_MAX,
+    OUTCOME: OUTCOME_MAX, COIN1_ACTION_INDEX: EXPIRATION_MAX, COIN2_ACTION_INDEX: EXPIRATION_MAX,
+    TARGET_CONTRACT_INDEX: EXPIRATION_MAX,
 });
 
 /*
@@ -47,6 +48,8 @@ const FIELD_MAX = Object.freeze({
  *   ISSUE 0 and 2                           MINT_START_BLOCK, MINT_STOP_BLOCK, at any value,
  *                                           since the tokens row binds them as carried
  *                                           (issue/edit_rules.js)
+ *   LINK 0                                 COIN1_ACTION_INDEX, COIN2_ACTION_INDEX, either side
+ *                                           (link.js), whichever chain it names
  * A literal past the field's column range is normalized to NULL, which stores, so it
  * keeps its other verdicts; decimal spellings are never refused here.
  *
@@ -66,6 +69,9 @@ const PREFIXED_INTEGER_FIELDS = Object.freeze({
         2: ['MINT_START_BLOCK', 'MINT_STOP_BLOCK'],
         4: ['CALLBACK_BLOCK'],
     },
+    LINK:      { 0: ['COIN1_ACTION_INDEX', 'COIN2_ACTION_INDEX'] },
+    // VM-emitted request (xcall/request.js); listed so any wire carrying one is judged alike.
+    XCALL:     { 0: ['TARGET_CONTRACT_INDEX'] },
 });
 // A CALLBACK_BLOCK reading zero or below binds 0 in the tokens row, so the ISSUE stays valid.
 const BOUND_ONLY_ABOVE_ZERO = new Set(['CALLBACK_BLOCK']);

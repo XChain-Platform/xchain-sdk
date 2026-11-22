@@ -127,17 +127,17 @@ describe('BET client-side validation mirrors the consensus rules', function () {
     });
 
     it('rejects a market whose allow list and block list are the same list', function () {
-        // Such a market looks live in the explorer and can never be bet on; it
+        // Such a market looks live in the explorer and can never accept a position; it
         // just burns pass rows until it expires.
         expect(() => b.createMarketParams(createParams({ allowList: 42, blockList: 42 })))
-            .to.throw(/Nobody could ever bet/);
+            .to.throw(/Nobody could ever participate/);
         expect(() => b.createMarketParams(createParams({ allowList: '7', blockList: '07' })))
-            .to.throw(/Nobody could ever bet/);
+            .to.throw(/Nobody could ever participate/);
         expect(() => b.createMarketParams(createParams({ allowList: '0', blockList: '00' })))
-            .to.throw(/Nobody could ever bet/);
+            .to.throw(/Nobody could ever participate/);
         expect(() => b.createMarketParams(createParams({
             allowList: '9007199254740992', blockList: '9007199254740993'
-        }))).to.throw(/Nobody could ever bet/);
+        }))).to.throw(/Nobody could ever participate/);
         expect(() => b.createMarketParams(createParams({ allowList: 42, blockList: 43 }))).to.not.throw();
         const distinct = b.createMarketParams(createParams({ allowList: '07', blockList: '8' }));
         expect(distinct.allowList).to.equal('07');

@@ -42,9 +42,12 @@ function prepareEvaluation(policy, actionData) {
     const destRaw = pick(params, DESTINATION_KEYS);
     const destinations = destRaw === undefined ? []
         : Array.isArray(destRaw) ? destRaw : String(destRaw).split(';');
+    const evaluation = { action, tick, amount, destinations, needsConfirmation: false };
+    const legsVerdict = legsViolation(policy, action, params, evaluation);
+    if (legsVerdict) return { verdict: legsVerdict };
 
     // ^<id> wire-form tick references. The SDK compacts an indexed token's tick
-    // to its immutable ^<id> form by default (tickResolver), and the co-signer
+    // to its ^<id> form by default (tickResolver), and the co-signer
     // daemon evaluates the params it decodes FROM the PSBT, so the same token
     // reaches this check as either 'NAME' or '^123' depending on the wire form
     // the agent chose. Tick-identity-sensitive rules cannot bind a reference
@@ -70,11 +73,34 @@ function prepareEvaluation(policy, actionData) {
                     `tick-scoped limits cannot bind it (declare it in policy.tickIds, or submit with ` +
                     `compactTickers disabled)`,
                     { action, tick },
-                    { action, tick, amount, destinations, needsConfirmation: false }) };
+                    evaluation) };
         }
     }
-    // Refuse a tick two policy keys both name in different case (TOK and tok are one
-    // token on chain), since either cap could be the one the operator meant.
+    evaluation.tick = tick;
+    const caseVerdict = tickCaseViolation(policy, action, tick, evaluation);
+    if (caseVerdict) return { verdict: caseVerdict };
+    return { action, params, version, amount, tick, destinations,
+        evaluation };
+}
+
+// LEGS carry one amount, tick and destination per leg, while the evaluation and
+// the spend window hold a single amount under a single tick. Refuse LEGS whenever
+// an amount or destination limit would otherwise read only the top-level fields.
+function legsViolation(policy, action, params, evaluation) {
+    if (ownLookup(params, 'LEGS') === undefined) return null;
+    const constrained = !!policy.maxPerAction
+        || !!(policy.maxPerWindow && policy.maxPerWindow.perTick)
+        || !!policy.confirmAbove
+        || !!policy.allowedDestinations;
+    if (!constrained) return null;
+    return deny('POLICY_LEGS_UNSUPPORTED',
+        `${action} carries LEGS whose combined amount and destinations cannot be enforced by this policy`,
+        { action }, evaluation);
+}
+
+// Refuse a tick two policy keys both name in different case (TOK and tok are one
+// token on chain), since either cap could be the one the operator meant.
+function tickCaseViolation(policy, action, tick, evaluation) {
     for (const [table, where] of [
         [ownLookup(policy.maxPerAction, action), 'maxPerAction.' + action],
         [policy.maxPerWindow && policy.maxPerWindow.perTick, 'maxPerWindow.perTick'],
@@ -82,14 +108,13 @@ function prepareEvaluation(policy, actionData) {
     ]) {
         const keys = tickKeysFor(table, tick);
         if (keys.length > 1)
-            return { verdict: deny('POLICY_TICK_CASE_COLLISION',
+            return deny('POLICY_TICK_CASE_COLLISION',
                 `${where} names token ${tick} under several spellings (${keys.join(', ')}); ` +
                 `ticks are case-insensitive on chain, so keep exactly one`,
                 { action, tick, table: where, keys },
-                { action, tick, amount, destinations, needsConfirmation: false }) };
+                evaluation);
     }
-    return { action, params, version, amount, tick, destinations,
-        evaluation: { action, tick, amount, destinations, needsConfirmation: false } };
+    return null;
 }
 
 // Apply amount, action, and destination checks before amount-cap classification.
@@ -166,14 +191,14 @@ function checkDerivability(policy, state) {
         || !!(policy.maxPerWindow && policy.maxPerWindow.perTick)
         || !!policy.confirmAbove;
 
-    if (UNBOUNDED_VALUE_ACTIONS.has(action) && hasAmountLimit)
+    if ((UNBOUNDED_VALUE_ACTIONS.has(action) || valueDerivability.isAlwaysUnbounded(action)) && hasAmountLimit)
         return deny('POLICY_UNBOUNDED_ACTION',
             `${action} moves an amount the policy cannot bound from the action alone; ` +
             `it cannot be signed while an amount cap is set (remove the amount cap or disallow ${action})`,
             { action }, evaluation);
 
-    // G2: the general form of the guard above. The named set catches the three
-    // actions that are unbounded by their very shape; this catches every OTHER
+    // G2: the general form of the guard above. Actions whose every classified
+    // version is unbounded are denied without a version; this catches every OTHER
     // format whose outflow the evaluator cannot read - the index-reference
     // family (COINPAY/SWAP/ORDER/DISPENSER/BET/VOTE by ACTION_INDEX), the
     // ownership escape hatches on ORDER/SWAP/DISPENSER/ISSUE, and anything new
@@ -181,7 +206,7 @@ function checkDerivability(policy, state) {
     // amount to undefined and every amount gate below silently SKIPPED, so the
     // operator's cap was decorative and no error said so.
     //
-    // Only enforced when the version is known. The daemon always knows it (it
+    // Mixed-version actions are enforced only when the version is known. The daemon always knows it (it
     // decodes the version from the PSBT and passes it, and refuses to sign
     // without one); AgentSession, the client-side guardrail, typically does not
     // - the encoder auto-selects the format after the policy check - and a

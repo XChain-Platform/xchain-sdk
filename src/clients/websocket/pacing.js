@@ -32,6 +32,7 @@
 'use strict';
 
 const { WS_OPEN } = require('./socket_constants.js');
+const onceKeys = require('./once_keys.js');
 
 // How many times one request dropped with RATE_LIMITED is sent again.
 const RATE_RETRIES = 5;
@@ -97,10 +98,11 @@ function resetOut(client) {
 
 // Send a reconnect's plain resubscribe with a request id, remembered until answered so
 // a RATE_LIMITED refusal naming it can be retried (answerTrackedSubscribe).
-function sendTrackedSubscribe(client, channels, params, attempt) {
+// `owner` is the tracked entry the request replays, when the caller has one.
+function sendTrackedSubscribe(client, channels, params, attempt, owner) {
     const id = 'resub-' + (client.nextId++);
     if (!client._pendingSubscribes) client._pendingSubscribes = {};
-    client._pendingSubscribes[id] = { channels, params, attempt: attempt || 0 };
+    client._pendingSubscribes[id] = { channels, params, attempt: attempt || 0, owner: owner || null };
     // Through client.send, which paces it (sendPaced), so one send path covers every frame.
     client.send({ action: 'subscribe', id, channels, params });
 }
@@ -114,11 +116,22 @@ function answerTrackedSubscribe(client, msg) {
     const tracked = pending[msg.id];
     delete pending[msg.id];
     if (!isRateLimited(msg) || tracked.attempt >= RATE_RETRIES) return;
-    if (!client._subscriptions.some(sub => sub.channels === tracked.channels)) return;
+    const owner = tracked.owner;
+    if (!stillTracked(client, tracked)) return;
     const timer = setTimeout(() => {
-        sendTrackedSubscribe(client, tracked.channels, tracked.params, tracked.attempt + 1);
+        // A once key the server spent meanwhile is not sent again (once_keys.js).
+        for (const request of onceKeys.liveRequests(tracked, owner))
+            sendTrackedSubscribe(client, request.channels, request.params, tracked.attempt + 1, owner);
     }, drainInterval(client));
     if (timer.unref) timer.unref();
+}
+
+// Whether the subscription a tracked resubscribe replays is still held: by its owning
+// entry when it carries one (a split request has channel arrays of its own), else by
+// the channel array it was sent with.
+function stillTracked(client, tracked) {
+    if (tracked.owner) return client._subscriptions.includes(tracked.owner);
+    return client._subscriptions.some(sub => sub.channels === tracked.channels);
 }
 
 // Handle a frame's bearing on rate-limited requests, and answer whether it was a

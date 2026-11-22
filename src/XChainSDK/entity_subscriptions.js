@@ -21,7 +21,7 @@
 const { SDKConfigError } = require('../utils/errors.js');
 const { getLogger } = require('../observability/logger.js');
 const log = getLogger('xchain-sdk');
-const { ADDRESS_EVENT_TYPES, MEMPOOL_EVENT_TYPES, oneShotTeardown, frameIsForAddress, frameIdMatches, entityGuarded } = require('./event_frames.js');
+const { ADDRESS_EVENT_TYPES, MEMPOOL_EVENT_TYPES, canonicalSubscriptionAddress, oneShotTeardown, frameIsForAddress, frameIdMatches, entityGuarded } = require('./event_frames.js');
 
 // Keep entity subscriptions together because they share frame identity guards.
 module.exports = {
@@ -129,6 +129,7 @@ module.exports = {
     // Listen for events on a specific address
     // Returns an unsubscribe function
     onAddress(address, callback, opts) {
+        address = canonicalSubscriptionAddress(address);
         const ws = this.requireWs();
         // Register handlers for every type the explorer routes here (see
         // ADDRESS_EVENT_TYPES); `opts.types` stays the caller's own narrowing
@@ -145,7 +146,8 @@ module.exports = {
         // top-level 'SNAPSHOT' type (not one of the `types` above), so it
         // needs its own filtered handler or the frame is silently dropped.
         const onSnapshot = (msg) => {
-            if (msg && msg.data && msg.data.channel === 'address' && msg.data.address === address){
+            if (msg && msg.data && msg.data.channel === 'address' &&
+                canonicalSubscriptionAddress(msg.data.address) === address){
                 callback(msg);
             }
         };
@@ -184,6 +186,7 @@ module.exports = {
     // one connection per chain, so a second subscription per address would halve
     // the addresses it can watch.
     onMempoolAction(address, callback) {
+        address = canonicalSubscriptionAddress(address);
         const ws = this.requireWs();
         const onEvent = entityGuarded((msg) => frameIsForAddress(msg, address), callback);
         for (const t of MEMPOOL_EVENT_TYPES) ws.on(t, onEvent);

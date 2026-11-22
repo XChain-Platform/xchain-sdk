@@ -259,7 +259,34 @@ function authGateMiddleware({ apiKey }) {
     };
 }
 
+/*
+ * Batch element shape guard. Mount AFTER the auth gate and BEFORE the router.
+ *
+ * express-json-rpc-router dispatches every element of an array body through an
+ * async handler that destructures the element, then reads element.id
+ * synchronously. A null element makes the async call return a rejected promise
+ * that nothing awaits (the synchronous read throws first), and an unhandled
+ * rejection is fatal under Node 22: one unauthenticated `[null]` killed the
+ * process. The auth gate lets such an element through because it has no method.
+ * Default-deny: every element of a batch must be a plain JSON object, else the
+ * whole request answers a -32600 before anything is dispatched.
+ *
+ * @returns {function} express middleware
+ */
+function batchShapeMiddleware() {
+    return function batchShape(req, res, next) {
+        if (Array.isArray(req.body) &&
+            !req.body.every(call => call !== null && typeof call === 'object' && !Array.isArray(call)))
+            return res.status(400).json({
+                jsonrpc: '2.0', id: null,
+                error: { code: -32600, message: 'Invalid Request: every batch element must be an object' }
+            });
+        next();
+    };
+}
+
 module.exports = {
+    batchShapeMiddleware,
     parseWholeNumber,
     resolveMaxBatch,
     resolveRateLimit,

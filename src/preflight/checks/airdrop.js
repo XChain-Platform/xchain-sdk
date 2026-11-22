@@ -27,11 +27,13 @@
 const { FINDING_CODES, activationThreshold, describeActivation } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { actionRecord } = require('../resolvers.js');
-const { declareRepresentability, tokenDecimals, checkAmountField } = require('./amount_format.js');
+const { declareRepresentability, tokenDecimals, checkAmountField, checkAmountParses } = require('./amount_format.js');
 
 // Each leg's AMOUNT against its TICK's decimals, skipped when AMOUNT is empty
 // (xchain-indexer src/actions/airdrop/validate.js:41-43). A leg whose tick does not
-// exist is left to TOKEN_NOT_FOUND, which the handler refuses first.
+// exist is left to TOKEN_NOT_FOUND, which the handler refuses first. A leg that passes
+// the format rule must also parse as a bignumber, or processAirdropLeg
+// (airdrop/index.js) refuses it as invalid: AMOUNT (format) before the DEBIT math.
 async function checkAirdropAmountFormat(ctx) {
     const ticks = [].concat(ctx.params.TICK || []);
     const amounts = [].concat(ctx.params.AMOUNT || []);
@@ -42,6 +44,7 @@ async function checkAirdropAmountFormat(ctx) {
         const token = await ctx.token(tick);
         if (token === undefined) { ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'token lookup unavailable for ' + tick); continue; }
         if (checkAmountField(ctx, 'AMOUNT', amount, tokenDecimals(token), { tick })) return;
+        if (token && checkAmountParses(ctx, 'AMOUNT', amount, { tick })) return;
     }
 }
 

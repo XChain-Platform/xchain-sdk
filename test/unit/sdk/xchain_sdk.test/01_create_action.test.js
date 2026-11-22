@@ -69,7 +69,7 @@ describe('XChainSDK', function () {
 
         it('returns actionString for SEND without encoder', async function () {
             const sdk = makeSDK();
-            const result = await sdk.createAction({ action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } });
+            const result = await sdk.createAction({ action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } });
             expect(result.actionString).to.be.a('string');
             expect(result.actionString).to.include('SEND');
         });
@@ -79,7 +79,7 @@ describe('XChainSDK', function () {
             mockEncoder(sdk, { psbt: 'aabbcc', encoding: 'OP_RETURN' });
             const result = await sdk.createAction({
                 action: 'SEND',
-                params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' },
+                params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
                 encoder: { pubkey: 'mypubkey' }
             });
             expect(result.psbt).to.equal('aabbcc');
@@ -100,7 +100,7 @@ describe('XChainSDK', function () {
             for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS) encoderOpts[key] = 'set:' + key;
             await sdk.createAction({
                 action: 'SEND',
-                params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' },
+                params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
                 encoder: encoderOpts
             });
             const sent = sdk.encoder.createTx.firstCall.args[0];
@@ -122,7 +122,7 @@ describe('XChainSDK', function () {
             mockEncoder(sdk, { psbt: 'aabbcc', encoding: 'OP_RETURN' });
             await sdk.createAction({
                 action: 'SEND',
-                params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' },
+                params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
                 encoder: { pubkey: 'mypubkey' }
             });
             const sent = sdk.encoder.createTx.firstCall.args[0];

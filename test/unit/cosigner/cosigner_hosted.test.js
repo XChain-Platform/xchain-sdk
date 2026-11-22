@@ -101,7 +101,7 @@ describe('hosted co-signer: construction prerequisites', function () {
         // and the store's own file lock cannot catch it because both live in ONE
         // process where one of them legitimately holds the lock.
         const a = makeAccount(), b = makeAccount();
-        const shared = { snapshot: () => ({ count: 0, perTick: {} }), record: () => {} };
+        const shared = { hours: 24, snapshot: () => ({ count: 0, perTick: {} }), record: () => {} };
         const policy = { allowedActions: new Set(['SEND']), maxPerWindow: { hours: 24, maxActions: 5 } };
         expect(() => createHostedCoSignerApp({ tenants: [
             { id: 'a', token: TOKEN_A, coSigner: tenantFor(a, { policy, windowStore: shared }) },

@@ -33,17 +33,19 @@ function inputIsPresigned(input) {
 }
 
 // Indices of the unsigned inputs that spend the caller-approved outpoints.
-// Throws when the encoder added an unsigned input the caller never named, since
-// the key would otherwise sign it along with the approved set.
+// Throws when the encoder added any input the caller never named: an unsigned
+// one would be signed along with the approved set, and a pre-signed one can carry
+// data the decoder reads and attributes to the caller's own first input.
 function approvedInputIndices(psbtHex, approved, net) {
     const psbt = bitcoin.Psbt.fromHex(psbtHex, { network: net });
     const indices = [];
     psbt.txInputs.forEach((txIn, i) => {
-        if (inputIsPresigned(psbt.data.inputs[i])) return;
+        const presigned = inputIsPresigned(psbt.data.inputs[i]);
         const key = outpointKey(Buffer.from(txIn.hash).reverse().toString('hex'), txIn.index);
         if (!approved.has(key))
             throw new SDKActionError('UNAPPROVED_INPUT',
-                `the encoder response spends ${key}, which is not among the supplied utxos; refusing to sign`);
+                `the encoder response spends ${key}${presigned ? ' (arrived pre-signed)' : ''}, which is not among the supplied utxos; refusing to sign`);
+        if (presigned) return;
         indices.push(i);
     });
     if (!indices.length)
@@ -100,6 +102,9 @@ module.exports = {
             // (EncoderClient.CREATE_TX_OPTION_FIELDS), never a hand-copied subset:
             // the hand-copied version had silently fallen behind createTx and was
             // dropping feeQuote, compress, options and sourceAddress.
+            // Same serialized-boundary gate submitAction crosses: a halt-class field
+            // in any spelling is refused before the encoder is contacted.
+            LifecycleManager.assertNoHaltClassFields(this, result.actionString);
             let txResult = await encoder.createTx(EncoderClient.pickCreateTxOptions(data.encoder, {
                 data:   result.actionString,
                 pubkey: data.encoder.pubkey
@@ -112,8 +117,10 @@ module.exports = {
     },
 
     // Submit an action through the full lifecycle: create, encode, sign, broadcast, wait.
-    // actionData = { action, params }; encoderOpts = { pubkey, change, utxos, encoding, fee, ... };
-    // opts = { wif, waitForIndexer, timeout, pollInterval, requireValid, strictStatus, onProgress }.
+    // actionData = { action, params }; encoderOpts contains createTx fields and optional fee caps.
+    // opts includes wif, lifecycle controls, signer, maxFeeSats and maxPhaseFundingSats.
+    // A cap in opts wins over encoderOpts; caps are local and never sent to the encoder.
+    // See LifecycleManager.submitAction for the complete option list.
     // With waitForIndexer (default), a chain-REJECTED action REJECTS this call with
     // SDKActionError ACTION_REJECTED carrying the indexer's reason; the resolved
     // result's `indexed.statusKnown` says whether the status was read or assumed

@@ -69,7 +69,7 @@ describe('AddressResolver LIST items', function () {
 
         expect((await resolver.resolveActionParams('list', params)).item).to.deep.equal(['^57', '^58']);
         expect((await resolver.resolveActionParams('LIST', params)).item).to.deep.equal(['^57', '^58']);
-        expect(calls.address).to.deep.equal([ADDR1, ADDR2]);
+        expect(calls.address).to.deep.equal([ADDR1, ADDR2, ADDR1, ADDR2]);
     });
 
     it('leaves items untouched on an unarmed mainnet', async function () {

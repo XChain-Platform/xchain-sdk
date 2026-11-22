@@ -15,6 +15,7 @@
 'use strict';
 
 const assert = require('assert');
+const http = require('http');
 const ExplorerClient = require('../../../../src/clients/explorer.js');
 const { buildExplorer } = require('../../../../src/utils/action_waiter/explorer_options.js');
 
@@ -38,6 +39,16 @@ describe('explorer option construction', function () {
         );
 
         assert.ok(explorer instanceof ExplorerClient);
+    });
+
+    it('dials an override explorer through the SDK connection pool', function () {
+        const agent = new http.Agent();
+        const explorer = buildExplorer(
+            { options: { network: 'bitcoin-regtest', pool: { httpAgent: agent } } },
+            { explorerUrl: 'h', explorerPort: 8080 }
+        );
+
+        assert.strictEqual(explorer.client.defaults.httpAgent, agent);
     });
 
     it('accepts a null SDK when a URL is supplied', function () {

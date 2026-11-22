@@ -21,7 +21,7 @@
  ********************************************************************/
 
 const { SDKMessagingError } = require('../../utils/errors.js');
-const { reconcileEncoded } = require('../../carrier/reconcile_encoded.js');
+const { reconcileEncoded, feeQuoteAuthorizedOutput } = require('../../carrier/reconcile_encoded.js');
 const { assertCarrierBinding } = require('../../carrier/bind_action_carrier.js');
 const { METHOD_ECIES, METHOD_ECDH, METHOD_AES, normalizeLookupBudget } = require('./kdf_constants.js');
 const { messageQueryType, messagePaginationOpts, unwrapMessages, messageEntry } = require('./message_rows.js');
@@ -181,17 +181,23 @@ module.exports = {
         const messageIsBytes = validateSendParams(params, sdk);
         const actionParams = await buildMessageActionParams(this, params, sdk, messageIsBytes);
 
+        const encoder = Object.assign({}, params.encoder);
+        if (encoder.attachPrevTx === undefined) encoder.attachPrevTx = true;
         let actionResult = await sdk.createAction({
             action: 'MESSAGE',
             params: actionParams,
-            encoder: params.encoder
+            encoder
         });
 
         // Reconcile the encoder's outputs and fee on every wallet; a missing network only means an address it cannot parse authorizes nothing
         let network;
         try { network = sdk.wallet.getBitcoinNetwork(); } catch (e) { network = undefined; }
+        // The encoder adds the caller's customOutputs and the hub feeQuote output on request, so both are part of the submitted intent
+        const quoteOutput = feeQuoteAuthorizedOutput(params.encoder.feeQuote);
+        const customOutputs = Array.isArray(params.encoder.customOutputs) ? params.encoder.customOutputs : [];
         reconcileEncoded(actionResult.psbt, {
             network:          network,
+            customOutputs:    quoteOutput ? customOutputs.concat([quoteOutput]) : customOutputs,
             changeAddresses:  params.encoder.change,
             callerIdentities: params.encoder.pubkey,
             maxFeeSats:       params.encoder.maxFeeSats,

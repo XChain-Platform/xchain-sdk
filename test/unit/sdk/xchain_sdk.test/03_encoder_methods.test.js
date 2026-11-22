@@ -124,7 +124,7 @@ describe('XChainSDK', function () {
             const sdk = makeSDK();
             mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
             const result = await sdk.estimateFees(
-                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                 { pubkey: 'mypub' }
             );
             expect(sdk.encoder.estimateFee.calledOnce).to.be.true;
@@ -162,7 +162,7 @@ describe('XChainSDK', function () {
             let err = null;
             try {
                 await sdk.estimateFees(
-                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                     { pubkey: 'mypub' }
                 );
             } catch (e) { err = e; }
@@ -177,10 +177,8 @@ describe('XChainSDK', function () {
 
     describe('encoder methods', function () {
 
-        // Second half of the same rule. The envelope reveal reaches estimateFees so the commit's
-        // funding leg can be pinned to what actually spends it, but it is a GATE INPUT: the
-        // gate above never reconciles it, so returning it would hand back a second signable
-        // PSBT nothing checked - the same hole one field over.
+        // The envelope reveal reaches estimateFees as a local gate input. Both legs
+        // are reconciled, but neither is returned as a separately signable pair.
         it('estimateFees consumes an envelope reveal as the phase pin and never returns it', async function () {
             const bitcoin = require('bitcoinjs-lib');
             const ecc = require('@bitcoinerlab/secp256k1');
@@ -190,6 +188,9 @@ describe('XChainSDK', function () {
             const ECPair = ECPairFactory(ecc);
             const script = () => bitcoin.payments.p2wpkh({ pubkey: Buffer.from(ECPair.makeRandom({ network: net }).publicKey), network: net }).output;
             const mine = script();
+            const revealChange = bitcoin.payments.p2wpkh({
+                pubkey: Buffer.from(ECPair.makeRandom({ network: net }).publicKey), network: net,
+            });
             const leg  = bitcoin.script.compile([bitcoin.opcodes.OP_1, Buffer.from('bb'.repeat(32), 'hex')]);
 
             const commit = new bitcoin.Psbt({ network: net });
@@ -198,18 +199,17 @@ describe('XChainSDK', function () {
             commit.addOutput({ script: leg, value: 50000 });
             commit.addOutput({ script: mine, value: 49000 });
 
-            // A reveal that pays a stranger. The commit reconciles either way, so this is
-            // only safe because the reveal does not leave the method.
+            // The reveal returns the funding leg to the caller-authorized change address.
             const reveal = new bitcoin.Psbt({ network: net });
             reveal.addInput({ hash: 'cc'.repeat(32), index: 0, witnessUtxo: { script: leg, value: 50000 } });
-            reveal.addOutput({ script: script(), value: 49000 });
+            reveal.addOutput({ script: revealChange.output, value: 49000 });
 
             const sdk = makeSDK();
             mockEncoder(sdk, { psbt: commit.toHex(), encoding: 'TAPROOT', revealPsbt: reveal.toHex(),
                 envelope: { tapleafHash: 'cd'.repeat(32) }, fee: 1000 });
             const result = await sdk.estimateFees(
-                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
-                { pubkey: 'mypub' }
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
+                { pubkey: 'mypub', change: revealChange.address }
             );
             // The commit is checked but withheld: signed without its reveal and its
             // recovery record, neither of which comes back here, it strands its funds.
@@ -255,7 +255,7 @@ describe('XChainSDK', function () {
             let err = null;
             try {
                 await sdk.estimateFees(
-                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                     { pubkey: 'mypub' }
                 );
             } catch (e) { err = e; }
@@ -275,7 +275,7 @@ describe('XChainSDK', function () {
             mockEncoder(sdk, { psbt: estimatePsbtHex(), encoding: 'OP_RETURN', fee: 1000 });
             mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 5000, requiredFeeSatsExact: "5000", feeDestination: 'feeaddr', actionString: 'SEND|...' });
             const result = await sdk.estimateFees(
-                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                 { pubkey: 'mypub', payFeeInNativeCoin: true, source: 'addr1' }
             );
             expect(result.nativeFeeQuote).to.be.ok;
@@ -287,7 +287,7 @@ describe('XChainSDK', function () {
             mockExplorer(sdk, { supported: false, valid: false, error: 'unsupported' });
             try {
                 await sdk.estimateFees(
-                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                     { pubkey: 'mypub', payFeeInNativeCoin: true }
                 );
                 expect.fail('should throw');
@@ -302,7 +302,7 @@ describe('XChainSDK', function () {
             mockExplorer(sdk, { supported: true, valid: false, error: 'stale price' });
             try {
                 await sdk.estimateFees(
-                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                    { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                     { pubkey: 'mypub', payFeeInNativeCoin: true }
                 );
                 expect.fail('should throw');
@@ -324,7 +324,7 @@ describe('XChainSDK', function () {
             const sdk = makeSDK();
             mockExplorer(sdk, { supported: true, valid: true, requiredFeeSats: 1000, requiredFeeSatsExact: "1000" });
             const result = await sdk.quoteNativeFee(
-                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } },
+                { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } },
                 { source: 'addr1' }
             );
             expect(sdk.explorer.getFeeQuote.calledOnce).to.be.true;

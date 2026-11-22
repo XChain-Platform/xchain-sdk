@@ -15,11 +15,11 @@
  * XChain Platform SDK - Ticker Resolver
  *
  * Transaction-size optimization: a ticker can be referenced on the wire
- * either by its full text name (JDOG) or by its immutable numeric id with a
- * caret prefix (^1234). The id form is almost always smaller. This resolver
- * looks a ticker name up via the explorer, caches the id permanently (ids
- * never change once assigned), and substitutes the `^<id>` form into the
- * action before it is serialized.
+ * either by its full text name (JDOG) or by its numeric id with a caret
+ * prefix (^1234). The id form is almost always smaller. This resolver
+ * looks a ticker name up via the explorer for each action and substitutes the
+ * current `^<id>` form before it is serialized. A rollback can free a dense id
+ * for reuse, so resolved ids are never retained across actions.
  *
  * Behavior is opt-out, ON by default: the SDK tries to produce the smallest
  * transaction and falls back to the supplied name whenever the id cannot be
@@ -29,8 +29,8 @@
  ********************************************************************/
 
 // Fields across all ACTION formats whose value references an EXISTING token,
-// and therefore can be compacted to the `^<id>` wire form (the xchain-indexer
-// accepts `^<id>` anywhere it accepts a ticker; see getTickerId()). The
+// and therefore can be compacted to the `^<id>` wire form where the id belongs
+// to the reading chain's ticker table (see getTickerId()). The
 // defining TICK of an ISSUE is handled separately at the call site below,
 // gated by format rather than excluded outright: the validator now accepts a
 // caret-led ISSUE TICK (row 24), but compacting it is only safe on the
@@ -42,6 +42,7 @@
 // gated_files.gate_ticker by literal string, so a `^<id>` un-gates the file.
 const { TICK_REF_FIELDS } = require('../protocol/tick_ref_fields.js');
 const { compactListTickItems } = require('./list_tick_compaction.js');
+const { parseCoinCode } = require('./endpoints.js');
 
 // ISSUE formats that reject an unknown TICK outright (xchain-indexer
 // src/actions/issue.js: format 6 requires an existing tokenInfo at
@@ -63,16 +64,26 @@ const ISSUE_TICK_COMPACT_FORMATS = new Set(['6', '7']);
 // but never responds, where it bounds the fall-back-to-name latency.
 const LOOKUP_CAP_MS = 2500;
 
+function actionParam(sdk, params, wanted) {
+    for (const key of Object.keys(params)) {
+        if (sdk.util.camelToUpperSnake(key) === wanted) return params[key];
+    }
+    return undefined;
+}
+
+function hasForeignGetTick(sdk, action, params) {
+    if (action !== 'ORDER' && action !== 'SWAP') return false;
+    const getCoin = actionParam(sdk, params, 'GET_COIN');
+    if (getCoin === undefined || getCoin === null || String(getCoin).trim() === '') return false;
+    const local = parseCoinCode(sdk.explorer && sdk.explorer.coin);
+    return !local || String(getCoin).trim().toUpperCase() !== local.coin;
+}
+
 class TickResolver {
 
     constructor(sdk) {
         this.sdk = sdk;
         this.lookupCapMs = LOOKUP_CAP_MS;
-        // Permanent name -> numeric-id cache. A ticker id (index_tickers.id) is
-        // immutable once assigned, so entries never need invalidation. Keyed by
-        // lowercase name; an SDK instance is bound to a single network/coin, so
-        // ids cannot collide across coins within one cache.
-        this.cache = new Map();
     }
 
     // Compaction is on by default; opt out with { compactTickers: false }.
@@ -105,8 +116,6 @@ class TickResolver {
         let str = String(tick);
         if (str === '') return tick;
         if (str.charAt(0) === '^') return tick;          // already an id reference
-        let key = str.toLowerCase();
-        if (this.cache.has(key)) return '^' + this.cache.get(key);
         if (!this.sdk.explorer) return tick;             // no explorer: keep the name
 
         let id = null;
@@ -124,7 +133,6 @@ class TickResolver {
         }
 
         if (id === null || !/^[0-9]+$/.test(id)) return tick;   // not indexed yet / unusable id
-        this.cache.set(key, id);
         return '^' + id;
     }
 
@@ -139,6 +147,7 @@ class TickResolver {
         let name = String(action || '').toUpperCase();
         let out  = Object.assign({}, params);
         if (name === 'LIST') out = await compactListTickItems(this, out);
+        const foreignGetTick = hasForeignGetTick(this.sdk, name, out);
         // ISSUE's own TICK needs the wire format before it can be judged (see
         // ISSUE_TICK_COMPACT_FORMATS above); read it once, tolerant of either
         // casing, the same way the loop below maps every other key.
@@ -158,6 +167,9 @@ class TickResolver {
             // which formats() defaults to 0) never compacts: a brand-new token has
             // no id yet.
             if (name === 'ISSUE' && field === 'TICK' && !ISSUE_TICK_COMPACT_FORMATS.has(issueVersion)) continue;
+            // A foreign GET_TICK is matched by name on the remote chain. Its
+            // numeric id would refer to this chain's unrelated ticker table.
+            if (field === 'GET_TICK' && foreignGetTick) continue;
             let val = out[key];
             if (val === undefined || val === null || Array.isArray(val)) continue;
             out[key] = await this.resolve(val);

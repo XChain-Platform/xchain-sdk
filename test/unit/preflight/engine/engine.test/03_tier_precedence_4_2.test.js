@@ -19,7 +19,7 @@ function registerAuthoritativeDryRunCases() {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => notFound(),
                 getBalances: () => [],
-                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
             } });
             const r = await sdk.preflight('SEND|0|MISSING|1|addr', { source: 's', preflight: 'report' });
             const tokenFinding = r.findings.find(f => f.code === 'TOKEN_NOT_FOUND');
@@ -32,7 +32,7 @@ function registerAuthoritativeDryRunCases() {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG' }),
                 getBalances: () => [{ tick: 'JDOG', amount: '100' }],
-                getFeeQuote: () => ({ supported: true, valid: false, status: 'some-reject' }),
+                getPreflight: () => ({ supported: true, valid: false, status: 'some-reject' }),
             } });
             const r = await sdk.preflight('SEND|0|JDOG|1|addr', { source: 's', preflight: 'report' });
             const dry = r.findings.find(f => f.code === 'DRYRUN_INVALID');
@@ -41,6 +41,26 @@ function registerAuthoritativeDryRunCases() {
             expect(dry.source).to.equal('dryrun');
             expect(r.verdict).to.equal('fail');
         });
+    });
+}
+
+function registerResolvedTickDeltaCase() {
+    it('keeps a reservation warning when the delta uses the resolved tick name', async function () {
+        for (const wireTick of ['jdog', '^42']) {
+            const sdk = mockSdk({ explorerSpec: {
+                getToken: () => ({ tick: 'JDOG', divisible: 0 }),
+                getBalances: () => [{ tick: 'JDOG', amount: '1000' }],
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+            } });
+            const r = await sdk.preflight(`SEND|0|${wireTick}|600|addr`, {
+                source: 's', preflight: 'report', localDeltas: [{ tick: 'JDOG', amount: '600' }],
+            });
+            const bal = r.findings.find(f => f.code === 'BALANCE_INSUFFICIENT');
+            expect(bal.severity).to.equal('warning');
+            expect(bal._downgradedBy).to.equal('dryrun-valid-local-delta');
+            expect(bal.data.localDeltaApplied).to.equal('600');
+            expect(r.verdict).to.equal('warn');
+        }
     });
 }
 
@@ -55,7 +75,7 @@ function registerBalancePrecedenceCases() {
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG', divisible: 0 }),
                 getBalances: () => [{ tick: 'JDOG', amount: '1000' }],
-                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
             } });
             const r = await sdk.preflight('SEND|0|JDOG|600|addr', {
                 source: 's', preflight: 'report', localDeltas: [{ tick: 'JDOG', amount: '600' }],
@@ -68,13 +88,15 @@ function registerBalancePrecedenceCases() {
             expect(r.verdict).to.equal('warn');       // NOT 'pass' - no clean "Looks good"
         });
 
+        registerResolvedTickDeltaCase();
+
         it('Tier-1 valid still flattens a shortfall with no localDeltas behind it', async function () {
             // Same shape without the §4.7 netting: the client and the network
             // disagree about confirmed state, and the network wins as before.
             const sdk = mockSdk({ explorerSpec: {
                 getToken: () => ({ tick: 'JDOG', divisible: 0 }),
                 getBalances: () => [{ tick: 'JDOG', amount: '100' }],
-                getFeeQuote: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
+                getPreflight: () => ({ supported: true, valid: true, status: 'valid', blockIndex: 5 }),
             } });
             const r = await sdk.preflight('SEND|0|JDOG|600|addr', { source: 's', preflight: 'report' });
             const bal = r.findings.find(f => f.code === 'BALANCE_INSUFFICIENT');

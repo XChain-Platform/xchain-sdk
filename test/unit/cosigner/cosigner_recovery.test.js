@@ -121,6 +121,20 @@ describe('cosigner/recovery buildRecoverySpend', function () {
         expect(e).to.match(/exceeds the .* sat\/vB ceiling/);
     });
 
+    it('never calls sign when the fee-rate exceeds the ceiling', async function () {
+        const a = account();
+        const inner = localPairSigner(a.acct.recovery.agentRecovery, [a.agent.sk, a.recovery.sk]);
+        let calls = 0;
+        const sign = (hash, i) => { calls++; return inner(hash, i); };
+        const inputs = [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 100000000 }];
+        const outputs = [{ script: a.acct.output, value: 1000 }];
+        let error;
+        try { await buildRecoverySpend({ account: a.acct, leafName: 'agentRecovery', inputs, outputs, sign }); }
+        catch (e) { error = e; }
+        expect(error).to.match(/exceeds the .* sat\/vB ceiling/);
+        expect(calls).to.equal(0);
+    });
+
     it('allows an absurd fee-rate when acceptHighFee is set', async function () {
         const a = account();
         const inputs  = [{ txid: crypto.randomBytes(32).toString('hex'), vout: 0, value: 100000000 }];

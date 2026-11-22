@@ -24,7 +24,7 @@ const { getNetwork }    = require('../protocol/networks.js');
 const { SDKValidationError, SDKContractError } = require('../utils/errors.js');
 const Config            = require('../config.js');
 const { fillMarketCoinFields } = require('./market_coin_fields.js');
-const { compiledPushSize, carrierCeiling } = require('../contract/chunk_helper.js');
+const { compiledPushSize, carrierCeiling, normalizeConstructorParams } = require('../contract/chunk_helper.js');
 
 // Encoding byte limits for pre-flight validation. Only P2SH is read from this
 // table today (the oversize suggestion below); the OP_RETURN gate is
@@ -80,10 +80,7 @@ function normalizeActionFields(context, actionName, params) {
             fields.PARAMS = fields.PARAMS.map(p => String(p));
     }
     if (actionName === 'DEPLOY' && fields.CONSTRUCTOR_PARAMS !== undefined) {
-        if (!Array.isArray(fields.CONSTRUCTOR_PARAMS))
-            fields.CONSTRUCTOR_PARAMS = [String(fields.CONSTRUCTOR_PARAMS)];
-        else
-            fields.CONSTRUCTOR_PARAMS = fields.CONSTRUCTOR_PARAMS.map(p => String(p));
+        fields.CONSTRUCTOR_PARAMS = normalizeConstructorParams(fields.CONSTRUCTOR_PARAMS);
     }
 
     // [3d] LIST: ITEM is a rest-field; coerce to an array of strings so a
@@ -313,8 +310,16 @@ class Actions {
     validateAction(action, params) {
         let actionName = String(action).toUpperCase();
         let fields     = this.util.normalizeFields(params || {});
-        fields         = this.normalizeLegs(fields);
-        fields         = this.util.setNumberFormats(fields);
+        // The numeric cast refuses caller input (a JS number the JSON parser may
+        // already have rounded) by throwing SDKValidationError; a dry run reports
+        // that as a validation result, the same shape the validator's errors take.
+        try {
+            fields     = this.normalizeLegs(fields);
+            fields     = this.util.setNumberFormats(fields);
+        } catch (e) {
+            if (!(e instanceof SDKValidationError)) throw e;
+            return { valid: false, errors: [this.validator.buildError(e.code, e.message, e.details)] };
+        }
         fields         = fillMarketCoinFields(fields, actionName, this.network);
         let errors     = this.validator.validate(actionName, fields);
         if (errors.length === 0)

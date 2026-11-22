@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-22
+
+### Added
+- Added resumable multipart FILE publishing for up to 65,535 parts with confirmed funding waves and gated manifests.
+- Added multipart planning, assembly reads, progress events and two-step Taproot envelope recovery support.
+
+### Changed
+- Mirrored the testnet ORDER_GET_ADDRESS_COIN and LINT_REGEX_GROUP_DEPTH rules in preflight and deploy linting, with mainnet unarmed.
+- Attached required native-coin fee outputs through the shared submit path for Litecoin and Dogecoin.
+- Signed and verified Bitcoin messages in the SDK itself instead of through an external package.
+
+### Fixed
+- Hardened helper API JSON-RPC validation, error codes and rate-limit accounting for malformed requests.
+- Made preflight timeouts, coalescing, stale balance handling and halt-class findings fail closed consistently.
+- Preserved spent-input and change metadata after post-broadcast failures and stabilized WebSocket reconnect catch-up.
+- Refused prefixed, hexadecimal, binary and octal integer literals and over-wide values in preflight and checked address checksums.
+
+### Security
+- Updated vulnerable dependencies, including bitcoinjs-lib, hono, qs, pbkdf2, serialize-javascript, follow-redirects and body-parser.
+
+### Fixed
+- Attached required native-coin fee outputs in the shared action submission path, covering direct submits and all workflow helpers.
+
 ## [0.27.0] - 2026-11-01
 
 ### Added

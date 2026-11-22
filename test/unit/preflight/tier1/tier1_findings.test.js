@@ -83,6 +83,44 @@ describe('pre-flight Tier-1 findings: a valid verdict', function () {
     });
 });
 
+describe('pre-flight Tier-1 findings: halt-class findings under a valid verdict', function () {
+    const haltFinding = (extra) => ({
+        code: 'VALIDATOR_SEMANTICS', severity: 'error', source: 'client', overridable: false,
+        message: 'halt', data: Object.assign({ haltClass: true }, extra || {}),
+    });
+
+    it('keeps a halt-class error at error under a valid verdict', function () {
+        const findings = [haltFinding()];
+        applyTier1(findings, { kind: 'verdict', valid: true });
+        expect(findings[0].severity).to.equal('error');
+        expect(findings[0].overridable).to.equal(false);
+        expect(findings[0]).to.not.have.property('_downgradedBy');
+    });
+
+    it('keeps a halt-class error at error even with a local delta applied', function () {
+        const findings = [haltFinding({ localDeltaApplied: true })];
+        applyTier1(findings, { kind: 'verdict', valid: true });
+        expect(findings[0].severity).to.equal('error');
+    });
+
+    it('keeps a halt-class error in a batch whose sub-commands all dry-run valid', function () {
+        const f = haltFinding({ commandIndex: 1 });
+        const findings = [f];
+        applyTier1(findings, { kind: 'verdict', valid: true,
+            subCommands: [{ index: 0, valid: true, status: 'valid' }, { index: 1, valid: true, status: 'valid' }] });
+        expect(f.severity).to.equal('error');
+    });
+
+    it('still demotes a non-halt client error beside a halt-class one (control)', function () {
+        const findings = [haltFinding(), clientError('TOKEN_NOT_FOUND'),
+            clientError('INSUFFICIENT_BALANCE', { localDeltaApplied: true })];
+        applyTier1(findings, { kind: 'verdict', valid: true });
+        expect(findings[0].severity).to.equal('error');
+        expect(findings[1].severity).to.equal('info');
+        expect(findings[2].severity).to.equal('warning');
+    });
+});
+
 describe('pre-flight Tier-1 findings: an invalid verdict', function () {
 
     it('adds an overridable DRYRUN_INVALID error carrying the status', function () {

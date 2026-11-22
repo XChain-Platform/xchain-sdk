@@ -65,13 +65,17 @@ describe('EncoderClient', function () {
 
     describe('encoder API key', function () {
         it('sends no x-api-key header at all when none is configured', async function () {
+            let requestHeaders;
             nock(BASE)
-                .matchHeader('x-api-key', (v) => v === undefined)
                 .post('/')
-                .reply(200, { jsonrpc: '2.0', result: { psbt: 'aabbcc', encoding: 'OP_RETURN' }, id: 1 });
+                .reply(200, (request) => {
+                    requestHeaders = request.headers;
+                    return { jsonrpc: '2.0', result: { psbt: 'aabbcc', encoding: 'OP_RETURN' }, id: 1 };
+                });
 
             let result = await client.createTx({ data: 'SEND|0|TOKEN|100|addr1', pubkey: 'mypubkey' });
             expect(result.psbt).to.equal('aabbcc');
+            expect(requestHeaders.has('x-api-key')).to.equal(false);
         });
     });
 });

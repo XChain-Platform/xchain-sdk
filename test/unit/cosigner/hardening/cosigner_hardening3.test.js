@@ -337,7 +337,7 @@ describe('bounded rest-field EXECUTE decode', function () {
         const acct = makeAccount();
         const co = new CoSigner({ secretKey: acct.coSk, publicKeys: acct.keys,
             policy: { allowedActions: new Set(['EXECUTE']), maxPerWindow: { hours: 24, maxActions: 10 } },
-            windowStore: {
+            windowStore: { hours: 24,
                 snapshot: () => ({ count: 0, perTick: {} }),
                 record: () => {},
             } });

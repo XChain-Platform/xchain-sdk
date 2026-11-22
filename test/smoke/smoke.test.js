@@ -70,7 +70,7 @@ describe('Smoke: real API app through the authenticated HTTP layer', function ()
             params: {
                 tick: 'TOKEN',
                 amount: '100',
-                destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+                destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC',
                 memo: 'smoke test'
             }
         });
@@ -115,7 +115,7 @@ describe('Smoke: real API app action validation', function () {
             params: {
                 tick: 'TOKEN',
                 amount: '100',
-                destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
+                destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC'
             }
         });
 
@@ -179,7 +179,7 @@ describe('Smoke: real API app request handling', function () {
                     // Amounts start at 100, not 0: the validator rejects a zero amount, and a
                     // bad fixture would fail this test for a reason unrelated to concurrency.
                     amount: String((index + 1) * 100),
-                    destination: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
+                    destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC'
                 }
             })
         ));

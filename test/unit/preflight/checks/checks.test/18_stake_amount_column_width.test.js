@@ -52,4 +52,68 @@ describe('pre-flight Tier-2 per-action matrix', function () {
             expect(r.findings.some((f) => f.code === 'BALANCE_INSUFFICIENT')).to.equal(false);
         });
     });
+
+    describe('shared stored-amount width rule', function () {
+        const atLimit = '0'.repeat(249) + '1';
+        const overLimit = '0'.repeat(250) + '1';
+        const amountErrors = (r) => r.findings.filter((f) => f.code === 'AMOUNT_FORMAT_INVALID'
+            && f.severity === 'error');
+
+        for (const network of ['bitcoin-mainnet', 'bitcoin-regtest']) {
+            it('refuses a 251-character MINT AMOUNT on ' + network, async function () {
+                const r = await reportFor('MINT|0|JDOG|' + overLimit, SPEC, { network });
+                expect(amountErrors(r)).to.have.length(1);
+            });
+
+            it('accepts a 250-character MINT AMOUNT on ' + network, async function () {
+                const r = await reportFor('MINT|0|JDOG|' + atLimit, SPEC, { network });
+                expect(amountErrors(r)).to.deep.equal([]);
+            });
+        }
+    });
+});
+
+describe('pre-flight SEND and DESTROY leg width after consolidation', function () {
+    const atLimit = '0'.repeat(249) + '1';
+    const overLimit = '0'.repeat(250) + '1';
+    const amountErrors = (r) => r.findings.filter((f) => f.code === 'AMOUNT_FORMAT_INVALID'
+        && f.severity === 'error');
+    const cases = [
+        ['a lone 251-character SEND leg', 'SEND|0|JDOG|' + overLimit + '|r1', 1],
+        ['a lone 250-character SEND leg', 'SEND|0|JDOG|' + atLimit + '|r1', 0],
+        ['a wide SEND leg merged with a sibling on its destination and tick', 'SEND|1|JDOG|' + overLimit + '|r1|1|r1', 0],
+        ['a wide SEND leg whose sibling has another destination', 'SEND|1|JDOG|' + overLimit + '|r1|1|r2', 1],
+        ['a wide SEND leg whose only sibling is held out of the merge', 'SEND|1|JDOG|' + overLimit + '|r1|1.123456789|r1', 2],
+        ['a wide SEND leg whose sibling names another tick', 'SEND|2|JDOG|' + overLimit + '|r1|XCHAIN|1|r1', 1],
+        ['a lone 251-character DESTROY leg', 'DESTROY|0|JDOG|' + overLimit, 1],
+        ['a wide DESTROY leg merged with a sibling under one memo', 'DESTROY|1|JDOG|' + overLimit + '|JDOG|1|m', 0],
+        ['a wide DESTROY leg whose sibling has another memo', 'DESTROY|2|JDOG|' + overLimit + '|m1|JDOG|1|m2', 1],
+        ['a wide DESTROY leg whose sibling shares its per-leg memo', 'DESTROY|2|JDOG|' + overLimit + '|m1|JDOG|1|m1', 0],
+    ];
+
+    for (const network of ['bitcoin-mainnet', 'bitcoin-regtest']) {
+        for (const [title, wire, expected] of cases) {
+            it(`raises ${expected} amount error(s) for ${title} on ${network}`, async function () {
+                const r = await reportFor(wire, SPEC, { network });
+                expect(amountErrors(r), wire.slice(0, 12)).to.have.length(expected);
+            });
+        }
+    }
+
+    it('refuses a lone wide SEND leg as a non-overridable width error', async function () {
+        const r = await reportFor('SEND|0|JDOG|' + overLimit + '|r1', SPEC);
+        const [found] = amountErrors(r);
+        expect(found.overridable).to.equal(false);
+        expect(found.message).to.include('invalid: AMOUNT (format)');
+        expect(found.data).to.include({ tick: 'JDOG', width: 251, limit: 250 });
+    });
+
+    it('raises exactly one amount error for a 251-character STAKE, DEPOSIT or WITHDRAW', async function () {
+        const wires = ['STAKE|1|' + overLimit + '|' + KEY, 'DEPOSIT|0|42|JDOG|' + overLimit,
+            'WITHDRAW|0|42|JDOG|' + overLimit];
+        for (const wire of wires) {
+            const r = await reportFor(wire, SPEC);
+            expect(amountErrors(r), wire.slice(0, 8)).to.have.length(1);
+        }
+    });
 });

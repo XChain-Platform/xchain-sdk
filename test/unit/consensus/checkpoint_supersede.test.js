@@ -149,8 +149,11 @@ describe('checkpoint supersede compatibility @regression @tier1', function () {
             checkpoint_seq: 417, snapshot_block: 900120,
             supersedes_from: 900000, rules_digest: RULES_DIGEST
         };
-        const canonical = Checkpoint.canonicalCheckpoint(cp);
-        assert.strictEqual(canonical.includes('SUPERSEDE'), false);
+        const plain = Object.assign({}, cp);
+        delete plain.supersedes_from; delete plain.rules_digest;
+        const canonical = Checkpoint.canonicalCheckpoint(plain);
+        assert.throws(() => Checkpoint.canonicalCheckpoint(cp), /not active/);
+        assert.strictEqual(Checkpoint.tryCanonicalCheckpoint(cp), null);
         cp.validator_signatures = [{ pubkey: key.pubkey, sig: sign(key.privateKey, canonical) }];
         assert.strictEqual(Checkpoint.verifyCheckpoint(cp, [key.pubkey]).valid, false);
     });

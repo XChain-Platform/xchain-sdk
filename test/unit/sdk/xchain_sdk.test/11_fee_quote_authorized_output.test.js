@@ -21,7 +21,7 @@ const { feeQuoteAuthorizedOutput } = require('../../../../src/carrier/reconcile_
 bitcoin.initEccLib(ecc);
 const NET = bitcoin.networks.regtest;
 const OWN = bitcoin.payments.p2wpkh({ hash: Buffer.alloc(20, 0xab), network: NET }).output;
-const SEND = { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } };
+const SEND = { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } };
 
 const addressFor = (byte) => bitcoin.payments.p2wpkh({ hash: Buffer.alloc(20, byte), network: NET }).address;
 

@@ -64,6 +64,11 @@ const BET_LIMITS = {
     MAX_BET_DEADLINE_HORIZON:  31536000   // 1 year past the block time
 };
 
+// bet_feeds.fee is VARCHAR(11) and the FEE format admits leading zeros, so the indexer
+// refuses a FEE wider than this many code points whatever its value. Kept outside
+// BET_LIMITS, which mirrors the indexer config, because the width is a column rule.
+const MAX_FEED_FEE_LENGTH = 11;
+
 // Characters an outcome label may not contain: the OUTCOMES separator, the
 // field separator, the BATCH command separator, and ASCII control characters
 // (which render invisibly and would let two labels look identical). Spaces and
@@ -104,4 +109,4 @@ function jsonDepth(value, depth = 1) {
     return max;
 }
 
-module.exports = { BET_LIMITS, OUTCOME_FORBIDDEN, BET_DETAILS_SCHEMA, isSet, fail, jsonDepth };
+module.exports = { BET_LIMITS, MAX_FEED_FEE_LENGTH, OUTCOME_FORBIDDEN, BET_DETAILS_SCHEMA, isSet, fail, jsonDepth };

@@ -89,6 +89,28 @@ describe('pre-flight conformance F2 balances paging', function () {
         expect(hasError(r, 'BALANCE_INSUFFICIENT')).to.equal(false);
         expect(seen).to.deep.equal([1, 2]);
     });
+
+    it('F2 a malformed second page leaves the balance unverified', async function () {
+        const page1 = Array.from({ length: 500 }, (_, i) => ({ tick: 'A' + String(i).padStart(4, '0'), amount: '1' }));
+        const spec = {
+            getToken: () => ({ info: { tick: 'ZZZZ', decimals: 0 } }),
+            getBalances: (addr, opts = {}) => (opts.page === 2 ? { total: 501 } : { data: page1, total: 501 }),
+        };
+        const r = await reportFor('SEND|0|ZZZZ|7|' + ADDR, spec);
+        expect(hasError(r, 'BALANCE_INSUFFICIENT')).to.equal(false);
+        expect(r.unverified.map((u) => u.check)).to.include.members(['BALANCE_LOOKUP', 'BALANCE_INSUFFICIENT']);
+    });
+
+    it('F2 a missing second page leaves the balance unverified', async function () {
+        const page1 = Array.from({ length: 500 }, (_, i) => ({ tick: 'A' + String(i).padStart(4, '0'), amount: '1' }));
+        const spec = {
+            getToken: () => ({ info: { tick: 'ZZZZ', decimals: 0 } }),
+            getBalances: (addr, opts = {}) => (opts.page === 2 ? notFound() : { data: page1, total: 501 }),
+        };
+        const r = await reportFor('SEND|0|ZZZZ|7|' + ADDR, spec);
+        expect(hasError(r, 'BALANCE_INSUFFICIENT')).to.equal(false);
+        expect(r.unverified.map((u) => u.check)).to.include.members(['BALANCE_LOOKUP', 'BALANCE_INSUFFICIENT']);
+    });
 });
 
 describe('pre-flight conformance F2 balances paging on an explorer without ?page', function () {
@@ -196,6 +218,14 @@ describe('pre-flight conformance A5 cross-chain GET_TICK', function () {
     it('A5 a cross-chain ORDER GET_TICK is not judged locally', async function () {
         const r = await reportFor('ORDER|0|BTC|JDOG|1|0|LTC|LTC|1|0|' + ADDR + '||||m', SPEC);
         expect(errors(r, 'TOKEN_NOT_FOUND').filter((f) => f.data.field === 'GET_TICK')).to.deep.equal([]);
+    });
+
+    it('A5 a caret cross-chain ORDER GET_TICK requires the remote name', async function () {
+        const wire = 'ORDER|0|BTC|JDOG|1|0|LTC|^42|1|0|' + ADDR + '||||m';
+        const r = await reportFor(wire, SPEC);
+        const findings = errors(r, 'TOKEN_NOT_FOUND').filter((f) => f.data.remoteNameRequired);
+        expect(findings).to.have.lengthOf(1);
+        expect(findings[0].data).to.include({ field: 'GET_TICK', tick: '^42' });
     });
 });
 

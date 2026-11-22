@@ -148,14 +148,14 @@ describe('x402', () => {
 describe('x402', () => {
     describe('X402Client', () => {
         it('signs the invoice for a requireSignature send offer and the gateway accepts it end-to-end', async () => {
-            const { ECPairFactory } = require('ecpair');
             const ecc = require('@bitcoinerlab/secp256k1');
             const { getNetwork } = require('../../../../src/protocol/networks.js');
+            const { createECPair } = require('../../../../src/utils/bitcoinjs_compat/ecpair.js');
             const AuthUtils = require('../../../../src/utils/auth.js');
             const NET = 'dogecoin-testnet';
             const netParams = getNetwork(NET);
             const auth = new AuthUtils(NET);
-            const WIF = ECPairFactory(ecc).makeRandom({ network: netParams }).toWIF();
+            const WIF = createECPair(ecc).makeRandom({ network: netParams }).toWIF();
             const PAYER = auth.signMessage('probe', WIF).address;
 
             const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'x402e2e-'));

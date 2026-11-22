@@ -20,10 +20,11 @@ const { isBytes, toBuffer, bytesEqual } = require('../../utils/bytes');
 
 // Satoshi values arrive as Number OR BigInt: applyBufferutilsPatch teaches
 // bip174/bitcoinjs to carry values above 2^53-1 (large DOGE UTXOs) as BigInt.
-// All arithmetic here is BigInt so a >2^53 value is neither rejected nor rounded.
+// A Number must be safe because an unsafe one has already been rounded; see
+// exactU64 below. All arithmetic here remains BigInt.
 function toU64(v) {
     if (typeof v === 'bigint') return v;
-    if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return BigInt(v);
+    if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) return BigInt(v);
     return null;
 }
 
@@ -101,13 +102,8 @@ function isOpReturn(script) {
 // they can be pinned to is shape: a plain payment to an arbitrary P2PKH/P2WPKH
 // recipient - the drain this gate exists to stop - is not one of these.
 //
-// Shape ALONE is not an authorization, though. A hostile encoder controls
-// which p2sh/p2wsh/p2tr it emits, so shape by itself lets it park arbitrary value in
-// a script only it can spend, and the maxFeeSats ceiling does not bound that: a
-// parked output is counted in totalOut, so it lowers the computed fee rather than
-// raising it. Every shaped output therefore also has to clear a value pin: the
-// companion PSBT that spends it (`phaseSpends`), the later phase that spends it back
-// (`requiredSpends`), or the caller's `maxPhaseFundingSats` ceiling.
+// Treat shape as classification only. Chunk legs must also bind one-to-one to verified,
+// caller-gated carrier scripts; envelope legs and later phases retain their spend/value pins.
 const PHASE_SHAPES = {
     // OP_HASH160 <20> OP_EQUAL
     p2sh:  (d) => d.length === 3 && d[0] === bitcoin.opcodes.OP_HASH160 && isBytes(d[1]) && d[1].length === 20 && d[2] === bitcoin.opcodes.OP_EQUAL,

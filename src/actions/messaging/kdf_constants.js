@@ -21,11 +21,11 @@
  ********************************************************************/
 
 const crypto = require('crypto');
-const { ECPairFactory } = require('ecpair');
+const { createECPair } = require('../../utils/bitcoinjs_compat/ecpair.js');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { SDKMessagingError } = require('../../utils/errors.js');
 
-const ECPair = ECPairFactory(ecc);
+const ECPair = createECPair(ecc);
 
 // ECIES ciphertext layout:
 // [ephemeralPubkey (33 bytes)] [iv (12 bytes)] [authTag (16 bytes)] [encrypted data]

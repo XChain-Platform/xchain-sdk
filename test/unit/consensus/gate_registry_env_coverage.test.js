@@ -1,3 +1,16 @@
+/*********************************************************************
+ *
+ * Copyright © 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************/
 'use strict';
 
 const assert = require('assert');
@@ -71,6 +84,11 @@ describe('gate registry env view covers the regtest arming grammar', function ()
         const names = [...new Set(Object.values(REGTEST_ARMING).map((rule) => rule.env))];
         const missing = names.filter((name) => !entry.includes('get ' + name + '()'));
         assert.deepStrictEqual(missing, [], 'registryEnv has no getter for ' + missing.join(', '));
+        for (const name of names) {
+            withEnv(name, '702', () => {
+                assert.strictEqual(gates.armingEnv[name], '702', name + ' is not wired to its config reader');
+            });
+        }
     });
 
     it('enforces bundle order from the venue height on an armed regtest venue', function () {
@@ -81,7 +99,9 @@ describe('gate registry env view covers the regtest arming grammar', function ()
         });
         withEnv(STAKE_ENV, undefined, () => assert.strictEqual(gates.get(BUNDLE_ORDER).regtest, 0));
     });
+});
 
+describe('gate registry env view covers the regtest arming grammar', function () {
     it('resolves the archive roll-call presence gate at the BTC snapshot block', function () {
         const key = 'archive_rollcall_presence_activation.ARCHIVE_ROLLCALL_PRESENCE_ACTIVATION';
         assert.strictEqual(gates.activeAt(key, 'regtest', 'BTC', 0, null), true);

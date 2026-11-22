@@ -192,7 +192,10 @@ jobs:
       - name: Check out the re-taken SDK suite-title pin
         uses: actions/checkout@v4
         with:
-          ref: ed715d88a82023db589a9ceebdab8e97389e5992
+          # Re-taken 2026-11-17 at the develop head after the banned-with parity
+          # test stopped pinning lint-core.js, constants.js and nesting_depth.js;
+          # contract_parity.test.js compares the whole lint-core tree instead.
+          ref: 704b8fee1a3d9cfb2c1c0f142c63db43fb0315b6
           path: suite-title-pins/sdk/xchain-sdk
 
       - name: Use Node.js 22

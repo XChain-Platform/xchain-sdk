@@ -23,7 +23,7 @@ const NET = bitcoin.networks.regtest;
 const H160 = Buffer.alloc(20, 0xab);
 const CHUNK_CALLER = bitcoin.payments.p2wpkh({ hash: H160, network: NET }).address;
 const OWN = bitcoin.payments.p2wpkh({ hash: H160, network: NET }).output;
-const SEND = { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mrCDrCybB6J1vRfbwM5hemdJz73FwDBC2W' } };
+const SEND = { action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } };
 
 function makeSDK() {
     return new XChainSDK({
@@ -47,7 +47,7 @@ function plainPsbt(extraOutputs = []) {
 }
 
 // A P2WSH chunk transaction mirroring the encoder's redeem-script shape.
-function chunkLane(actionString, rawBuf) {
+function chunkLane(actionString, rawBuf, extraOutputs = []) {
     const data = bitcoin.script.compile([Buffer.from(actionString, 'utf8'), rawBuf]);
     const redeems = [];
     for (let i = 0; i < data.length; i += 40) {
@@ -59,7 +59,9 @@ function chunkLane(actionString, rawBuf) {
     psbt.addInput({ hash: crypto.randomBytes(32), index: 0, witnessUtxo: { script: OWN, value: 100000 } });
     for (const r of redeems)
         psbt.addOutput({ script: bitcoin.payments.p2wsh({ redeem: { output: r }, network: NET }).output, value: 1000 });
-    psbt.addOutput({ script: OWN, value: 80000 });
+    for (const out of extraOutputs) psbt.addOutput(out);
+    const diverted = extraOutputs.reduce((sum, out) => sum + out.value, 0);
+    psbt.addOutput({ script: OWN, value: 80000 - diverted });
     return { psbt: psbt.toHex(), encoding: 'P2WSH', carrierScripts: redeems.map((r) => r.toString('hex')) };
 }
 
@@ -92,8 +94,9 @@ describe('XChainSDK', function () {
             const estimate = sinon.stub(sdk.encoder, 'estimateFee').resolves({ psbt: plainPsbt(), encoding: 'OP_RETURN' });
             await sdk.estimateFees(SEND, { pubkey: 'mypub' });
             const sent = estimate.firstCall.args[0];
-            for (const key of ['compress', 'feeQuote', 'rawData', 'sourceAddress', 'attachPrevTx'])
+            for (const key of ['compress', 'feeQuote', 'rawData', 'sourceAddress'])
                 expect(Object.prototype.hasOwnProperty.call(sent, key), key).to.equal(false);
+            expect(sent.attachPrevTx).to.equal(true);
         });
 
         it('keeps the native-fee output when the caller also passes customOutputs', async function () {
@@ -108,6 +111,38 @@ describe('XChainSDK', function () {
                 { address: addressFor(0x01), value: 600 },
                 { address: addressFor(0x02), value: 500 },
             ]);
+        });
+    });
+});
+
+describe('XChainSDK', function () {
+    afterEach(function () { sinon.restore(); });
+
+    describe('estimateFees: a caller-supplied native-fee output', function () {
+
+        it('does not duplicate an output supplied by the documented workaround', async function () {
+            const sdk = makeSDK();
+            const estimate = sinon.stub(sdk.encoder, 'estimateFee').resolves({ psbt: plainPsbt(), encoding: 'OP_RETURN' });
+            sinon.stub(sdk, 'quoteNativeFee').resolves({ supported: true, valid: true, requiredFeeSats: 500, requiredFeeSatsExact: "500", feeDestination: addressFor(0x02) });
+            const supplied = [{ address: addressFor(0x02), value: 500 }];
+            await sdk.estimateFees(SEND, { pubkey: 'mypub', payFeeInNativeCoin: true, customOutputs: supplied });
+            expect(estimate.firstCall.args[0].customOutputs).to.deep.equal([{ address: addressFor(0x02), value: 500 }]);
+            expect(supplied, 'the caller list is not mutated').to.have.length(1);
+        });
+
+        it('refuses a PSBT paying the fee twice when the caller supplied the fee output once', async function () {
+            const sdk = makeSDK();
+            const fee = { script: bitcoin.address.toOutputScript(addressFor(0x02), NET), value: 500 };
+            sinon.stub(sdk.encoder, 'estimateFee').resolves({ psbt: plainPsbt([fee, fee]), encoding: 'OP_RETURN' });
+            sinon.stub(sdk, 'quoteNativeFee').resolves({ supported: true, valid: true, requiredFeeSats: 500, requiredFeeSatsExact: "500", feeDestination: addressFor(0x02) });
+            let err;
+            try {
+                await sdk.estimateFees(SEND, {
+                    pubkey: 'mypub', payFeeInNativeCoin: true,
+                    customOutputs: [{ address: addressFor(0x02), value: 500 }],
+                });
+            } catch (e) { err = e; }
+            expect(err, 'a doubled fee must not come back signable').to.be.an('error');
         });
     });
 });
@@ -140,6 +175,24 @@ describe('XChainSDK', function () {
             catch (e) { err = e; }
             expect(err, 'a substituted payload must fail closed').to.be.ok;
             expect(err.code).to.equal('CARRIER_ACTION_MISMATCH');
+        });
+
+        it('refuses an extra shaped funding leg that has no verified carrier', async function () {
+            const sdk = makeSDK();
+            const file = { action: 'FILE', params: { name: 'report.bin', type: 1 } };
+            const actionString = sdk.actions.createAction(file).actionString;
+            const bytes = Buffer.from('report row,'.repeat(40), 'utf8');
+            const foreign = bitcoin.payments.p2wsh({ redeem: { output: bitcoin.script.compile([
+                Buffer.from('foreign'), bitcoin.opcodes.OP_DROP, bitcoin.opcodes.OP_TRUE
+            ]) }, network: NET }).output;
+            sinon.stub(sdk.encoder, 'estimateFee').resolves(chunkLane(actionString, bytes,
+                [{ script: foreign, value: 5000 }]));
+            let err;
+            try {
+                await sdk.estimateFees(file, { pubkey: CHUNK_CALLER, rawData: bytes.toString('binary'),
+                    maxPhaseFundingSats: 100000 });
+            } catch (e) { err = e; }
+            expect(err).to.have.property('code', 'UNBOUND_PHASE_FUNDING_LEG');
         });
 
         it('authorizes the feeQuote output the caller submitted', async function () {

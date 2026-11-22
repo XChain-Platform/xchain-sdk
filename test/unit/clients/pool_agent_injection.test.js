@@ -29,10 +29,13 @@ const http  = require('http');
 const https = require('https');
 const sinon = require('sinon');
 const axios = require('axios');
+const nock  = require('nock');
 
 const ExplorerClient = require('../../../src/clients/explorer.js');
 const EncoderClient  = require('../../../src/clients/encoder.js');
 const HubConnector   = require('../../../src/clients/hub.js');
+const WebSocketClient = require('../../../src/clients/websocket.js');
+const XChainSDK      = require('../../../src/XChainSDK.js');
 
 // Recognisable stand-ins for a SOCKS agent. Real ones are http/https
 // Agent subclasses that dial through a proxy; all that matters here is
@@ -223,6 +226,129 @@ describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', functi
             expect(opts.proxy).to.equal(false);
             expect(opts.httpAgent).to.equal(undefined);
             expect(opts.httpsAgent).to.equal(undefined);
+        });
+    });
+});
+
+
+// The address-subscription socket is the lane a Tor toggle must not miss: it
+// carries the user's address set, so a direct dial leaks both the IP and
+// what is being watched. Node's http.request hands the request to
+// agent.addRequest synchronously, so a spy shows which agent a dial used
+// without any server. Port 1 on loopback refuses at once.
+const DEAD_HTTP = 'http://127.0.0.1:1';
+
+function spyAgents() {
+    const httpAgent  = marker('http');
+    const httpsAgent = marker('https');
+    return {
+        httpAgent, httpsAgent,
+        httpSpy:  sinon.spy(httpAgent, 'addRequest'),
+        httpsSpy: sinon.spy(httpsAgent, 'addRequest')
+    };
+}
+
+async function dial(client) {
+    try { await client.connect(); } catch (e) { /* refused: only the agent choice matters */ }
+    client.disconnect();
+}
+
+function wsClient(url, pool) {
+    return new WebSocketClient({ network: 'bitcoin-regtest', websocketUrl: url, pool });
+}
+
+// nock replaces http.request while active and then never calls the agent, so
+// a spy on the agent would read zero whichever agent the dial was given. The
+// real http stack is put back around the dial cases and nock restored after.
+function realHttpStack() {
+    let nockWasActive;
+    before(function () { nockWasActive = nock.isActive(); if (nockWasActive) nock.restore(); });
+    after(function () { if (nockWasActive) nock.activate(); });
+    afterEach(restoreSinon);
+}
+
+describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', function () {
+
+    describe('WebSocketClient scheme choice', function () {
+        realHttpStack();
+
+        it('dials a ws:// URL through the injected http agent only', async function () {
+            const a = spyAgents();
+            await dial(wsClient('ws://127.0.0.1:1', { httpAgent: a.httpAgent, httpsAgent: a.httpsAgent }));
+            expect(a.httpSpy.callCount).to.equal(1);
+            expect(a.httpsSpy.callCount).to.equal(0);
+        });
+
+        it('dials a wss:// URL through the injected https agent only', async function () {
+            const a = spyAgents();
+            await dial(wsClient('wss://127.0.0.1:1', { httpAgent: a.httpAgent, httpsAgent: a.httpsAgent }));
+            expect(a.httpsSpy.callCount).to.equal(1);
+            expect(a.httpSpy.callCount).to.equal(0);
+        });
+
+        it('rewrites an https:// base to wss:// and uses the https agent', async function () {
+            const a = spyAgents();
+            await dial(wsClient('https://127.0.0.1:1', { httpAgent: a.httpAgent, httpsAgent: a.httpsAgent }));
+            expect(a.httpsSpy.callCount).to.equal(1);
+            expect(a.httpSpy.callCount).to.equal(0);
+        });
+    });
+
+    describe('WebSocketClient fallbacks', function () {
+        realHttpStack();
+
+        it('never falls back to the other scheme agent when its own slot is empty', async function () {
+            const a = spyAgents();
+            await dial(wsClient('wss://127.0.0.1:1', { httpAgent: a.httpAgent }));
+            expect(a.httpSpy.callCount).to.equal(0);
+        });
+
+        it('keeps using the injected agent after a repoint to another scheme', async function () {
+            const a = spyAgents();
+            const client = wsClient('ws://127.0.0.1:1', { httpAgent: a.httpAgent, httpsAgent: a.httpsAgent });
+            await dial(client);
+            client.setBase('wss://127.0.0.1:2');
+            await dial(client);
+            expect(a.httpSpy.callCount).to.equal(1);
+            expect(a.httpsSpy.callCount).to.equal(1);
+        });
+
+        it('still dials when no pool is injected', async function () {
+            const client = wsClient('ws://127.0.0.1:1');
+            let err;
+            try { await client.connect(); } catch (e) { err = e; }
+            client.disconnect();
+            expect(err.code).to.be.oneOf(['WS_CONNECTION_FAILED', 'WS_CONNECTION_CLOSED']);
+        });
+    });
+});
+
+describe('injected connection agents (pool.httpAgent / pool.httpsAgent)', function () {
+
+    describe('XChainSDK websocket lane', function () {
+        realHttpStack();
+
+        it('builds sdk.ws with the injected pool and dials through its agent', async function () {
+            const a = spyAgents();
+            const sdk = new XChainSDK({
+                network: 'bitcoin-regtest', explorerUrl: DEAD_HTTP, encoderUrl: DEAD_HTTP, retry: false,
+                pool: { httpAgent: a.httpAgent, httpsAgent: a.httpsAgent }
+            });
+            await dial(sdk.ws);
+            expect(a.httpSpy.callCount).to.equal(1);
+            expect(a.httpsSpy.callCount).to.equal(0);
+        });
+
+        it('builds the websocket client from hub endpoints with the injected pool', async function () {
+            const a = spyAgents();
+            const sdk = new XChainSDK({ network: 'bitcoin-regtest', explorerUrl: DEAD_HTTP, retry: false });
+            sdk.ws = null;
+            sdk.hub = { extractServiceEndpoints: () => ({ explorerUrl: DEAD_HTTP }) };
+            sdk.options = { network: 'bitcoin-regtest', retry: false, pool: { httpAgent: a.httpAgent, httpsAgent: a.httpsAgent } };
+            sdk.applyEndpoints();
+            await dial(sdk.ws);
+            expect(a.httpSpy.callCount).to.equal(1);
+            expect(a.httpsSpy.callCount).to.equal(0);
         });
     });
 });

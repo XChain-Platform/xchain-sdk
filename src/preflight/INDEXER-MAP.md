@@ -8,8 +8,9 @@ silently drift out of ground-truth, so the drift gate
 job on both repos) fails when any mapped indexer handler's SHA-256
 of normalized source changes without a matching update here. JavaScript
 comments are removed and line-end whitespace is trimmed before hashing;
-empty source lines are ignored and multiline source keeps one terminal line
-ending, while quoted string and template contents remain byte-exact.
+an inline comment that separates two tokens preserves that boundary, empty
+source lines are ignored, and multiline source keeps one terminal line ending,
+while quoted string and template contents remain byte-exact.
 
 To resolve a drift-gate failure: re-read the changed handler, update the
 client check (or confirm no client-visible logic changed), then refresh
@@ -82,26 +83,93 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `cad84089a`
+**Pins taken at indexer commit:** `33fbabce2`
 
-(Re-anchored 2026-11-02 a third time, against indexer `cad84089a`, the head of the indexer
-v0.27.7 hotfix that carries the prefixed mint window refusal reviewed in the first entry of the
-review log below. Only the `issue` directory pin moves. The other fifteen rows are unchanged and
-match this tree, and `985327003` is an ancestor of this anchor. The hotfix merges into indexer
-master as these exact commits, so the anchor stays reachable from master.)
+(Not re-anchored 2026-11-19. The `batch` pin alone moves to `1c42ba29`, the hash of indexer
+`a11e0d7be`, a commit of the next review-round branch that sits ahead of this anchor and is not yet
+on origin develop; the other fifteen rows hash as pinned at both commits. The anchor stays on
+`33fbabce2` because it is on origin develop and stays reachable however that branch lands, and the
+review range from it still covers the moved `batch/index.js`. Until the branch lands, SDK CI, which
+grades this map against indexer develop, reports `batch` as drifted.)
 
-(Re-anchored 2026-11-02 a second time, against indexer `985327003`, the head of the indexer
-v0.27.6 hotfix that carries the prefixed integer refusals reviewed in the first entry of the
-review log below. Only the `issue`, `dispenser`, `order`, `swap` and `bet` directory pins move.
-The other eleven rows are unchanged and match this tree, and `c3f900d2d` is an ancestor of this
-anchor. The hotfix merges into indexer master as these exact commits, so the anchor stays
-reachable from master.)
+(Re-anchored 2026-11-18 to `33fbabce2`, the committed tip of the indexer review-round branch that
+bills every controller-guard gas debit through `billGuardGas` and keys the BATCH probe collectors on
+`DRY_RUN`. The `send`, `destroy`, `mint`, `dispenser`, `order`, `swap`, `airdrop`, `dividend`,
+`batch`, `deposit.js`, `withdraw.js` and `stake` pins move; the other four rows hash as pinned there.
+The previous anchor `6257fff51` is its ancestor, and `33fbabce2` sits one commit ahead of origin
+develop `1e4a03de1`, so it stays reachable only if the branch lands by fast-forward or as a merge
+parent; a squash or rebased landing orphans it, and the anchor then moves to the landed commit with no
+pin change. Until that branch lands, SDK CI, which grades this map against indexer develop, reports
+the twelve moved rows as drifted.)
 
-(Re-anchored 2026-11-02 against indexer `c3f900d2d`, the head of the indexer v0.27.4 hotfix that
-carries the column-width refusals reviewed in the first entry of the review log below. Only the
-`issue`, `price` and `bet` directory pins move. The other thirteen rows are unchanged and match
-this tree. `3387e7bd` is not an ancestor of this anchor. The hotfix merges into indexer master
-as these exact commits, so the anchor stays reachable from master.)
+(Re-anchored 2026-11-18 to `6257fff51`, the committed tip of the indexer review-round branch that
+records per-leg probe verdicts for DESTROY and AIRDROP, refuses an AIRDROP leg amount the ledger
+cannot parse, and stops a DISPENSER create skipping the legacy tracker freshness read. The `send`,
+`destroy`, `dispenser` and `airdrop` pins move; the other twelve rows hash as pinned there. The
+previous anchor `a6b8655f2` is its ancestor and is on origin develop. `6257fff51` stays reachable only
+if the branch lands by fast-forward or as a merge parent; a squash or rebased landing orphans it, and
+the anchor then moves to the landed commit with no pin change. Until that branch lands, SDK CI, which
+grades this map against indexer develop, reports the four moved rows as drifted.)
+
+(Re-anchored 2026-11-16 to `a6b8655f2`, the committed tip of the indexer hand branch that adds
+ORDER_GET_ADDRESS_COIN, STATE_VALUE_ASTRAL_ESCAPE and LINT_REGEX_GROUP_DEPTH. Only the `order` pin
+moves, to `4e130541`; the other fifteen rows hash as pinned there. The previous anchor `93cde565f` is
+its ancestor. `a6b8655f2` sits six commits ahead of origin develop `5ceaa07c4`, so it stays reachable
+only if the branch lands by fast-forward or as a merge parent; a squash or rebased landing orphans it,
+and the anchor then moves to the landed commit with no pin change. Until that branch lands, SDK CI,
+which grades this map against indexer develop, reports `order` as drifted.)
+
+(Re-anchored 2026-11-16 to `93cde565f`, the origin develop commit where the `batch` pin
+`ca3e05eb` was taken and all sixteen rows hash as pinned. The previous anchor `8960c6ed1`
+hashes `batch` to `c6ca292c`; it remains an ancestor of this anchor. No pin moves.)
+
+(Re-anchored 2026-11-15 to `8960c6ed1`, the origin develop head the next review round sits on. At
+that commit every one of the sixteen rows hashes as pinned. The `batch` pin moved to `ca3e05eb` once the
+review round's two `batch/` commits reached origin develop (indexer `93cde565f`), as the 2026-11-15
+entry below records. The previous anchor `f9d86586d` is an
+object no branch reaches, the review-round landing having reached origin develop under other commit
+ids with the same mapped content, so it could not begin a range; `8960c6ed1` is on origin develop
+itself and stays reachable whether the round lands by fast-forward, as a merge parent or squashed.)
+
+(Re-anchored 2026-11-14 against the committed indexer tree `f9d86586d`, the review-round landing
+that folds a multi-leg SEND sub-command's leg verdicts into the BATCH probe answer, reviewed in the
+first entry of the review log below, which had not landed on origin develop when this was written.
+Only the `send` and `batch` directory pins move. The other fourteen rows are unchanged and match
+this tree, and `265c85c86` is an ancestor of this anchor. The commit lands on origin develop as
+this exact commit, by fast-forward or as a parent of the landing merge, so the anchor stays
+reachable; a squashed or rebased landing would orphan it, and the section on an unreachable anchor
+below is then the way back.)
+
+(Re-anchored 2026-11-02 a third time, against the committed indexer tree `265c85c86`, the
+prefixed mint window refusal reviewed in the first entry of the review log below, which had not
+landed on origin develop when this was written. Only the `issue` directory pin moves. The other
+fifteen rows are unchanged and match this tree, and `0d08f2d77` is an ancestor of this anchor. The
+commits land on origin develop as these exact commits, by fast-forward or as parents of the
+landing merge, so the anchor stays reachable; a squashed or rebased landing would orphan it, and
+the section on an unreachable anchor below is then the way back.)
+
+(Re-anchored 2026-11-02 a second time, against the committed indexer lane tree `0d08f2d77`, the
+head of the prefixed integer refusals reviewed in the first entry of the review log below, which
+had not landed on origin develop when this was written. Only the `issue`, `dispenser`, `order`,
+`swap` and `bet` directory pins move. The other eleven rows are unchanged and match this tree,
+and `8185158fa` is an ancestor of this anchor. The commits land on origin develop as these exact
+commits, by fast-forward or as parents of the landing merge, so the anchor stays reachable; a
+squashed or rebased landing would orphan it, and the section on an unreachable anchor below is
+then the way back.)
+
+(Re-anchored 2026-11-02 against the committed indexer lane tree `8185158fa`, the head of the
+column-width refusals reviewed in the first entry of the review log below, which had not landed
+on origin develop when this was written. Only the `issue`, `price` and `bet` directory pins move.
+The other thirteen rows are unchanged and match this tree, and `e1befbb1` is an ancestor of this
+anchor. The commits land on origin develop as these exact commits, by fast-forward or as parents
+of the landing merge, so the anchor stays reachable; a squashed or rebased landing would orphan
+it, and the section on an unreachable anchor below is then the way back.)
+
+(Re-anchored 2026-11-01 against indexer `e1befbb1`, the committed landing tree for the
+SEND per-leg probe verdict review below. Only the `send` directory pin moves. The other
+fifteen rows are unchanged and match this tree. `3387e7bd` is not an ancestor: the v0.27.0
+release merge left it unreachable, and origin develop `7e699207` hashes `send` to the prior
+`bb0ad388` pin, so this landing is the only mapped change since that anchor.)
 
 (Re-anchored 2026-10-31 against indexer `3387e7bd`, the committed landing tree for the
 SEND destination-policy cache review below. Only the `send` directory pin moves. The other
@@ -499,7 +567,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff cad84089a..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 33fbabce2..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -572,21 +640,21 @@ behind by a move is a finding instead of the value that happens to be read.
 
 | Client check module | Indexer handler | SHA-256 |
 |---|---|---|
-| `checks/send.js` (SEND) | `src/actions/send/` | `bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc` |
-| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40` |
-| `checks/mint.js` | `src/actions/mint/` | `998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48` |
+| `checks/send.js` (SEND) | `src/actions/send/` | `3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8` |
+| `checks/send.js` (DESTROY) | `src/actions/destroy/` | `a52180e45cacbbb02ee302391bbff6c95eecdee68d6e62b8da97bc25eeb9b348` |
+| `checks/mint.js` | `src/actions/mint/` | `8321748e950c0ee3e0b2fdd3a73105e920c6f37714912d97847024841a918e53` |
 | `checks/issue.js` | `src/actions/issue/` | `259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978` |
-| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `8130c1a24aa0e3af97b773fdfdfb6ab6362b28cc5a5a9a55093db47e2736ffef` |
+| `checks/dispenser.js` (open/edit/close) | `src/actions/dispenser/` | `65209162a134ea9d067ccff5e0ed5127bdc3397ec72ff9efde2ef7cb86542a3a` |
 | `checks/dispenser.js` (DISPENSE) | `src/actions/dispense/` | `302ff0ba22c0ce8953db67b2eea23223162e4823302bd191ad8058ac52824cdc` |
-| `checks/trading.js` (ORDER) | `src/actions/order/` | `86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e` |
-| `checks/trading.js` (SWAP) | `src/actions/swap/` | `2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8` |
-| `checks/airdrop.js` | `src/actions/airdrop/` | `9b3ade3b59922532bf3f7296cd2232e52a8055c86532e9ad00bba106206105e7` |
-| `checks/dividend.js` | `src/actions/dividend/` | `7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065` |
-| `checks/batch.js` | `src/actions/batch/` | `9a5147d0a4e121f10d9dd23a6d2f9602f8359ec5eca8f555111aea973a6321ad` |
-| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f` |
-| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35` |
+| `checks/trading.js` (ORDER) | `src/actions/order/` | `faa64e31b2a882a6f337db72069b5b5bb8e0ef253f8a15916d5c1626b5d1088b` |
+| `checks/trading.js` (SWAP) | `src/actions/swap/` | `93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e` |
+| `checks/airdrop.js` | `src/actions/airdrop/` | `188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace` |
+| `checks/dividend.js` | `src/actions/dividend/` | `6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c` |
+| `checks/batch.js` | `src/actions/batch/` | `1c42ba29d46e2d5f6ef9689c90336c8fea2d68f841abf1063f79878b7b1b11d2` |
+| `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `2d8585841185d9948b841eb078f55c843ea6df0801206c6778005a51bf4bcf31` |
+| `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `cb8b7bf31b80689ec2c7c53139082b7123f2c9af97becfbb64eb0cf3eb3671af` |
 | `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
-| `checks/misc.js` (STAKE) | `src/actions/stake/` | `b38ea784128e91c87c0df0200696d2b0bac25105477c9111d929a420f30e6afc` |
+| `checks/misc.js` (STAKE) | `src/actions/stake/` | `791da27d6f8a49fc3498344b8a6bc4044bf9bdf4ff5811d88c9503077845e025` |
 | `universal.js` (BET halt field, feed FEE width, prefixed integers) | `src/actions/bet/` | `d1d5a599a1f9031c54d4c5f163b78007eb983090f406e241a0a7480e730eb8ad` |
 
 The mapped custody disclosures are checks/misc.js (DEPOSIT) and
@@ -613,6 +681,260 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-19 - the client mirrors the 250-character amount width on stored amounts and lone SEND and DESTROY legs
+
+No pin moves: this is a client follow-up to the 2026-10-23 entry, whose refusal sits in
+`utility/validation/amount_validation.js`, outside every mapped row's hash. The SDK's two-argument
+`Utility.isValidAmountFormat` now refuses a string or number wider than 250 code points ahead of
+its shape rule, as the indexer's does, so `amountFormatOk` and `checkAmountField` raise
+AMOUNT_FORMAT_INVALID for an overlong MINT, AIRDROP, DIVIDEND, ORDER, SWAP, dispenser or ISSUE
+supply amount on every network. The shape rule alone stays reachable as the non-enumerable
+`number_format.js` `isValidAmountMergeFormat`, which is not installed on `Utility.prototype`, and
+pre-flight reaches it through `numeric.isValidAmountMergeFormatWhere` and `amountMergeFormatOk`.
+
+- **SEND and DESTROY, `checks/send.js`:** `checkLegAmountFormat` judges each raw leg with the merge
+  rule, as `send/legs.js` and `destroy/legs.js` do, and then counts the legs that merge on each key
+  (`DESTINATION|TICK` for SEND, `TICK|MEMO` for DESTROY, raw wire spellings). A key holding two or
+  more legs is summed by `bcadd` into a number object, which the indexer's width refusal does not
+  read, so it stays clear. A leg alone on its key reaches `send/validate.js` or `destroy/validate.js`
+  as its raw text, and a width over 250 now raises a non-overridable AMOUNT_FORMAT_INVALID error
+  naming `invalid: AMOUNT (format)`. This replaces the 2026-10-23 entry's "lone leg stays a
+  server-side refusal": the mirror needs the merge keys only, never the `bcadd` text.
+- STAKE, DEPOSIT and WITHDRAW keep their own width check in `checks/misc.js` and raise it once.
+
+**Direction: WIDENS client refusal to match consensus; no activation row and no consensus change.**
+
+### 2026-11-19 - an authenticated BATCH dry-run reports a skipped COINPAY sub-command as unjudged
+
+The `batch` pin moves from `cb526c2f` to `1c42ba29`, hashed from the committed indexer review-round
+branch at `a11e0d7be` by `node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` and read
+against the anchor `33fbabce2`. Of the seven parts only `index.js` moves; `fees.js`, `limits.js`,
+`mint_cap.js`, `probe.js`, `sub_command.js` and `validate.js` hash as before. The other commits in the
+range touch no mapped row.
+
+- **BATCH, `batch/index.js`:** the per-sub-command STATUS delete in the dispatch loop fired only when
+  `FEE_PROBE` is true. It now also fires when the probe collectors are seeded (`collect`, which
+  `seedProbeCollectors` sets from `DRY_RUN`) and the sub-command is COINPAY, because COINPAY's
+  intentional skip paths write no status and the sub-verdict row inherited the previous
+  sub-command's verdict. Both public surfaces (feequote and preflight) pass `feeProbe: true`, so on
+  them the delete already fired for every sub-command and nothing moves. On a decoded transaction
+  `DRY_RUN` is never set, so `collect` is false and the inherited-status behaviour is unchanged. Only
+  the regtest-only `feequotedryrun` differs: its `subCommands` row for a skipped COINPAY now carries
+  status null instead of its predecessor's verdict, and the BATCH's own STATUS is still restored
+  after the loop.
+
+**Client side:** no admission predicate, error text, amount rule or fee rule moves. `applyTier1`
+reads the `status` and `subCommands` of the feequote and preflight surfaces, whose answers are
+unchanged; `feequotedryrun` is not a surface the pre-flight calls (see `index/tier1_findings.js`).
+NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL for validity.** One row re-pins and the anchor stays.
+
+### 2026-11-18 - guard gas is billed through one helper and BATCH probe collectors key on DRY_RUN
+
+The `send` pin moves from `d5063639` to `3e4d1e27`, the `destroy` pin moves from `16967859` to
+`a52180e4`, the `mint` pin moves from `998c2d88` to `8321748e`, the `dispenser` pin moves from
+`d424db43` to `65209162`, the `order` pin moves from `4e130541` to `faa64e31`, the `swap` pin moves
+from `2ee469e1` to `93af1143`, the `airdrop` pin moves from `a7083540` to `188c409e`, the `dividend`
+pin moves from `7d66516b` to `6f309158`, the `batch` pin moves from `ca3e05eb` to `cb526c2f`, the
+`deposit.js` pin moves from `3e1dd191` to `2d858584`, the `withdraw.js` pin moves from `99cae8fa` to
+`cb8b7bf3` and the `stake` pin moves from `b38ea784` to `791da27d`, hashed from the committed indexer
+tree at the anchor above by `node bin/preflight_handler_dirs.js <indexer> src/actions/<name>` and read
+against the previous anchor `6257fff51`. The whole mapped diff is one review-round landing
+(`33fbabce2`); the CI pin commit in the range touches no mapped row. Outside the map, the same commit
+adds `resetGuardGasTotals`, `billGuardGas` and `guardGasTotal` to `src/utility/controller_guard.js`
+and a `guardGasFee` disclosure to the dry-run result.
+
+- **Guard gas, every settle path:** `send/settle.js`, `destroy/settle.js`, `mint/settle.js`,
+  `dispenser/settle.js`, `order/settle.js`, `swap/settle.js`, `airdrop/settle.js`,
+  `dividend/settle.js`, `deposit.js`, `withdraw.js` and `stake/contract_stake.js` replace
+  `debits.push([gasTick, guardFee, source])` with `this.util.billGuardGas(debits, gasTick, guardFee,
+  source, data)` (`handler.util` in ORDER and SWAP). The arguments are the ones the push used, and the
+  helper pushes that same row first; only when `data['DRY_RUN']` is true does it also add the fee to a
+  per-source total the dry-run result reads as `guardGasFee`. `DRY_RUN` is set only from the synthetic
+  dry-run transaction, so every decoded transaction's debits, balances and verdicts are unchanged.
+- **SEND, `send/leg_verdicts.js`:** `recordProbeLegVerdict` records a leg when `DRY_RUN` is true
+  instead of `FEE_PROBE`. DESTROY and AIRDROP share the recorder, so their leg lists follow the
+  same flag. Both public surfaces (feequote and preflight) set both flags, so their leg lists are
+  unchanged; the regtest-only `feequotedryrun` now carries them too.
+- **BATCH, `batch/index.js`, `batch/probe.js`:** the three probe-only gates of the dispatch loop now
+  read three flags. The VM-forbidden sub-action skip reads `GUARD_INERT`, the per-sub-command STATUS
+  delete keeps `FEE_PROBE`, and the sub-verdict collectors and the `_primaryVerdict` snapshot read
+  `DRY_RUN` (the refusal row is recorded only when collecting). Both public surfaces pass `guardInert:
+  true` and `feeProbe: true` unconditionally, so on them all three gates fire exactly as before. On a
+  decoded transaction all three flags are false, as before. Only `feequotedryrun`, which sets neither
+  `guardInert` nor `feeProbe`, behaves differently: it now reports `subCommands` and `legs`, and the
+  BATCH's own verdict there is no longer taken over by a sub-command's match snapshot.
+
+**Client side:** no admission predicate, error text, amount rule or fee rule moves in any mapped
+handler. `applyTier1` reads the network `status` of the feequote and preflight surfaces, whose
+verdicts are unchanged; `feequotedryrun` is not a surface the pre-flight calls (see
+`index/tier1_findings.js`), and no `checks/` module reads `guardGasFee`. NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL for validity.** Twelve rows re-pin, the anchor moves to the committed indexer
+tree, and the other four rows are unchanged.
+
+### 2026-11-18 - AIRDROP refuses a leg amount the ledger cannot parse, and DESTROY and AIRDROP keep per-leg probe verdicts
+
+The `send` pin moves from `341e2755` to `d5063639`, the `destroy` pin moves from `f6423fc8` to
+`16967859`, the `dispenser` pin moves from `8130c1a2` to `d424db43` and the `airdrop` pin moves from
+`9b3ade3b` to `a7083540`, hashed from the committed indexer tree at the anchor above by `node bin/preflight_handler_dirs.js <indexer>
+src/actions/<name>/` and read against the previous anchor `a6b8655f2`. The whole mapped diff is one
+review-round landing (`778f7049a`); the origin develop merge in the range touches no mapped row.
+
+- **AIRDROP, `airdrop/index.js`:** `processAirdropLeg` refuses a leg whose AMOUNT `bcparses` rejects
+  as `invalid: AMOUNT (format)`, after every earlier verdict and before the DEBIT `bcmul`. Where
+  AMOUNT_REPRESENTABILITY is unarmed (mainnet) the legacy format rule passes text such as `1.+5`,
+  `1.-5` or `01 .5`, which used to halt the block on the DEBIT math. Ungated.
+- **AIRDROP `airdrop/settle.js`, DESTROY `destroy/settle.js`:** each leg's status is appended to
+  `PROBE_LEG_VERDICTS` through `recordProbeLegVerdict` when `FEE_PROBE` is true, as SEND has since
+  2026-11-01. The key never exists on a decoded transaction, so no on-chain verdict, row or balance moves.
+- **SEND, `send/settle.js`, `send/leg_verdicts.js`:** `recordProbeLegVerdict` moves from `settle.js`
+  into `leg_verdicts.js` and is shared by the three actions. A leg with no DESTINATION now omits the
+  key instead of carrying `undefined`; every SEND leg has one, so SEND rows are unchanged.
+- **DISPENSER, `dispenser/index.js`:** below DISPENSER_FRESHNESS_ACTIVATION, a node whose utxo-tracker
+  client is present but unconfigured now runs the legacy freshness read, whose call throws the tagged
+  unavailable error and halts the block, where it used to skip the read and judge the create not fresh.
+  A node-local fault path: tracker-backed nodes reach the same verdict as before.
+
+**Client follow-up.** AIRDROP moves. Pre-flight already refused a first-leg `1.+5` through the
+validator (`AMOUNT must be numeric`), but on mainnet a later leg of a format-1 or format-2 AIRDROP,
+alone or as a BATCH sub-command, passed both the validator and `checkAirdropAmountFormat`'s legacy
+rule. `checks/airdrop.js` now runs `checkAmountParses` (`checks/amount_format.js`, over
+`numeric.bignumberParses`, the indexer's `bcparses` on the same mathjs 15.2.0) on each leg whose token
+resolves, an AMOUNT_FORMAT_INVALID error that never duplicates a validator refusal of the field. It
+carries `haltClass`, as the 2026-11-02 entries set it, because an indexer without this commit halts on
+the leg, so a network answer of valid never demotes it. Every
+string of up to five characters over `0 1 5 . + - e x b o` and space that the indexer's legacy rule
+passes and mathjs refuses (588 cases over 0 and 8 decimals) is now refused on mainnet and regtest as a single leg,
+a later leg and a BATCH sub-command. DESTROY and SEND need nothing: no admission predicate moves, and
+`applyTier1` reads the network's `status` alone, which for a multi-leg DESTROY or AIRDROP now names
+the first refused leg (standalone through `dry_run_support.js`, in a BATCH through `batch/probe.js`)
+where it named the last leg's, as SEND's has since 2026-11-01. DISPENSER needs nothing: freshness stays
+server-side under DISPENSER_ORIGIN_STANDING. Tests:
+`test/unit/preflight/checks/airdrop_leg_amount_parse.test.js`.
+
+**Direction: TIGHTENS AIRDROP, ungated.** The refused amounts halted the chain before. One client
+check is added; DESTROY, SEND and DISPENSER are NEUTRAL for validity. The anchor moves to the committed
+indexer tree, and the other twelve rows are unchanged.
+
+### 2026-11-16 - a cross-chain ORDER's GET_ADDRESS is judged against GET_COIN behind ORDER_GET_ADDRESS_COIN
+
+The `order` pin moves from `86b0a7c3` to `4e130541`, hashed from the committed indexer tree at the
+anchor above by `node bin/preflight_handler_dirs.js <indexer> src/actions/order/` and read against the
+previous anchor `93cde565f`. Two parts change; `controller_guard.js`, `fees.js`, `index.js` and
+`settle.js` are untouched in the range.
+
+- **ORDER, `order/context.js`:** `detectSides` resolves `getAddressOnGetCoin`, true when the ORDER is
+  cross-chain (format 0, GET_COIN set and not this chain's COIN) and `ORDER_GET_ADDRESS_COIN` is
+  enabled at the ORDER's block. A same-chain ORDER skips the lookup.
+- **ORDER, `order/validate.js`:** `validateFormats` passes GET_COIN to `isCryptoAddress` when that flag
+  is set, so a cross-chain GET_ADDRESS must be a valid GET_COIN address on this network; below the flag
+  it is still checked against the local chain's format. The contract-address branch, the
+  missing-GET_ADDRESS rule and every error string are unchanged.
+
+**Activation.** `ORDER_GET_ADDRESS_COIN` is a `protocol_changes` time row (`changes_5.js`), unarmed on
+mainnet, armed on testnet at 1794873600 (2026-11-17T00:00Z) and active from genesis on regtest. It is
+not an `addGate` row, so it cannot join `ACTIVATION_MIRRORS`, whose drift-gate reader finds addGate
+calls only. It joins `DISCLOSURE_MIRRORS` in `activation.js` and is bound by value against `changes_5.js`
+and `flag_times.js` in `test/unit/preflight/checks/activation_splits_mirrored.test.js`.
+
+**Client follow-up.** The validator's GET_ADDRESS rule (`protocol/validator/field_rules_basic.js`
+`validateAddressFields`, through `isValidListAddress`) accepts an address of any supported coin on the
+SDK's network tier, so it already admits every payout address the indexer now accepts, and nothing is
+loosened. `checks/trading.js` gains `checkOrderGetAddressCoin`: for a v0 cross-chain ORDER with a full
+GET_ADDRESS (not `^<id>`, not a contract address) where the gate is active by the wall clock, a
+GET_ADDRESS that is not a valid GET_COIN address on this network is an error, `invalid: GET_ADDRESS
+(format)`. Where the gate is unarmed it adds nothing, and with no known chain coin or network it
+discloses the check as unverified. The pre-activation local-chain refusal (a foreign payout address
+below the flag, today's mainnet rule) stays the indexer's to report, as it was before this change.
+Tests: `test/unit/preflight/checks/trading_order_get_address_coin.test.js`.
+
+**Handler changes in the same range outside every mapped row.**
+- **EXECUTE and DEPLOY state writes, `STATE_VALUE_ASTRAL_ESCAPE`** (`execute/run_vm.js`,
+  `execute/guard_effects.js`, new `execute/state_value_text.js`, `deploy/constructor_effects.js`): each
+  stored state value's JSON text writes a character above U+FFFF as its escape pair. Storage-only: no
+  verdict, status or fee moves, and JSON.parse returns the same value. The SDK light client hashes the
+  server's raw stored `state_value` into the contract leaf (`protocol/light_client/proof_checks.js`
+  `verifyContractStateProof`) and never re-serializes it, so it verifies either spelling. No client
+  check reads the gate, so no mirror row is added.
+- **DEPLOY lint, `LINT_REGEX_GROUP_DEPTH`** (`deploy/lint.js`): `resolveLintFlags` passes
+  `enforceLintRegexGroupDepth`, so a deploy holding a regex literal nested past 64 groups is refused from
+  the gate (a time row: unarmed on mainnet, testnet 1794873600, regtest 0). Pre-flight DEPLOY runs no
+  lint (`checks/misc.js` declares VM syntax server-side). The SDK's lint-core copy carries the same bound
+  (`contract/lint-core/regex_group_depth.js`), and its callers (`validateContract` and
+  `contract/utils.js` `validate`) pass no options, so the bound applies on every network whatever the
+  gate, as the nesting and syntax depth bounds already do. It is not advisory on the deploy path: the
+  builder's `preflightContractLint` runs `validateContract` in `block` mode by default and throws
+  `CONTRACT_LINT_FAILED`, so such a deploy is refused client-side on mainnet and on testnet below the
+  gate, where the indexer still accepts it; `{ lint: 'warn' }` or `'off'` lets it through. No mirror row
+  is added, since no client predicate reads the gate.
+- `file.js`, the `file_multipart*` parts and `slash/bounty.js` also change in the range. None is a
+  mapped row and none was reviewed here.
+
+**Direction: TIGHTENS for a cross-chain ORDER whose GET_ADDRESS is not GET_COIN's, where the gate is
+active.** One client check is added. The anchor moves to the committed indexer tree, and the other
+fifteen rows are unchanged.
+
+### 2026-11-15 - a BATCH probe says why it cannot judge a payment-triggered DISPENSE
+
+The `batch` pin moves from `c6ca292c` to `ca3e05eb` once the round's commits are on origin develop (held at
+`c6ca292c` until then, since a pin ahead of origin fails every SDK push), hashed from the committed review-round tree by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` and read against the anchor above
+(`8960c6ed1`, which hashes `batch` to `c6ca292c`). The round's two commits change three parts of the
+directory and no other mapped row.
+
+- **BATCH, `batch/probe.js`:** `recordSubVerdict` now sets the `refused` note on a DISPENSE
+  sub-command whose probe status is null and which carries no `COIN_DESTINATION`, because the
+  synthetic pre-flight transaction pays no dispenser address. The row's `status` stays null, as it
+  already was for that case, and the note is the only new field value.
+- **BATCH, `batch/limits.js`, `batch/sub_command.js`:** comment-only, shortened. Every weight,
+  cap and activation constant and every code path is unchanged.
+
+**Client follow-up.** No admission predicate, status string, fee or weight rule, or validation order
+moves, so every on-chain verdict and row is unchanged and `checks/batch.js` stands. The network's
+BATCH answer for that sub-command was already unjudged and stays unjudged; only its stated reason
+changes. `classifySubCommands` in `index/tier1_findings.js` already files a `status: null` row as
+`DRYRUN_SUBCOMMAND_UNJUDGED` and prints the row's `refused` text in the disclosure, so the note
+reaches the caller with no code change, and only the comment naming the live causes of an unjudged
+row is extended. Tests:
+`test/unit/preflight/tier1/batch_tier1.test/10_a_payment_triggered_dispense_is_unjudged_with_its_reason.test.js`,
+the note carried into the disclosure, an unjudged row never overriding a client error, and an older
+answer with no note.
+
+**Direction: NEUTRAL for validity.** NO CLIENT CHECK MOVES. The anchor moves to the origin develop
+head and the other fifteen rows are unchanged.
+
+### 2026-11-14 - a BATCH probe answers a multi-leg SEND sub-command with its first refused leg
+
+The `send` pin moves from `1591aa81` to `341e2755` and the `batch` pin moves from `9a5147d0` to
+`c6ca292c`, hashed from the committed indexer tree at the anchor above by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/send/` and `src/actions/batch/`. That
+tree is origin develop `a26636f04` plus one review-round landing (`f9d86586d`); origin develop
+carried no change to either directory since `265c85c86`, so the whole mapped diff is that
+landing. Per-part digests at the two commits differ only in `send/leg_verdicts.js` (new) and
+`batch/probe.js`: `send/settle.js`, `batch/fees.js`, `batch/limits.js` and `batch/sub_command.js`
+change comments alone and hash identically at both.
+
+- **SEND, `send/leg_verdicts.js` (new):** `foldLegVerdicts(legs, isGuardInert)` copies the `PROBE_LEG_VERDICTS` rows `send/settle.js` records on a `FEE_PROBE` run and answers with the first leg whose status is neither `valid` nor guard-inert, else the first leg that is not `valid`, else `valid`, plus the copied `legs`; an absent or empty list is null. The indexer's standalone dry-run reader (`actions_class/dry_run_support.js`, outside this map) now calls it too, so a standalone multi-leg SEND prefers a real refusal over a guard-inert one where it used to take the first non-valid leg.
+- **BATCH, `batch/probe.js`:** `recordSubVerdict` folds the legs before the per-sub-command key clear drops them, so a SEND sub-command's row in `PROBE_SUB_VERDICTS` carries the first refused leg's status where it carried the last leg's (`send/settle.js` writes `data['STATUS']` per leg), and gains a `legs` list. A folded guard-inert status still becomes `status: null` with a `refused` note. A sub-command that set off a match keeps its match snapshot and is not folded.
+- **SEND `send/settle.js`, BATCH `batch/fees.js`, `batch/limits.js`, `batch/sub_command.js`:** comment-only, re-pointing references at the files `actions/index.js` was split into.
+
+**Client follow-up.** No admission predicate, status string, fee or weight rule, or validation
+order moves, and `FEE_PROBE` never exists on a decoded transaction, so every on-chain verdict and
+row is unchanged and `checks/send.js` and `checks/batch.js` stand. What moves is the network's
+BATCH answer: a multi-leg SEND sub-command whose earlier leg is refused and whose last leg settles
+used to read `valid`, which `applyTier1` takes as the network accepting that command and so
+downgraded a Tier-2 error on it to info; it now reads as the refusal, and the Tier-2 error stays.
+`normalizeSubCommands` reads `status` and `refused` alone and drops `legs`, which nothing in the
+report needs. Tests: `test/unit/preflight/tier1/batch_tier1.test/09_a_multi_leg_send_answers_with_its_first_refused_leg.test.js`,
+a folded refusal with `legs` and a folded guard-inert row through `runTier1` and `applyTier1`.
+
+**Direction: NEUTRAL for validity.** NO CLIENT CHECK MOVES. A client reading the indexer
+pre-flight answer for a BATCH holding a multi-leg SEND now sees a refusal it was previously told
+was valid. The anchor moves to the committed indexer tree, and the other fourteen rows are
+unchanged.
 
 ### 2026-11-02 - ISSUE refuses a hexadecimal, binary or octal mint window
 
@@ -666,8 +988,8 @@ literal past the range, which normalization stores as NULL.
 
 The same commits refuse a prefixed LINK COIN1_ACTION_INDEX or COIN2_ACTION_INDEX and XCALL
 TARGET_CONTRACT_INDEX (`link.js`, `xcall/request.js`), and fit or null refused rows' integer
-columns in `db/`; those handlers sit outside every mapped row, and pre-flight has no LINK or XCALL
-check to align.
+columns in `db/`. Pre-flight mirrors both field refusals through `PREFIXED_INTEGER_FIELDS` (LINK 0
+and XCALL 0); XCALL is VM-emitted, so no user wire reaches its entry.
 
 **Client follow-up.** `numeric.keepsPrefixedSpelling` mirrors the indexer helper, and
 `indexer_value_checks_parity.test.js` runs both over one corpus (radix, case, sign, whitespace and
@@ -725,6 +1047,23 @@ canonical gate. Tests: `test/unit/preflight/issue/issue_stored_widths.test.js` a
 
 **Direction: TIGHTENING, ungated.** The refused values halted the chain before. The anchor moves
 to the committed lane tree, and the other thirteen rows are unchanged.
+
+### 2026-11-01 - SEND keeps each leg's verdict on fee-probe runs
+
+The `send` pin moves from `bb0ad388` to `1591aa81`, hashed from indexer commit
+`e1befbb18e05906cb3e3f8024e05980ab9707421` by
+`node bin/preflight_handler_dirs.js <indexer> src/actions/send/`. The mapped diff changes only
+`settle.js`: after each leg's status is set, `recordProbeLegVerdict` appends
+`{ tick, amount, destination, status }` to `PROBE_LEG_VERDICTS` when `FEE_PROBE` is true. That
+key exists only on the synthetic transaction the public quote surfaces build, never on a
+decoded transaction, so the per-leg status, the action STATUS, the sends rows and every
+balance write are unchanged on chain. The indexer's dry-run reader (outside this map) now
+answers a multi-leg SEND with the first refused leg's status instead of the last leg's, and
+adds a `legs` list.
+
+**Direction: NEUTRAL for validity.** NO CLIENT CHECK MOVES: no SEND admission predicate,
+error text or validation order changed. A client reading the indexer pre-flight answer for a
+multi-leg SEND now sees a refusal it was previously told was valid.
 
 ### 2026-10-31 - SEND reuses destination token-list policy across legs
 

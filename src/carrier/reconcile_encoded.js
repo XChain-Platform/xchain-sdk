@@ -32,8 +32,8 @@
  * guessed from the encoder's answer.
  *
  * Fail-closed: throws SDKActionError on the first output or fee it cannot account
- * for. Returns { fee, totalIn, totalOut } (fee null when the PSBT does not carry
- * enough input data to compute one).
+ * for. Returns { fee, totalIn, totalOut } only after every value needed for fee
+ * accounting has been verified.
  */
 
 const bitcoin = require('bitcoinjs-lib');
@@ -66,10 +66,46 @@ function createDeny(psbtHex, label) {
     };
 }
 
+function trustedPrevTxMap(intent, deny) {
+    const map = new Map();
+    for (const raw of (Array.isArray(intent.trustedPrevTxs) ? intent.trustedPrevTxs : [])) {
+        try {
+            const bytes = Buffer.isBuffer(raw) ? raw
+                : (typeof raw === 'string' && /^(?:[0-9a-fA-F]{2})+$/.test(raw)
+                    ? Buffer.from(raw, 'hex') : null);
+            if (!bytes) return deny('UNRECONCILABLE_PSBT', 'trustedPrevTxs contains a non-transaction value');
+            const tx = bitcoin.Transaction.fromBuffer(bytes);
+            map.set(tx.getHash().toString('hex'), tx);
+        } catch (e) {
+            return deny('UNRECONCILABLE_PSBT', 'trustedPrevTxs contains an invalid transaction: ' + e.message);
+        }
+    }
+    return map;
+}
+
+function isTaprootScript(script) {
+    const b = Buffer.from(script);
+    return b.length === 34 && b[0] === bitcoin.opcodes.OP_1 && b[1] === 32;
+}
+
+function witnessAmountIsBound(psbt, i, trusted, deny) {
+    const data = psbt.data.inputs[i];
+    if (data.nonWitnessUtxo) return 'prevtx';
+    const tx = trusted.get(psbt.txInputs[i].hash.toString('hex'));
+    if (!data.witnessUtxo || !tx) return false;
+    const out = tx.outs[psbt.txInputs[i].index];
+    let sameValue = false;
+    try { sameValue = !!out && BigInt(out.value) === BigInt(data.witnessUtxo.value); } catch (e) { /* false */ }
+    if (!out || !bytesEqual(out.script, data.witnessUtxo.script) || !sameValue)
+        return deny('INCONSISTENT_PREVOUT', 'input ' + i + ' witnessUtxo disagrees with trustedPrevTxs');
+    return 'trusted';
+}
+
 // Read signer-owned funding state once so output authorization uses proven scripts.
 // A P2SH input paying the caller key's P2SH-P2WPKH script is single-key as well.
 function readInputs(psbt, deny, intent) {
     const nestedOwn = callerNestedScripts(intent.callerIdentities, intent.network);
+    const trusted = trustedPrevTxMap(intent, deny);
     // Funding scripts authorize change only when unsigned AND single-key: the WIF must
     // finalize every input, so it alone controls them; a shared-key script (1-of-2) never qualifies.
     const fundingScripts = [];
@@ -77,12 +113,21 @@ function readInputs(psbt, deny, intent) {
     const spent = [];
     let totalIn = 0n;
     let feeComputable = true;
+    const unverified = [];
+    let encoderDependent = 0;
     for (let i = 0; i < psbt.txInputs.length; i++) {
         // Refuse UTXO fields that disagree: the key signs the nonWitnessUtxo prevout, so judging a forged witnessUtxo approves a drain
         try { findVerifiedPrevout(psbt, i); }
         catch (e) { return deny('INCONSISTENT_PREVOUT', e.message); }
         const script = inputScript(psbt, i);
         if (!script) return deny('UNRECONCILABLE_PSBT', 'input ' + i + ' carries no witnessUtxo or nonWitnessUtxo, so its funding script cannot be established');
+        const data = psbt.data.inputs[i];
+        const finalized = !!(data.finalScriptSig || data.finalScriptWitness);
+        if (!finalized && !isTaprootScript(script)) {
+            const binding = witnessAmountIsBound(psbt, i, trusted, deny);
+            if (binding !== 'trusted') encoderDependent++;
+            if (!binding) unverified.push(i);
+        }
         if (!inputPresigned(psbt, i)) {
             unsignedInputs++;
             if (singleKeyInput(psbt, i, script) || nestedOwn.some((s) => bytesEqual(s, script))) fundingScripts.push(script);
@@ -95,6 +140,13 @@ function readInputs(psbt, deny, intent) {
     // inputs but no signer-owned one, and it is denied below with its own reason
     // rather than mislabelled as input-less.
     if (!psbt.txInputs.length) return deny('UNRECONCILABLE_PSBT', 'the encoder returned a transaction with no inputs');
+    // A previous transaction supplied by the encoder can move between otherwise
+    // identical signing responses. Refuse a witness-only v0 input when another
+    // v0 input also depends on the encoder, so signatures cannot be combined
+    // across role-swapped responses with different claimed amounts.
+    if (unverified.length >= 1 && encoderDependent >= 2)
+        return deny('UNVERIFIED_INPUT_VALUE', { inputs: unverified,
+            detail: 'a segwit-v0 input amount is unbound while another input amount depends on the encoder; request attachPrevTx' });
     if (!unsignedInputs) return deny('NO_SIGNER_OWNED_INPUT',
         'every input in the encoder response already carries a signature, so none of them is the local signer\'s');
 
@@ -178,8 +230,8 @@ function reconcileOutput(out, i, inputs, outputs, deny) {
     // (d) An encoder-derived funding leg for this phase. Shape gets it this far
     //     only: the script is the encoder's to derive and a chunked payload emits
     //     as many of them as it needs, so neither address nor count can pin it.
-    //     Value is pinned separately, by whichever of the two mechanisms this
-    //     phase has, and a leg that clears neither is a park.
+    //     Bind chunk legs to verified carrier scripts after this pass; companion
+    //     spends and optional ceilings additionally pin their value.
     if (matchesPhaseShape(script, outputs.phaseShapes)) {
         // Where a companion PSBT already exists (the envelope pair comes back
         // from one createTx call), the leg must be exactly what that companion
@@ -239,10 +291,19 @@ function checkPhaseFundingCap(intent, outputs, deny) {
             { total: String(outputs.phaseFundingTotal), legs: outputs.phaseFunding.length, maxPhaseFundingSats: String(maxPhaseFunding) });
 }
 
-// Finish fee accounting only when every input value is available.
+// A fee gate that cannot read every input value must fail closed.
 function reconcileFee(intent, inputs, outputs, deny) {
+    // Parse the caller's cap before any fee-dependent branch. An unreadable fee
+    // must not turn a malformed or unenforceable cap into an uncapped approval.
+    const maxFee = exactU64(intent.maxFeeSats);
+    if (intent.maxFeeSats != null && maxFee === null)
+        return deny('MALFORMED_FEE_CAP',
+            { maxFeeSats: String(intent.maxFeeSats),
+              detail: 'maxFeeSats must be a non-negative integer (number, bigint, or digit string); the cap cannot be enforced as given' });
     if (!inputs.feeComputable)
-        return { fee: null, totalIn: null, totalOut: outputs.totalOut, phaseFunding: outputs.phaseFunding };
+        return deny('UNCOMPUTABLE_FEE',
+            { totalOut: String(outputs.totalOut),
+              detail: 'an input value could not be read, so the fee guards and any maxFeeSats cap cannot be enforced' });
     // (e) Fee. The action string never constrains the miner fee, so an encoder can
     //     drain the balance by omitting or undersizing change and leaving the
     //     remainder to miners. Two always-on guards that cannot false-positive: a
@@ -255,16 +316,8 @@ function reconcileFee(intent, inputs, outputs, deny) {
     if (inputs.totalIn > 0n && outputs.totalOut === 0n)
         return deny('FULL_BURN_FEE', { totalIn: String(inputs.totalIn), detail: 'every satoshi would go to miners' });
     const fee = inputs.totalIn - outputs.totalOut;
-    // Caller-supplied cap is parsed exactly. Routing it through Number before
-    // toU64 rounds a >2^53 cap, which both slackens and false-positives the
-    // comparison. exactU64 also keeps the decimal-STRING form the encoder emits.
-    const maxFee = exactU64(intent.maxFeeSats);
-    // Same fail-closed rule as the phase-funding cap above: an unparseable ceiling
-    // is denied, never treated as no ceiling.
-    if (intent.maxFeeSats != null && maxFee === null)
-        return deny('MALFORMED_FEE_CAP',
-            { maxFeeSats: String(intent.maxFeeSats),
-              detail: 'maxFeeSats must be a non-negative integer (number, bigint, or digit string); the cap cannot be enforced as given' });
+    // maxFee was parsed exactly above. Routing it through Number would round a
+    // value above 2^53 and could weaken or falsely trigger the comparison.
     if (intent.maxFeeSats != null && fee > maxFee)
         return deny('FEE_OVER_CAP', { fee: String(fee), maxFeeSats: String(maxFee) });
 
@@ -284,7 +337,8 @@ function reconcileFee(intent, inputs, outputs, deny) {
  *   callerIdentities {Array}  the caller's own `pubkey` identity (address or raw
  *                             pubkey hex), whose default-type scripts a reveal with
  *                             no wallet input of its own returns change to
- *   maxFeeSats     {number}   absolute fee ceiling from the caller, or null
+ *   maxFeeSats     {number}   absolute fee ceiling for this PSBT, or null. Callers
+ *                             reconciling several PSBTs apply it to each, not their sum
  *   phaseShapes    {string[]} script shapes this phase's encoder-derived funding
  *                             legs may take ('p2sh' / 'p2wsh' / 'p2tr'), empty or
  *                             absent for a plain single-phase action
@@ -295,6 +349,8 @@ function reconcileFee(intent, inputs, outputs, deny) {
  *   requiredSpends {Array}    funding legs an EARLIER phase paid out that this PSBT
  *                             must consume as inputs, so value the SDK authorized by
  *                             shape is proven to come back rather than stay parked
+ *   trustedPrevTxs {Array}    raw transactions the SDK built and signed, which
+ *                             bind witness-only phase inputs to their real outputs
  *   maxPhaseFundingSats       absolute ceiling on the TOTAL value across this PSBT's
  *                  {number}   shaped funding legs, or null. maxFeeSats does not
  *                             bound them, so this is the caller's only value cap on
@@ -333,4 +389,4 @@ function feeQuoteAuthorizedOutput(feeQuote) {
     return { address: feeQuote.address, value };
 }
 
-module.exports = { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput };
+module.exports = { reconcileEncoded, reconcileFee, psbtPrevouts, feeQuoteAuthorizedOutput };

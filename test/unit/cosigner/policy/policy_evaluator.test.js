@@ -16,7 +16,6 @@ const send = (params) => ({ action: 'SEND', params });
 // The pure verdict function shared by AgentSession (client guardrail) and the
 // co-signer daemon (hard enforcement). No I/O, no throws: deny is a return
 // value. These tests pin that contract independently of either caller.
-
 describe('policyEvaluator.evaluatePolicy', function () {
     it('allows an in-policy action', function () {
         const policy = { allowedActions: new Set(['SEND']) };
@@ -159,7 +158,6 @@ describe('policyEvaluator.evaluatePolicy', function () {
 describe('policyEvaluator.evaluatePolicy', function () {
     // Caps must bind to each action's real value field, not only literal AMOUNT.
     describe('per-action value-field binding', function () {
-
         it('caps a SWAP on its GIVE_AMOUNT/GIVE_TICK (was uncapped)', function () {
             const policy = { allowedActions: new Set(['SWAP']), maxPerAction: { SWAP: { FOO: '100' } } };
             const over = evaluatePolicy(policy, { action: 'SWAP', params: { giveTick: 'FOO', giveAmount: '1000000', getTick: 'BAR', getAmount: '1' } });
@@ -352,6 +350,20 @@ describe('policyEvaluator.evaluatePolicy', function () {
         it('a count-only maxActions is not an amount limit and still allows the action', function () {
             const policy = { allowedActions: new Set(['AIRDROP']), maxPerWindow: { hours: 24, maxActions: 5 } };
             expect(evaluatePolicy(policy, { action: 'AIRDROP', params: { tick: 'FOO', amount: '1' } }).ok).to.equal(true);
+        });
+
+        it('denies every always-unbounded action without needing a format version', function () {
+            const actions = ['BATCH', 'EXECUTE', 'CALLBACK'];
+            const policy = { allowedActions: new Set(actions), maxPerWindow: { hours: 24, perTick: { '*': '10' } } };
+            for (const action of actions) {
+                const verdict = evaluatePolicy(policy, { action, params: { command: 'SEND|0|TOK|1000000|dest' } });
+                expect(verdict.violation.code, action).to.equal('POLICY_UNBOUNDED_ACTION');
+            }
+        });
+
+        it('does not treat a count-only window as an amount limit for BATCH', function () {
+            const policy = { allowedActions: new Set(['BATCH']), maxPerWindow: { hours: 24, maxActions: 5 } };
+            expect(evaluatePolicy(policy, { action: 'BATCH', params: { command: 'SEND|0|TOK|1|dest' } }).ok).to.equal(true);
         });
     });
 });

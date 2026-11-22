@@ -260,7 +260,7 @@ function decodeBetListEdit(chainSuffix, pick, feedRef, memo, memoWarn) {
         ],
         warnings: [
             'Only the market creator can make this edit, and only while the market is open.',
-            'The new membership lists affect future bets only. Existing bets are unchanged.',
+            'The new membership lists affect future positions only. Existing positions are unchanged.',
             ...memoWarn,
         ],
     };
@@ -270,7 +270,7 @@ function decodeBetPlacement(chainSuffix, pick, feedRef, outcome, memo, memoWarn)
     // v2 place a bet
     const amount = pick('amount', 'AMOUNT');
     return {
-        summary: `Bet ${amount || '?'} on outcome ${outcome || '?'} of market ${feedRef || '?'}${chainSuffix}`,
+        summary: `Commit ${amount || '?'} to outcome ${outcome || '?'} of market ${feedRef || '?'}${chainSuffix}`,
         details: [
             { label: 'Market', value: feedRef },
             { label: 'Outcome', value: outcome },
@@ -278,8 +278,8 @@ function decodeBetPlacement(chainSuffix, pick, feedRef, outcome, memo, memoWarn)
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
         warnings: [
-            'Bets are final. There is no cancel and no way to change your outcome once this is signed.',
-            'This is a parimutuel market, so your share is not fixed now: later bets change what a win pays.',
+            'This position is final. There is no cancel and no way to change your outcome once this is signed.',
+            'This is a parimutuel market, so your share is not fixed now: later positions change what a win pays.',
             ...(isNotPositive(amount) ? ['Stake is not positive.'] : []),
             ...memoWarn,
         ],
@@ -306,16 +306,36 @@ function decodeBetResolution(chainSuffix, feedRef, outcome, memo, memoWarn) {
 function decodeBetCancellation(chainSuffix, feedRef, memo, memoWarn) {
     // v1 cancel a market
     return {
-        summary: `Cancel market ${feedRef || '?'} and refund every bet${chainSuffix}`,
+        summary: `Cancel market ${feedRef || '?'} and refund every position${chainSuffix}`,
         details: [
             { label: 'Market', value: feedRef },
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
         warnings: [
-            'Every open bet is refunded in full and the market is over. This cannot be undone.',
+            'Every open position is refunded in full and the market is over. This cannot be undone.',
             ...memoWarn,
         ],
     };
+}
+
+function formatMarketClose(deadline) {
+    if (!/^\d+$/.test(String(deadline))) return deadline;
+    const date = new Date(Number(deadline) * 1000);
+    if (!Number.isFinite(date.getTime())) return deadline;
+    return `${date.toISOString().slice(0, 19).replace('T', ' ')} UTC (${deadline})`;
+}
+
+function formatRefundWindow(refundWindow) {
+    if (!/^\d+$/.test(String(refundWindow))) return refundWindow;
+    const seconds = Number(refundWindow);
+    if (!Number.isSafeInteger(seconds)) return refundWindow;
+    if (seconds % 86400 === 0) {
+        const days = seconds / 86400;
+        return `${days} ${days === 1 ? 'day' : 'days'}`;
+    }
+    const hours = seconds / 3600;
+    const shown = Number.isInteger(hours) ? hours : Number(hours.toFixed(2));
+    return `${shown} ${shown === 1 ? 'hour' : 'hours'}`;
 }
 
 function decodeBetMarket(chainSuffix, pick, memo, memoWarn) {
@@ -333,24 +353,24 @@ function decodeBetMarket(chainSuffix, pick, memo, memoWarn) {
     const outcomeList = outcomes ? outcomes.split(',') : [];
 
     return {
-        summary: `Open a betting market on ${tick || '?'}${chainSuffix}: ${label || '(untitled)'}`,
+        summary: `Open a market on ${tick || '?'}${chainSuffix}: ${label || '(untitled)'}`,
         details: [
             { label: 'Market', value: label },
             { label: 'Outcomes', value: outcomeList.join(' / ') },
-            { label: 'Wager token', value: tick },
+            { label: 'Stake token', value: tick },
             // Named to keep it distinct from the protocol's market duration fee,
             // which is a different charge paid to a different party.
             { label: 'Oracle fee (percent of pot)', value: fee ? `${fee}%` : '0%' },
-            { label: 'Betting closes', value: deadline },
-            { label: 'Refund window (seconds)', value: refundWindow },
-            ...(minAmount ? [{ label: 'Minimum bet', value: minAmount }] : []),
+            { label: 'Market closes', value: formatMarketClose(deadline) },
+            { label: 'Refund window', value: formatRefundWindow(refundWindow) },
+            ...(minAmount ? [{ label: 'Minimum stake', value: minAmount }] : []),
             ...(allowList ? [{ label: 'Allow list', value: allowList }] : []),
             ...(blockList ? [{ label: 'Block list', value: blockList }] : []),
             ...(memo ? [{ label: 'Memo', value: memo }] : []),
         ],
         warnings: [
             'Market terms cannot be edited after this. Only allow and block list references can change while the market is open.',
-            'You are the oracle: if you never resolve it, bettors are refunded after the refund window, and your address carries that record publicly.',
+            'You are the oracle: if you never resolve it, participants are refunded after the refund window, and your address carries that record publicly.',
             ...(outcomeList.length < 2 ? ['A market needs at least two outcomes.'] : []),
             ...memoWarn,
         ],

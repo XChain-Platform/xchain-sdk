@@ -42,12 +42,14 @@ const { FINDING_CODES } = require('../constants.js');
  *   valid    - `status === 'valid'`. The network really ran this command.
  *   invalid  - any other non-empty status string. The network ran it and
  *              rejected it.
- *   unjudged - `status === null`, with or without a `refused` note. Two live
- *              causes, both measured on BTC regtest 2026-08-13: a VM sub-action
- *              the probe refuses to dispatch (`refused` set), and a settlement
- *              leg that returns without recording a status because the probe
- *              carries no real transaction (`COINPAY|0|<match>` inside a batch
- *              answers `{status:null, refused:null}`).
+ *   unjudged - `status === null`, with or without a `refused` note. Three live
+ *              causes, the first two measured on BTC regtest 2026-08-13: a VM
+ *              sub-action the probe refuses to dispatch (`refused` set), a
+ *              settlement leg that returns without recording a status because the
+ *              probe carries no real transaction (`COINPAY|0|<match>` inside a
+ *              batch answers `{status:null, refused:null}`), and a
+ *              payment-triggered DISPENSE, which the probe now answers with a
+ *              `refused` note because its transaction pays no dispenser address.
  *
  * DECLARED LIMITATION, in the idiom batch_limits.js uses for its MINT-distinctness
  * approximation rather than left to be rediscovered: the SDK cannot turn a
@@ -109,6 +111,18 @@ function pushSubCommandFindings(findings, subs) {
     return cls;
 }
 
+// A shortfall tagged staleMirror was computed from an explorer read the mirror served
+// behind the chain tip, so the funding it misses may postdate that tip. With no network
+// verdict to certify it, it stays visible as a warning rather than a certified error.
+function capStaleMirrorShortfalls(findings) {
+    for (const f of findings) {
+        if (f.severity === 'error' && f.source === 'client' && f.data && f.data.staleMirror === true) {
+            f.severity = 'warning';
+            delete f.overridable;   // warnings carry no override flag (§4.2)
+        }
+    }
+}
+
 /*
  * Apply Tier-1 precedence to the assembled Tier-2 findings.
  *   - Tier-1 valid: authoritative pass. Contradicting Tier-2 ERRORS
@@ -130,6 +144,7 @@ function pushSubCommandFindings(findings, subs) {
  * payment is clean when their own wallet has already committed the funds.
  */
 function applyTier1(findings, tier1) {
+    if (!tier1 || tier1.kind !== 'verdict') capStaleMirrorShortfalls(findings);
     if (!tier1) return findings;
     if (tier1.kind === 'verdict' && tier1.valid === true) {
         applyValidVerdict(findings, tier1);
@@ -168,6 +183,11 @@ function applyValidVerdict(findings, tier1) {
             data: { oracleFeesOwed: tier1.oracleFeesOwed } });
     for (const f of findings) {
         if (f.severity === 'error' && f.source === 'client') {
+            // A halt-class finding is a rule an older indexer may lack, so the
+            // dry-run there (real handler, forced rollback) answers valid:true
+            // for an action that can halt it. A dry-run cannot vouch for these,
+            // so Tier 1 never demotes them, in any mode.
+            if (f.data && f.data.haltClass) continue;
             // §4.7 + per-sub-command precedence. Tier 1 outranks a Tier-2 error
             // only where it actually judged the thing the error is about. For a
             // batch that is PER COMMAND: a finding tagged with a commandIndex is

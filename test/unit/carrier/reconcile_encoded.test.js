@@ -42,6 +42,33 @@ function psbtHex(funding, outputs) {
 
 const carrier = (value) => ({ script: bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('58434841494e', 'hex')]), value });
 
+function registerLargeFeeCapCase() {
+    it('a >2^53 fee cap is compared exactly, not through a rounding Number() hop', function () {
+        // DOGE has no supply cap, so a fee this size is reachable rather than
+        // hypothetical. Number('9007199254740993') is 9007199254740992, so the cap
+        // arrived one satoshi SHORT of what the caller set and an honest fee landing
+        // exactly on it was denied; a bigint cap rounded identically. Both accept
+        // directions and the deny direction are asserted, since a cap that rounds
+        // the other way would slacken the guard instead.
+        const funding = payTo();
+        const IN     = 18014398509481985n;  // 2^54 + 1
+        const CHANGE = 9007199254740992n;   // 2^53
+        const FEE    = IN - CHANGE;         // 2^53 + 1, the first value a double cannot hold
+
+        const psbt = new bitcoin.Psbt({ network: NET });
+        psbt.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: funding.script, value: IN } });
+        psbt.addOutput(carrier(0));
+        psbt.addOutput({ script: funding.script, value: CHANGE });
+        const hex = psbt.toHex();
+
+        assert.strictEqual(reconcileEncoded(hex, { network: NET, maxFeeSats: String(FEE) }).fee, FEE);
+        assert.strictEqual(reconcileEncoded(hex, { network: NET, maxFeeSats: FEE }).fee, FEE);
+        assert.throws(
+            () => reconcileEncoded(hex, { network: NET, maxFeeSats: FEE - 1n }),
+            (e) => e.code === 'FEE_OVER_CAP');
+    });
+}
+
 describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', function () {
 
     it('accepts the ordinary shape: a zero-value carrier plus change back to the funding script', function () {
@@ -125,30 +152,15 @@ describe('reconcileEncoded (encoder-authored PSBT vs submitted intent)', functio
         assert.strictEqual(reconcileEncoded(hex, { network: NET }).fee, 10000n);
     });
 
-    it('a >2^53 fee cap is compared exactly, not through a rounding Number() hop', function () {
-        // DOGE has no supply cap, so a fee this size is reachable rather than
-        // hypothetical. Number('9007199254740993') is 9007199254740992, so the cap
-        // arrived one satoshi SHORT of what the caller set and an honest fee landing
-        // exactly on it was denied; a bigint cap rounded identically. Both accept
-        // directions and the deny direction are asserted, since a cap that rounds
-        // the other way would slacken the guard instead.
+    it('applies maxFeeSats independently to each reconciled transaction', function () {
         const funding = payTo();
-        const IN     = 18014398509481985n;  // 2^54 + 1
-        const CHANGE = 9007199254740992n;   // 2^53
-        const FEE    = IN - CHANGE;         // 2^53 + 1, the first value a double cannot hold
-
-        const psbt = new bitcoin.Psbt({ network: NET });
-        psbt.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: funding.script, value: IN } });
-        psbt.addOutput(carrier(0));
-        psbt.addOutput({ script: funding.script, value: CHANGE });
-        const hex = psbt.toHex();
-
-        assert.strictEqual(reconcileEncoded(hex, { network: NET, maxFeeSats: String(FEE) }).fee, FEE);
-        assert.strictEqual(reconcileEncoded(hex, { network: NET, maxFeeSats: FEE }).fee, FEE);
-        assert.throws(
-            () => reconcileEncoded(hex, { network: NET, maxFeeSats: FEE - 1n }),
-            (e) => e.code === 'FEE_OVER_CAP');
+        const hex = psbtHex(funding, [carrier(0), { script: funding.script, value: 90000 }]);
+        const intent = { network: NET, maxFeeSats: 10000 };
+        assert.strictEqual(reconcileEncoded(hex, intent).fee, 10000n);
+        assert.strictEqual(reconcileEncoded(hex, intent).fee, 10000n);
     });
+
+    registerLargeFeeCapCase();
 
 });
 

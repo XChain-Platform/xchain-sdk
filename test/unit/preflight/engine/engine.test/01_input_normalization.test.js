@@ -89,6 +89,57 @@ function registerCamelCaseInputNormalization() {
     });
 }
 
+function registerVirtualDispenseNormalization() {
+    describe('input normalization', function () {
+        it('canonicalizes the virtual DISPENSE action index alias', function () {
+            const parsed = normalizeInput({ action: 'DISPENSE', params: { actionIndex: 5 } }, core);
+            expect(parsed.actionString).to.equal('DISPENSE|0|5');
+            expect(parsed.params.DISPENSER_ACTION_INDEX).to.equal(5);
+        });
+
+        it('keeps virtual DISPENSE identity consistent across accepted forms', function () {
+            const alias = normalizeInput({ action: 'DISPENSE', params: { actionIndex: 5 } }, core);
+            const canonical = normalizeInput({ action: 'DISPENSE', params: { dispenserActionIndex: 5 } }, core);
+            const wire = normalizeInput('DISPENSE|0|5', core);
+            expect([alias.actionString, canonical.actionString, wire.actionString])
+                .to.deep.equal(['DISPENSE|0|5', 'DISPENSE|0|5', 'DISPENSE|0|5']);
+            expect(normalizeInput('DISPENSE|0|42|1', core).actionString).to.equal('DISPENSE|0|42');
+            expect(normalizeInput({ action: 'DISPENSE', params: {
+                dispenserActionIndex: 0, actionIndex: 9,
+            } }, core).actionString).to.equal('DISPENSE|0|0');
+        });
+
+        it('keeps virtual DISPENSE units out of the non-wire action identity', function () {
+            const parsed = normalizeInput({ action: 'DISPENSE', params: {
+                actionIndex: 5, units: '9'.repeat(100),
+            } }, core);
+            expect(parsed.actionString).to.equal('DISPENSE|0|5');
+            expect(parsed.params.UNITS).to.equal('9'.repeat(100));
+        });
+
+        it('rebuilds a virtual DISPENSE ParsedAction identity from its params', function () {
+            const stale = { ok: true, action: 'DISPENSE', version: 0, params: { ACTION_INDEX: '9' },
+                actionString: 'DISPENSE|0|', validation: { ok: true, findings: [] } };
+            const parsed = normalizeInput(stale, core);
+            expect(parsed.actionString).to.equal('DISPENSE|0|9');
+            expect(parsed.params.DISPENSER_ACTION_INDEX).to.equal('9');
+            expect(stale.actionString).to.equal('DISPENSE|0|');
+            const wire = normalizeInput('MINT|0|JDOG|5', core);
+            expect(normalizeInput(wire, core)).to.equal(wire);
+        });
+
+        it('a rebuilt virtual ParsedAction keeps no state its identity does not carry', function () {
+            const parsed = normalizeInput({ ok: true, action: 'dispense', version: 3,
+                params: { DISPENSER_ACTION_INDEX: '7' }, actionString: 'DISPENSE|0|',
+                validation: { ok: false, findings: [{ code: 'X', severity: 'error' }] } }, core);
+            expect(parsed.action).to.equal('DISPENSE');
+            expect(parsed.version).to.equal(0);
+            expect(parsed.actionString).to.equal('DISPENSE|0|7');
+            expect(parsed.validation).to.deep.equal({ ok: true, findings: [] });
+        });
+    });
+}
+
 function registerSharedComposeCoreCases() {
     // The three cases above were each fixed one at a time, because
     // pre-flight re-implemented a SUBSET of createAction's params ->
@@ -170,6 +221,7 @@ function registerComposeCoreDifferences() {
 describe('pre-flight engine', function () {
     registerBasicInputNormalization();
     registerCamelCaseInputNormalization();
+    registerVirtualDispenseNormalization();
     registerSharedComposeCoreCases();
     registerComposeCoreDifferences();
 });

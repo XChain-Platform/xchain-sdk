@@ -18,13 +18,13 @@
  *
  ********************************************************************/
 
-require('../apply_bufferutils_patch');
+const bufferutils = require('../apply_bufferutils_patch');
 const bitcoin = require('bitcoinjs-lib');
-const psbtutils = require('bitcoinjs-lib/src/psbt/psbtutils');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { SDKWalletError } = require('../errors.js');
 const { ECPair } = require('./key_derivation.js');
 const { assertConsistentPrevouts, findVerifiedPrevout } = require('./psbt_prevout.js');
+const { assertPartialFeeWithinCeiling } = require('./psbt_partial_fee.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -35,6 +35,14 @@ bitcoin.initEccLib(ecc);
 const ENCODER_MAX_FEE_RATE_SAT_VB = { dogecoin: 1000000, litecoin: 100000 };
 const CEILING_HEADROOM = 2;
 const UNKNOWN_CHAIN_CEILING = 10000000;
+
+function witnessStackToScriptWitness(witness) {
+    const parts = [Buffer.from(bufferutils.varuint.encode(witness.length))];
+    for (const item of witness) {
+        parts.push(Buffer.from(bufferutils.varuint.encode(item.length)), Buffer.from(item));
+    }
+    return Buffer.concat(parts);
+}
 
 // supplyNested fills in the redeem script of this key's own P2SH-P2WPKH inputs.
 function createSigningContext(psbtHex, wif, net, supplyNested) {
@@ -154,7 +162,10 @@ module.exports = {
      * the user was shown/approved, instead of blindly signing every UTXO the
      * active key controls. With a partial (scoped) sign the transaction is not
      * fully finalized, so the extracted tx is omitted and the partially-signed
-     * PSBT is returned for the caller/counterparty to complete.
+     * PSBT is returned for the caller/counterparty to complete. The fee ceiling
+     * applies to that partial PSBT too (FEE_RATE_TOO_HIGH): the chain default
+     * counts an input with no UTXO data as zero, and an explicit
+     * opts.maximumFeeRate refuses such an input as FEE_UNVERIFIABLE.
      *
      * @param {string} psbtHex - Unsigned PSBT from encoder, as hex
      * @param {string} wif - WIF-encoded private key
@@ -207,6 +218,7 @@ module.exports = {
             (inp) => inp.finalScriptSig || inp.finalScriptWitness
         );
         if (!allFinalized) {
+            assertPartialFeeWithinCeiling(psbt, this.resolveMaxFeeRate(opts), opts);
             return { txHex: null, txid: null, psbtHex: psbt.toHex() };
         }
 
@@ -257,7 +269,7 @@ module.exports = {
                 });
                 return {
                     finalScriptSig: undefined,
-                    finalScriptWitness: psbtutils.witnessStackToScriptWitness(payment.witness),
+                    finalScriptWitness: witnessStackToScriptWitness(payment.witness),
                 };
             }
             throw new SDKWalletError('FINALIZE_FAILED',

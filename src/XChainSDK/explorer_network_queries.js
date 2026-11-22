@@ -195,10 +195,12 @@ module.exports = {
     // validatorSource says whether the verdict trusts the explorer for the set.
     async verifyCheckpoint(blockIndex, opts) {
         let supplied = CheckpointVerifier.suppliedValidators(opts);
-        let body = await this.requireExplorer().getCheckpointVerify(blockIndex);
+        const explorer = this.requireExplorer();
+        const body = await explorer.getCheckpointVerify(blockIndex);
         // Nothing to verify if the explorer sent no checkpoint back; fail loudly rather than report success.
         if (!body || !body.checkpoint) throw new Error('verifyCheckpoint: no checkpoint in response');
-        return CheckpointVerifier.verifyServedCheckpoint(body, supplied);
+        return CheckpointVerifier.verifyServedCheckpoint(body, supplied,
+            { coin: explorer.coin, blockIndex });
     },
 
 

@@ -149,7 +149,9 @@ class EncoderClient {
         let self = this;
         let retryConfig = this.retry === false || options.retry === false
             ? { maxRetries: 0 }
-            : this.retry;
+            : (typeof options.retryOn === 'function'
+                ? Object.assign({}, this.retry, { isRetryable: options.retryOn })
+                : this.retry);
         let onRetry = encoderRetryHook(this, method);
 
         try {
@@ -202,6 +204,18 @@ class EncoderClient {
     }
 
     handleError(err, method) {
+        // A timeout can fire after the headers arrived (a stalled body): axios then rejects
+        // with the 2xx response still attached, as ECONNABORTED or as ERR_BAD_RESPONSE
+        // "stream has been aborted". A success status is never the failure, so it is a
+        // timeout when the stream was aborted and a network failure otherwise.
+        const status = err.response ? err.response.status : 0;
+        const stalledBody = status > 199 && status < 300;
+        if (stalledBody && !/abort|timeout/i.test(String(err.message))) {
+            throw new SDKEncoderError('ENCODER_NETWORK', 'Encoder response failed after HTTP ' + status + ': ' + err.message, { method, error: err.message });
+        }
+        if (err.code === 'ECONNABORTED' || stalledBody) {
+            throw new SDKEncoderError('ENCODER_TIMEOUT', 'Encoder request timed out', { method, timeout: this.timeout });
+        }
         if (err.response) {
             // Keep the encoder's own JSON-RPC error off a non-2xx body (401 -32001,
             // 429 -32029, 400 -32600) in the same details fields a 2xx error uses.
@@ -225,9 +239,6 @@ class EncoderClient {
                 'Encoder returned HTTP ' + err.response.status + ' for method ' + method + rpcErrorSuffix(rpcError),
                 Object.assign({ method, status: err.response.status, data: err.response.data }, rpcDetails)
             );
-        }
-        if (err.code === 'ECONNABORTED') {
-            throw new SDKEncoderError('ENCODER_TIMEOUT', 'Encoder request timed out', { method, timeout: this.timeout });
         }
         throw new SDKEncoderError('ENCODER_NETWORK', 'Encoder request failed: ' + err.message, { method, error: err.message });
     }

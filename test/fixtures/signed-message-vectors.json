@@ -1,0 +1,312 @@
+{
+  "vectors": [
+    {
+      "id": "bitcoin-mainnet-compressed",
+      "network": "bitcoin-mainnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": null,
+      "address": "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH",
+      "signature": "H/ekWyEiNs+vsqOX5k7LH3pPZfy9izgt6UYvcEGT9tf2FrGCBH9ZB1O0JtiULTJoDxEmmBJSI2FTGZQaBn83kbM="
+    },
+    {
+      "id": "bitcoin-mainnet-uncompressed",
+      "network": "bitcoin-mainnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "XChain signed message vector",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": false,
+      "segwitType": null,
+      "address": "1LagHJk2FyCV2VzrNHVqg3gYG4TSYwDV4m",
+      "signature": "HFNNJG12TCuoTEDOhK9Y4NNVZ7imrNaghcU9jdVB2OM/LkCRIfXHDZI+ni6efsljcs7oeH77NL7bYU3MJxRIOcA="
+    },
+    {
+      "id": "bitcoin-testnet-compressed",
+      "network": "bitcoin-testnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "XChain signed message vector",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": null,
+      "address": "mg8Jz5776UdyiYcBb9Z873NTozEiADRW5H",
+      "signature": "IFNNJG12TCuoTEDOhK9Y4NNVZ7imrNaghcU9jdVB2OM/LkCRIfXHDZI+ni6efsljcs7oeH77NL7bYU3MJxRIOcA="
+    },
+    {
+      "id": "bitcoin-testnet-uncompressed",
+      "network": "bitcoin-testnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "privateKeyHex": "00000000000000000000000000000000000000000000000000000000deadbeef",
+      "compressed": false,
+      "segwitType": null,
+      "address": "mytoedSeXrmFCJZHiGz4fNrY48h67KrpTB",
+      "signature": "HNuVgshO+TAVfCk3vxpP5dHib3B0sLIYPc8XJLIu7ZQ4enHtcaO+MviD4rK35f3rs8WUaT+On1ERfJJ1qDWsfNo="
+    },
+    {
+      "id": "litecoin-mainnet-compressed",
+      "network": "litecoin-mainnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "privateKeyHex": "00000000000000000000000000000000000000000000000000000000deadbeef",
+      "compressed": true,
+      "segwitType": null,
+      "address": "LQm1PuT9Ff4seBvaL5dXtw43TSwxoW7gWR",
+      "signature": "II54xFgM/rp+8n663HXd2pbKAhuIxnUPk/sSMN+I7sdVDV98hW4wf9W1aC5bUMP1F3U91qX6BAEYyBb983GwSsw="
+    },
+    {
+      "id": "litecoin-mainnet-uncompressed",
+      "network": "litecoin-mainnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "UTF-8: café, 🚀, 狗, привет",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": false,
+      "segwitType": null,
+      "address": "LYWKqJhtPeGyBAw7WC8R3F7ovxtzAiubdM",
+      "signature": "HDzvU1klZjj1/XhosAD3eP2y2uRTlFYDiq0GEJL9UJaMQAEhCYbWUk82ctyCngrKzF3084+P+sVk12HHQ/803I0="
+    },
+    {
+      "id": "litecoin-testnet-compressed",
+      "network": "litecoin-testnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "UTF-8: café, 🚀, 狗, привет",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": null,
+      "address": "mrCDrCybB6J1vRfbwM5hemdJz73FwDBC8r",
+      "signature": "IDzvU1klZjj1/XhosAD3eP2y2uRTlFYDiq0GEJL9UJaMQAEhCYbWUk82ctyCngrKzF3084+P+sVk12HHQ/803I0="
+    },
+    {
+      "id": "litecoin-testnet-uncompressed",
+      "network": "litecoin-testnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": false,
+      "segwitType": null,
+      "address": "n16daMq14zdjocUU5rUDVxts8449SL2VrL",
+      "signature": "GzrW1iTdySm2OqUUIgW31PPHjuAFCZpBOFGWoPWVudiCN9zfZsfhMHgd7Ghbeb7tNm226rUUotrXxB8cMfcXUu8="
+    },
+    {
+      "id": "dogecoin-mainnet-compressed",
+      "network": "dogecoin-mainnet",
+      "messagePrefixHex": "19446f6765636f696e205369676e6564204d6573736167653a0a",
+      "message": "",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": null,
+      "address": "D5kTEGxmas71USKAcAaJptKjq8NJc6EK8C",
+      "signature": "IFNMaSBhaFahyqGAX/w/MFowgxZoSOBk54B6TFX8sHrJWpDomEABGhSL7m92TGdgicjUBrNKwpH9iFciFihT9dA="
+    },
+    {
+      "id": "dogecoin-mainnet-uncompressed",
+      "network": "dogecoin-mainnet",
+      "messagePrefixHex": "19446f6765636f696e205369676e6564204d6573736167653a0a",
+      "message": "XChain signed message vector",
+      "privateKeyHex": "00000000000000000000000000000000000000000000000000000000deadbeef",
+      "compressed": false,
+      "segwitType": null,
+      "address": "DPWwtqJK2FEGxCGGjJ1FPDop5GpgXcdQru",
+      "signature": "G+2h1QRjI8nKy00CR6d2OcYSAtVs50T41NsRlPvt0KFIAPd8tJZFxHTuyTW57DrkSjw1ppDiOE3q7QfVWRD1Q6c="
+    },
+    {
+      "id": "dogecoin-testnet-compressed",
+      "network": "dogecoin-testnet",
+      "messagePrefixHex": "19446f6765636f696e205369676e6564204d6573736167653a0a",
+      "message": "XChain signed message vector",
+      "privateKeyHex": "00000000000000000000000000000000000000000000000000000000deadbeef",
+      "compressed": true,
+      "segwitType": null,
+      "address": "nZjDPxpsQPBpoMzCvMHFR5kBNEhGzuj6w1",
+      "signature": "H+2h1QRjI8nKy00CR6d2OcYSAtVs50T41NsRlPvt0KFIAPd8tJZFxHTuyTW57DrkSjw1ppDiOE3q7QfVWRD1Q6c="
+    },
+    {
+      "id": "dogecoin-testnet-uncompressed",
+      "network": "dogecoin-testnet",
+      "messagePrefixHex": "19446f6765636f696e205369676e6564204d6573736167653a0a",
+      "message": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": false,
+      "segwitType": null,
+      "address": "nhUXqN5cYNPvLLzk6Tn8ZPowqkeJP7Qws2",
+      "signature": "HNmNynz8DKsXh/eVcPUPp3KNvJ2pCGOtqDgehrZulfdaTeSTK2QycCxYgMZBYfqmwwHbea3VGCVolHbXBCGE42E="
+    },
+    {
+      "id": "bitcoin-mainnet-p2sh(p2wpkh)-1",
+      "network": "bitcoin-mainnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": "p2sh(p2wpkh)",
+      "address": "3JvL6Ymt8MVWiCNHC7oWU6nLeHNJKLZGLN",
+      "signature": "Iy6DjRBvbxS17ygilnZMr1EdyiJ+/7/XYRgqUs52pdnlIl9qwLtzKHOJLpkmfGnYGjf2RdwsR97U14XiLRkpjxU="
+    },
+    {
+      "id": "bitcoin-mainnet-p2sh(p2wpkh)-2",
+      "network": "bitcoin-mainnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "UTF-8: café, 🚀, 狗, привет",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": "p2sh(p2wpkh)",
+      "address": "3FWHHE3RVgyv5vYmMrcoRdA25uugWvQbso",
+      "signature": "Iw2ECMI83InBOdWWqEIrRT6ONSJShvjhcK4MBy7WxKgGZdSnuCjwb+vZOFjrjaGSOhxerQqK4dp20zS5UmRa4gg="
+    },
+    {
+      "id": "bitcoin-mainnet-p2wpkh-1",
+      "network": "bitcoin-mainnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": "p2wpkh",
+      "address": "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+      "signature": "Jy6DjRBvbxS17ygilnZMr1EdyiJ+/7/XYRgqUs52pdnlIl9qwLtzKHOJLpkmfGnYGjf2RdwsR97U14XiLRkpjxU="
+    },
+    {
+      "id": "bitcoin-mainnet-p2wpkh-2",
+      "network": "bitcoin-mainnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "UTF-8: café, 🚀, 狗, привет",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": "p2wpkh",
+      "address": "bc1qq6hag67dl53wl99vzg42z8eyzfz2xlkvxechjp",
+      "signature": "Jw2ECMI83InBOdWWqEIrRT6ONSJShvjhcK4MBy7WxKgGZdSnuCjwb+vZOFjrjaGSOhxerQqK4dp20zS5UmRa4gg="
+    },
+    {
+      "id": "bitcoin-testnet-p2sh(p2wpkh)-1",
+      "network": "bitcoin-testnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "UTF-8: café, 🚀, 狗, привет",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": "p2sh(p2wpkh)",
+      "address": "2NAUYAHhujozruyzpsFRP63mbrdaU5wnEpN",
+      "signature": "JNBz9Ao0WKRumulLB+nryu9K80fgexb1zBRGul9nw9SVfDwJtSPLskbM6xUqAbOBWC5N3V+5C4UqXloZtBPAn8o="
+    },
+    {
+      "id": "bitcoin-testnet-p2sh(p2wpkh)-2",
+      "network": "bitcoin-testnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": "p2sh(p2wpkh)",
+      "address": "2N74VLxyT79VGHiBK2zEg3a9HJG7rEc5F3o",
+      "signature": "JKhMgyYnRfuEOeRznTGSesfM0kYm0sHOqsTUiIv6JGQ4EtbhBnyGYVdcFkt2GTCjaNm3JuirsyHhftG5fgOTEmA="
+    },
+    {
+      "id": "bitcoin-testnet-p2wpkh-1",
+      "network": "bitcoin-testnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "UTF-8: café, 🚀, 狗, привет",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": "p2wpkh",
+      "address": "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+      "signature": "KNBz9Ao0WKRumulLB+nryu9K80fgexb1zBRGul9nw9SVfDwJtSPLskbM6xUqAbOBWC5N3V+5C4UqXloZtBPAn8o="
+    },
+    {
+      "id": "bitcoin-testnet-p2wpkh-2",
+      "network": "bitcoin-testnet",
+      "messagePrefixHex": "18426974636f696e205369676e6564204d6573736167653a0a",
+      "message": "",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": "p2wpkh",
+      "address": "tb1qq6hag67dl53wl99vzg42z8eyzfz2xlkvvlryfj",
+      "signature": "KKhMgyYnRfuEOeRznTGSesfM0kYm0sHOqsTUiIv6JGQ4EtbhBnyGYVdcFkt2GTCjaNm3JuirsyHhftG5fgOTEmA="
+    },
+    {
+      "id": "litecoin-mainnet-p2sh(p2wpkh)-1",
+      "network": "litecoin-mainnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": "p2sh(p2wpkh)",
+      "address": "MR8UQSBr5ULwWheBHznrHk2jxyxkHQu8vB",
+      "signature": "JEEVO2BfM6E1QsCe6gmKu4LaZJclUAkIYuPYKRHz7cqlIjGRNb1SCbXD7WhQWW6VyxfoXwsF3j2Y37FcbvWSaQQ="
+    },
+    {
+      "id": "litecoin-mainnet-p2sh(p2wpkh)-2",
+      "network": "litecoin-mainnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "XChain signed message vector",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": "p2sh(p2wpkh)",
+      "address": "MMiRb7TPSoqLtRpfTjc9FGQRQcW8WLeirF",
+      "signature": "JNDI/KOCuzFrcr23xtMypul/33XZFMYcrlsWtkvKlbPFV6FXa8fkuPqeD7V2niov1Nw1RmYwBrW7gMulRZpEsmY="
+    },
+    {
+      "id": "litecoin-mainnet-p2wpkh-1",
+      "network": "litecoin-mainnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": "p2wpkh",
+      "address": "ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9",
+      "signature": "KEEVO2BfM6E1QsCe6gmKu4LaZJclUAkIYuPYKRHz7cqlIjGRNb1SCbXD7WhQWW6VyxfoXwsF3j2Y37FcbvWSaQQ="
+    },
+    {
+      "id": "litecoin-mainnet-p2wpkh-2",
+      "network": "litecoin-mainnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "XChain signed message vector",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": "p2wpkh",
+      "address": "ltc1qq6hag67dl53wl99vzg42z8eyzfz2xlkvz9zn23",
+      "signature": "KNDI/KOCuzFrcr23xtMypul/33XZFMYcrlsWtkvKlbPFV6FXa8fkuPqeD7V2niov1Nw1RmYwBrW7gMulRZpEsmY="
+    },
+    {
+      "id": "litecoin-testnet-p2sh(p2wpkh)-1",
+      "network": "litecoin-testnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "XChain signed message vector",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": "p2sh(p2wpkh)",
+      "address": "2NAUYAHhujozruyzpsFRP63mbrdaU5wnEpN",
+      "signature": "Iw+Zt4tu9RrxNfF+AMPjUlFkjbmgDTaBpJky/ZIlDUjATRNL7yzDksPB5Bc5u5Bm4HRWFvgqQppdQEZPeFBZ5c0="
+    },
+    {
+      "id": "litecoin-testnet-p2sh(p2wpkh)-2",
+      "network": "litecoin-testnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": "p2sh(p2wpkh)",
+      "address": "2N74VLxyT79VGHiBK2zEg3a9HJG7rEc5F3o",
+      "signature": "Ix7mQ5OpCoOU0u7Z6+wyerNCpCGVlCREZEAC4RFO/weCcDuHQ5bvjd+WHS4w3v3UpHz6KqjluMpI9lmcUSTkm6k="
+    },
+    {
+      "id": "litecoin-testnet-p2wpkh-1",
+      "network": "litecoin-testnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "XChain signed message vector",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "compressed": true,
+      "segwitType": "p2wpkh",
+      "address": "tltc1qw508d6qejxtdg4y5r3zarvary0c5xw7klfsuq0",
+      "signature": "Jw+Zt4tu9RrxNfF+AMPjUlFkjbmgDTaBpJky/ZIlDUjATRNL7yzDksPB5Bc5u5Bm4HRWFvgqQppdQEZPeFBZ5c0="
+    },
+    {
+      "id": "litecoin-testnet-p2wpkh-2",
+      "network": "litecoin-testnet",
+      "messagePrefixHex": "194c697465636f696e205369676e6564204d6573736167653a0a",
+      "message": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "privateKeyHex": "0000000000000000000000000000000000000000000000000000000000000002",
+      "compressed": true,
+      "segwitType": "p2wpkh",
+      "address": "tltc1qq6hag67dl53wl99vzg42z8eyzfz2xlkv4hp6em",
+      "signature": "Jx7mQ5OpCoOU0u7Z6+wyerNCpCGVlCREZEAC4RFO/weCcDuHQ5bvjd+WHS4w3v3UpHz6KqjluMpI9lmcUSTkm6k="
+    }
+  ]
+}

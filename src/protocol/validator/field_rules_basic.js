@@ -110,7 +110,8 @@ function validateDescriptionField(validator, action, field, value, allFields, er
 // Applies one contiguous field-rule group while preserving finding order.
 function validateDecimalsField(validator, action, field, value, allFields, errors) {
     if (field === 'DECIMALS') {
-        if (!Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > MAX_DECIMALS)
+        if (!validator.util.isNumeric(value) || !Number.isInteger(Number(value)) ||
+            Number(value) < 0 || Number(value) > MAX_DECIMALS)
             errors.push(validator.buildError('INVALID_FIELD_VALUE', 'DECIMALS must be an integer between 0 and ' + MAX_DECIMALS, { field, value, constraint: { min: 0, max: MAX_DECIMALS, type: 'integer' } }));
     }
 }
@@ -244,9 +245,16 @@ function validateAddressFields(validator, action, field, value, allFields, error
     // address-ref field. It was additionally listed as an AMOUNT field below,
     // which rejected every address client-side and made owner issue-and-transfer
     // uncomposable through the SDK.
+    //
+    // The check is isValidListAddress, the same network-aware one LIST address
+    // items use: when the validator knows its network it runs the full
+    // base58check / bech32 checksum and version-byte rules for that network,
+    // so a case-flipped or wrong-network address is refused here instead of
+    // being built, signed and refused on chain after the fee is paid. With no
+    // known network it falls back to the one-argument length heuristic.
     if (field === 'DESTINATION' || field === 'GET_ADDRESS' || field === 'TRANSFER' ||
         field === 'TRANSFER_SUPPLY') {
-        if (String(value).charAt(0) !== '^' && !validator.util.isCryptoAddress(value))
+        if (String(value).charAt(0) !== '^' && !validator.isValidListAddress(value))
             errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be a valid crypto address', { field, value }));
     }
 }
@@ -255,7 +263,7 @@ function validateAddressFields(validator, action, field, value, allFields, error
 function validateEncryptionMethodField(validator, action, field, value, allFields, errors) {
     // ENCRYPTION_METHOD validation (numeric in all contexts)
     // - MESSAGE: 1=ECIES, 2=ECDH, 3=AES (symmetric-with-pre-shared-key)
-    // - FILE v1 (gated): 1=AES-256-GCM. Other values reserved for future v1 algorithms.
+    // - FILE (gated, format 0): 1=AES-256-GCM. Other values are reserved for future algorithms.
     if (field === 'ENCRYPTION_METHOD') {
         if (action === 'FILE') {
             if (!validator.util.isValidValue(value, [1]))

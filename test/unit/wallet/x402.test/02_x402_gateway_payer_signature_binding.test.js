@@ -26,15 +26,15 @@ const os     = require('os');
 const path   = require('path');
 const sinon  = require('sinon');
 const { expect } = require('chai');
-const { ECPairFactory } = require('ecpair');
 const ecc = require('@bitcoinerlab/secp256k1');
 
 const { X402Gateway, X402Client } = require('../../../../src/utils/x402.js');
 const { getNetwork } = require('../../../../src/protocol/networks.js');
+const { createECPair } = require('../../../../src/utils/bitcoinjs_compat/ecpair.js');
 const AuthUtils = require('../../../../src/utils/auth.js');
 
 const NONCE = 'a'.repeat(32);
-const ECPair = ECPairFactory(ecc);
+const ECPair = createECPair(ecc);
 
 const NET = 'dogecoin-testnet';   // matches coin TDOGE
 const netParams = getNetwork(NET);

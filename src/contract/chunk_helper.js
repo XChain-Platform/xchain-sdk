@@ -34,7 +34,7 @@ const crypto = require('crypto');
 // symbols and omits e.g. MAX_STANDARD_TX_WEIGHT, so no file diff guards this
 // seam and a "restore byte identity" edit would be wrong. These are the SDK's
 // single in-repo entry point (validator.js and psbt_action_decode.js import them
-// from here); test/unit/protocol_size_caps.test.js pins them to the canonical
+// from here); test/unit/contract/protocol_size_caps.test.js pins them to the canonical
 // values so a one-sided bump fails locally.
 const PROTO = require('../protocol/constants.js');
 const MAX_ACTION_DATA_LENGTH      = PROTO.MAX_ACTION_DATA_LENGTH;
@@ -89,12 +89,22 @@ function codeHashOf(code) {
     return crypto.createHash('sha256').update(Buffer.from(String(code), 'utf8')).digest('hex');
 }
 
-// Normalize constructorParams (array | string | undefined) into a pipe-joined string
-// for the single-shot size estimate (mirrors how the wire serializes the rest field).
+// Normalize constructorParams exactly as the action composer does. Only undefined
+// is absent; null is a supplied scalar and serializes as the text "null".
+function normalizeConstructorParams(constructorParams) {
+    if (constructorParams === undefined) return undefined;
+    const values = Array.isArray(constructorParams) ? constructorParams : [constructorParams];
+    return values.map((value) => String(value));
+}
+
+// Normalize constructorParams into a pipe-joined string for the single-shot size
+// estimate, including the composer's trimming of trailing empty rest fields.
 function ctorString(constructorParams) {
-    if (constructorParams === undefined || constructorParams === null) return '';
-    let arr = Array.isArray(constructorParams) ? constructorParams : [constructorParams];
-    return arr.map(p => String(p)).join('|');
+    const normalized = normalizeConstructorParams(constructorParams);
+    if (normalized === undefined) return '';
+    const fields = normalized.slice();
+    while (fields.length && fields[fields.length - 1] === '') fields.pop();
+    return fields.join('|');
 }
 
 // A field the caller actually supplied, as the wire would carry it. undefined,
@@ -119,8 +129,8 @@ function tailField(value) {
 // FormatSelector.serialize drops it (it pops trailing empties before joining), so
 // the estimate cannot over-count either and push an otherwise-inline deploy into a
 // chunked (multi-transaction, multi-fee) plan. That covers a trailing empty
-// SLASH_DESTINATION on v1 and, on v0, an absent CONSTRUCTOR_PARAMS: emitting its
-// separator anyway over-counted by one byte, which is enough to chunk a source
+// SLASH_DESTINATION on v1 and, on v0, absent or trailing-empty CONSTRUCTOR_PARAMS:
+// emitting their separators over-counts bytes, which is enough to chunk a source
 // whose real compiled push lands exactly on MAX_ACTION_DATA_LENGTH.
 function deployOverhead(opts) {
     const gas      = String(opts.gasLimit || 0);
@@ -182,6 +192,7 @@ function planDeploy(code, opts = {}) {
 }
 
 module.exports = {
+    normalizeConstructorParams,
     codeHashOf,
     fitsSingleDeploy,
     splitCode,

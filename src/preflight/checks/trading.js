@@ -24,12 +24,18 @@
 
 'use strict';
 
-const { FINDING_CODES, EXPIRATION_MAX, activeAtHeight, describeActivationHere } = require('../constants.js');
+const { FINDING_CODES, EXPIRATION_MAX, activeAtHeight, activeByWallClock, describeActivationHere } = require('../constants.js');
 const numeric = require('../numeric.js');
 const { declareRepresentability, tokenDecimals, checkAmountField } = require('./amount_format.js');
 const { checkDurationFee } = require('./duration_fee.js');
 const { getCoinConfig } = require('../../coins/index.js');
 const { parseCoinCode } = require('../../utils/endpoints.js');
+const Utility = require('../../utils/utility.js');
+
+const util = new Utility();
+
+// The indexer's contract-address shape (xchain-indexer src/utility/ledger.js isContractAddress).
+const CONTRACT_ADDRESS = /^C:[A-Z]+:[0-9]+$/;
 
 // Decimal places of a chain coin code (the indexer's COIN_DECIMALS), or null.
 function coinDecimals(coin) {
@@ -92,7 +98,11 @@ async function checkSameTokenOffer(ctx, noun) {
  * order. ORDER (xchain-indexer src/actions/order/validate.js:76-87): a native side
  * (empty TICK) is judged at COIN_DECIMALS, a token side at its token's DECIMALS, and
  * GET_AMOUNT is skipped on a cross-chain order (GET_COIN another chain). SWAP
- * (src/actions/swap/validate.js:70-75): each side only when its token row exists.
+ * (src/actions/swap/validate.js:70-75): each side only when its token row exists,
+ * and swap/context.js loadTokens loads the GET row only when GET_COIN is this
+ * chain's coin, so a SWAP naming another chain skips GET_AMOUNT as ORDER does.
+ * An empty GET_COIN keeps the local check: both handlers refuse it as an
+ * unsupported COIN before any format check, so a refusal here is never false.
  * A token side whose row is absent is left to TOKEN_NOT_FOUND, which the handler
  * refuses first.
  */
@@ -106,7 +116,7 @@ async function checkTradeAmountFormats(ctx, noun) {
         const tick = ctx.field(side + '_TICK');
         const coin = ctx.field(side + '_COIN');
         let decimals = null;
-        if (side === 'GET' && noun === 'ORDER') {
+        if (side === 'GET') {
             if (!plane) { ctx.addUnverified(FINDING_CODES.AMOUNT_FORMAT_INVALID, 'no chain coin is configured, so a cross-chain GET cannot be told apart'); continue; }
             if (coin && coin !== plane.coin) continue;
         }
@@ -119,6 +129,49 @@ async function checkTradeAmountFormats(ctx, noun) {
         }
         if (checkAmountField(ctx, field, amount, decimals, tick ? { tick } : { coin })) return;
     }
+}
+
+/*
+ * A cross-chain ORDER create's GET_ADDRESS against GET_COIN's address format, from
+ * ORDER_GET_ADDRESS_COIN (xchain-indexer src/actions/order/context.js detectSides and
+ * validate.js validateFormats). The validator's own GET_ADDRESS rule accepts an address
+ * of any supported coin on this network tier, so it never refuses a payout address the
+ * indexer accepts; this adds the refusal of one that is not GET_COIN's. Below the gate
+ * the indexer checks the local chain's format instead, and that is left to the indexer
+ * here, so nothing this check says is stricter than before the gate.
+ *
+ * A ^<id> reference resolves server-side and a contract address takes the indexer's
+ * separate contract branch, so neither is judged here. The gate is a time row read by
+ * the including block, which the wall clock stands in for.
+ */
+function checkOrderGetAddressCoin(ctx) {
+    if (String(ctx.parsed.version) !== '0') return;
+    const getAddress = ctx.field('GET_ADDRESS');
+    const getCoin = ctx.field('GET_COIN');
+    if (!getAddress || !getCoin || Array.isArray(getAddress)) return;
+    const address = String(getAddress);
+    if (address.charAt(0) === '^' || CONTRACT_ADDRESS.test(address)) return;
+    const plane = parseCoinCode(ctx.sdk && ctx.sdk.explorer && ctx.sdk.explorer.coin);
+    if (!plane) {
+        ctx.addUnverified(FINDING_CODES.VALIDATOR_SEMANTICS,
+            'no chain coin is configured, so a cross-chain GET_ADDRESS cannot be checked against GET_COIN');
+        return;
+    }
+    if (getCoin === plane.coin) return;
+    const active = activeByWallClock('ORDER_GET_ADDRESS_COIN', ctx.sdk);
+    if (active === undefined) {
+        ctx.addUnverified(FINDING_CODES.VALIDATOR_SEMANTICS,
+            'cross-chain GET_ADDRESS check needs this SDK\'s network; '
+            + describeActivationHere('ORDER_GET_ADDRESS_COIN', ctx.sdk));
+        return;
+    }
+    if (!active) return;
+    ctx.markRun(FINDING_CODES.VALIDATOR_SEMANTICS);
+    if (util.isCryptoAddress(address, getCoin, plane.network)) return;
+    ctx.addFinding(FINDING_CODES.VALIDATOR_SEMANTICS, 'error',
+        `GET_ADDRESS (${address}) is not a ${getCoin} ${plane.network} address; a cross-chain ORDER `
+        + 'pays out on GET_COIN, so the indexer rejects this action as invalid: GET_ADDRESS (format).',
+        { field: 'GET_ADDRESS', value: address, getCoin, network: plane.network });
 }
 
 /*
@@ -222,7 +275,10 @@ async function checkTrade(ctx, noun) {
     await checkSameTokenOffer(ctx, noun);
 }
 
-async function checkOrder(ctx) { await checkTrade(ctx, 'ORDER'); }
+async function checkOrder(ctx) {
+    await checkTrade(ctx, 'ORDER');
+    checkOrderGetAddressCoin(ctx);
+}
 async function checkSwap(ctx)  { await checkTrade(ctx, 'SWAP'); }
 
 module.exports = { checkOrder, checkSwap };

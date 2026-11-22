@@ -20,7 +20,8 @@
 
 const { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput } = require('../carrier/reconcile_encoded.js');
 const { exactU64 } = require('../carrier/reconcile_encoded/script_matching.js');
-const { assertCarrierBinding } = require('../carrier/bind_action_carrier.js');
+const { assertCarrierBinding, assertPhaseFundingBound } = require('../carrier/bind_action_carrier.js');
+const { nativeFeeQuoteSource, mergeNativeFeeOutputs } = require('../carrier/native_fee_source.js');
 const EncoderClient = require('../clients/encoder.js');
 const { SDKConfigError, SDKExplorerError } = require('../utils/errors.js');
 const coins = require('../coins');
@@ -72,7 +73,7 @@ function nativeFeeDisabled(quote) {
     return dest == null || dest === '' || /^X{34}$/.test(String(dest));
 }
 
-// Decide one action's native fee outputs for every signing path, so estimateFees and deployContract cannot drift apart again.
+// Decide one action's native fee outputs for every signing path, so estimateFees and submitAction cannot drift apart again.
 // An explicit payFeeInNativeCoin is strict; a registry-native chain default also tolerates a node with native fees off.
 async function resolveNativeFeeOutputs(sdk, actionData, opts, source) {
     if (!sdk.nativeFeeRequired(opts)) return { quote: null, outputs: [] };
@@ -90,6 +91,7 @@ async function resolveNativeFeeOutputs(sdk, actionData, opts, source) {
 // returns describes the transaction submitAction would build for the same options.
 function buildFeeEstimateRequest(result, encoderOpts, customOutputs) {
     const req = EncoderClient.pickCreateTxOptions(encoderOpts, {});
+    if (req.attachPrevTx === undefined) req.attachPrevTx = true;
     // Excluded on purpose: the AUTO capability hint lets the encoder answer with an
     // envelope pair, which this method can price but never return signable.
     delete req.options;
@@ -115,15 +117,20 @@ function assertFeeEstimateCarrier(feeResult, result, encoderOpts, reconcileNetwo
     });
 }
 
+// Apply the same intent gate to an envelope reveal while keeping it local.
+function reconcileEnvelopeEstimateReveal(revealPsbt, reconcileIntent, phaseFunding, customOutputs, quoteOutput) {
+    if (!revealPsbt) return;
+    reconcileEncoded(revealPsbt, Object.assign({}, reconcileIntent, {
+        label: 'envelope reveal',
+        customOutputs: quoteOutput ? customOutputs.concat([quoteOutput]) : customOutputs,
+        requiredSpends: phaseFunding,
+    }));
+}
+
 // Reconcile and annotate the fee result synchronously before it becomes signable.
 function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs, nativeFeeQuote) {
-    // An envelope answers as a PAIR, and the reveal is what pins the commit's
-    // funding leg below. Take it off the result and keep it LOCAL: this method
-    // hands back one signable PSBT, and a second one riding along in the return
-    // value would be a signable PSBT that nothing here reconciles - the same gap
-    // the pre-sign intent gate above closes, reopened one field over. Callers that
-    // need to sign a reveal go through submitAction, which gates commit and reveal
-    // separately.
+    // Keep an envelope reveal local after using it to pin and reconcile both legs.
+    // Envelope signing and recovery remain the responsibility of submitAction.
     let revealPsbt = feeResult.revealPsbt;
     delete feeResult.revealPsbt;
 
@@ -141,19 +148,23 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     // chunked P2SH/P2WSH action is indexed from its reveal, so its funding PSBT pays no quote.
     const quoteOutput = feeQuoteAuthorizedOutput(encoderOpts.feeQuote);
     const twoPhase = feeResult.encoding === 'P2SH' || feeResult.encoding === 'P2WSH';
-    reconcileEncoded(feeResult.psbt, {
+    const reconcileIntent = {
         network:             reconcileNetwork,
-        customOutputs:       (quoteOutput && !twoPhase) ? customOutputs.concat([quoteOutput]) : customOutputs,
         changeAddresses:     encoderOpts.change,
         callerIdentities:    encoderOpts.pubkey,
         maxFeeSats:          encoderOpts.maxFeeSats,
         maxPhaseFundingSats: encoderOpts.maxPhaseFundingSats,
+    };
+    const reconciled = reconcileEncoded(feeResult.psbt, Object.assign({}, reconcileIntent, {
+        customOutputs:       (quoteOutput && !twoPhase) ? customOutputs.concat([quoteOutput]) : customOutputs,
         label:               'fee estimate',
         // Single-phase only: an estimate carries phase 1 (plus an envelope's reveal
         // when the encoder answered as a pair), never a chunked action's phase 2.
         phaseShapes: twoPhase ? ['p2sh', 'p2wsh'] : (revealPsbt ? ['p2tr'] : []),
         phaseSpends: revealPsbt ? (psbtPrevouts(revealPsbt) || []) : null,
-    });
+    }));
+    reconcileEnvelopeEstimateReveal(revealPsbt, reconcileIntent, reconciled.phaseFunding,
+        customOutputs, quoteOutput);
 
     // ... and the same carrier bind, for the same reason. The gate above reads
     // outputs, values and the fee and deliberately never reads the data carrier,
@@ -161,6 +172,13 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
     // than the one this method was asked to price. A signable PSBT handed back
     // unbound is the identical exposure to signing it here.
     assertFeeEstimateCarrier(feeResult, result, encoderOpts, reconcileNetwork);
+    assertPhaseFundingBound({
+        phaseFunding: reconciled.phaseFunding,
+        carrierScripts: feeResult.carrierScripts,
+        encoding: feeResult.encoding,
+        network: reconcileNetwork,
+        label: 'fee estimate',
+    });
 
     feeResult.actionString = result.actionString;
     feeResult.action       = result.action;
@@ -213,11 +231,12 @@ module.exports = {
     //   encoding, psbt, signable, unsignableReason?, actionString }
     // When `signable` is true, the ONE PSBT this returns can be signed directly to skip a
     // second encode call: it has already cleared the same fail-closed reconcileEncoded
-    // intent gate submitAction applies before IT signs, so the encoder cannot swap outputs
-    // or drop change on this path. Throws SDKActionError rather than returning a PSBT it
-    // cannot account for. A TAPROOT envelope answer comes back priced but with `psbt: null`
-    // and `signable: false`: its commit is only safe to sign together with the reveal and
-    // the recovery record, so envelope actions are signed through submitAction.
+    // intent gate submitAction applies before IT signs. Chunk funding legs are also bound
+    // one-to-one to verified caller-gated carrier scripts. Throws SDKActionError rather than
+    // returning a PSBT it cannot account for. A TAPROOT envelope reveal clears the
+    // same intent and fee-cap gate as submitAction, then stays local. The answer is
+    // priced but has `psbt: null` and `signable: false`, because its commit is only
+    // safe to sign together with the reveal and recovery record through submitAction.
     //
     // Native-coin protocol fee (added by default on registry-native chains, opt-in on others via
     // encoderOpts.payFeeInNativeCoin, and payFeeInNativeCoin:false opts out): pay the XCHAIN
@@ -230,10 +249,9 @@ module.exports = {
         let result = this.actions.createAction(actionData);
         let encoder = this.requireEncoder();
 
-        let customOutputs  = Array.isArray(encoderOpts.customOutputs) ? encoderOpts.customOutputs.slice() : [];
-        let native = await resolveNativeFeeOutputs(this, actionData, encoderOpts, encoderOpts.source || encoderOpts.change);
+        let native = await resolveNativeFeeOutputs(this, actionData, encoderOpts, nativeFeeQuoteSource(encoderOpts));
         let nativeFeeQuote = native.quote;
-        for (let out of native.outputs) customOutputs.push(out);
+        let customOutputs  = mergeNativeFeeOutputs(encoderOpts.customOutputs, native.outputs);
 
         let feeResult = await encoder.estimateFee(buildFeeEstimateRequest(result, encoderOpts, customOutputs));
         reconcileFeeEstimate(this, feeResult, result, encoderOpts, customOutputs, nativeFeeQuote);

@@ -459,6 +459,10 @@
     "test/unit/cosigner/musig2_agent_session.test/01_agent_session.test.js": "test/unit/cosigner/musig2/musig2_agent_session.test/01_agent_session.test.js"
   },
   "titles": {
+    "test/unit/security/configuration/dependency_advisories.test.js": {
+      "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins minimatch at or above 10.2.5": "Security: remediated dependency advisories @regression @tier4 ADV-1: package.json pins minimatch at or above 11.0.9",
+      "Security: remediated dependency advisories @regression @tier4 ADV-2: every minimatch entry in package-lock.json is at or above 10.2.5": "Security: remediated dependency advisories @regression @tier4 ADV-2: every minimatch entry in package-lock.json is at or above 11.0.9"
+    },
     "test/unit/preflight/checks/checks.test/07_dispenser_create_pricing_amount_positivity_mirror.test.js": {
       "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative native-coin GET_AMOUNT is a format warning": "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a negative native-coin GET_AMOUNT is a format error",
       "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a native-coin GET_AMOUNT past the coin decimals is a format warning": "pre-flight Tier-2 per-action matrix DISPENSER create pricing (amount-positivity mirror) a native-coin GET_AMOUNT past the coin decimals is a format error"
@@ -526,6 +530,12 @@
     },
     "test/unit/preflight/activation/activation_coin_first_precedence.test.js": {
       "pre-flight activation lookup is coin-first every network-only mirrored row is the cancelling-match row": "pre-flight activation lookup is coin-first identifies every network-only mirrored row"
+    },
+    "test/unit/clients/explorer.test/20_public_methods.test.js": {
+      "ExplorerClient public methods has 134 public methods": "ExplorerClient public methods has 135 public methods"
+    },
+    "test/unit/cosigner/cosigner_hardening2.test/01_g9_allowed_destinations_enforceability.test.js": {
+      "G9: allowedDestinations enforceability pins the 8-of-72 figure the G9 rationale quotes, derived from the format table": "G9: allowedDestinations enforceability pins the decoder-reachable figure the G9 rationale quotes, derived from the format table"
     }
   }
 }

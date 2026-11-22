@@ -43,6 +43,7 @@
 
 'use strict';
 
+const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
 const AgentSession      = require('./agent_session.js');
@@ -149,8 +150,19 @@ class MuSig2AgentSession extends AgentSession {
         const mergedOpts = Object.assign({}, opts);
         if (!policy.stateFile && !mergedOpts.stateFile)
             mergedOpts.stateFile = path.join(os.homedir(), '.xchain', `musig2-usage-${account.address}.json`);
+        // The kill switch is keyed the same way: the documented default file is named
+        // for the address the session reports, so an operator who drops it beside a
+        // running session halts it.
+        const explicitHaltFile = !!(policy.killSwitchFile || mergedOpts.killSwitchFile);
+        if (!explicitHaltFile)
+            mergedOpts.killSwitchFile = path.join(os.homedir(), '.xchain', `agent-halt-${account.address}`);
 
         super(sdk, wif, policy, mergedOpts);
+
+        // A halt file named for the agent p2pkh was the default before the aggregate
+        // address, so it keeps halting a session that never named its own path.
+        this._agentAddressHaltFile = explicitHaltFile ? null
+            : path.join(os.homedir(), '.xchain', `agent-halt-${this.address}`);
 
         // The spending account is the aggregate/recovery P2TR; override the agent
         // p2pkh that WalletSession derived so UTXO pulls + encoder pubkey/change target it.
@@ -163,6 +175,20 @@ class MuSig2AgentSession extends AgentSession {
             { transport, publicKeys: signingKeys, tweaks: signingTweaks },
             recovery ? { recoveryPublicKey: recovery } : {}));
         this._musig2Signer = buildMuSig2Signer({ coSignerClient: client, secretKey: keyInfo.privateKey, network });
+    }
+
+    // The aggregate-address file is checked by the base class; the agent-p2pkh
+    // file is the same switch under its earlier name, so either one halts.
+    haltReason() {
+        const reason = super.haltReason();
+        if (reason !== null || !this._agentAddressHaltFile) return reason;
+        try {
+            fs.accessSync(this._agentAddressHaltFile);
+        } catch (e) {
+            if (e && e.code === 'ENOENT') return null;
+            return `kill-switch file ${this._agentAddressHaltFile} is unreadable (${e.code || 'error'})`;
+        }
+        return `kill-switch file ${this._agentAddressHaltFile} is present`;
     }
 
     // Inject the co-signer-backed signer so LifecycleManager completes the spend via

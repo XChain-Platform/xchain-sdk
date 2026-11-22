@@ -9,6 +9,7 @@
 // contact legal@dankest.llc.
 
 const { expect } = require('chai');
+const crypto = require('crypto');
 const AuthUtils = require('../../../src/utils/auth.js');
 const WalletUtils = require('../../../src/utils/wallet.js');
 
@@ -276,5 +277,124 @@ describe('AuthUtils', function() {
             const verified = auth.verifyOwnership(address, siteMessage, signed.signature);
             expect(verified.valid).to.be.true;
         });
+    });
+});
+
+describe('AuthUtils custom challenge templating', function() {
+    const auth = new AuthUtils('bitcoin-regtest');
+
+    it('should fill custom challenge placeholders', function() {
+        const template = 'Address: {address}\nNonce: {nonce}\nTime: {timestamp}\nExpires: {expiresAt}';
+        const result = auth.generateChallenge('bc1qtest', { message: template });
+        expect(result.challenge).to.include('Address: bc1qtest');
+        expect(result.challenge).to.include(`Nonce: ${result.nonce}`);
+        expect(result.challenge).to.include(`Time: ${result.timestamp}`);
+        expect(result.challenge).to.include(`Expires: ${result.expiresAt}`);
+        expect(result.challenge).to.not.include('{nonce}');
+        expect(result.bound).to.equal(true);
+    });
+
+    it('should keep a custom message that embeds the supplied nonce unchanged', function() {
+        const customMsg = 'Please sign this to verify your wallet. Nonce: deadbeef';
+        const result = auth.generateChallenge('bc1qtest', { message: customMsg, nonce: 'deadbeef' });
+        expect(result.challenge).to.equal(customMsg);
+        expect(result.nonce).to.equal('deadbeef');
+        expect(result.bound).to.equal(false);
+    });
+
+    it('should bind a caller-supplied nonce only through the nonce placeholder', function() {
+        const result = auth.generateChallenge('bc1qtest', {
+            message: 'Please sign. Nonce: {nonce}', nonce: '24', requireNonce: true
+        });
+        expect(result.challenge).to.equal('Please sign. Nonce: 24');
+        expect(result.bound).to.equal(true);
+    });
+
+    it('should reject a non-string custom challenge', function() {
+        expect(() => auth.generateChallenge('bc1qtest', { message: { nonce: true } }))
+            .to.throw().with.property('code', 'INVALID_MESSAGE');
+    });
+
+    it('should sign and verify a templated custom challenge', function() {
+        const wallet = new WalletUtils('bitcoin-regtest');
+        const kp = wallet.generateKeyPair();
+        const address = wallet.deriveAddress(kp.publicKey);
+        const result = auth.generateChallenge(address, { message: 'Verify {address}\nNonce: {nonce}' });
+        const signed = auth.signMessage(result.challenge, kp.wif);
+        expect(auth.verifyOwnership(address, result.challenge, signed.signature).valid).to.be.true;
+    });
+});
+
+describe('AuthUtils unbound custom challenges', function() {
+    const auth = new AuthUtils('bitcoin-regtest');
+
+    it('should flag a custom challenge that omits its nonce and warn once', function() {
+        const fresh = new AuthUtils('bitcoin-regtest');
+        const original = process.emitWarning;
+        const warnings = [];
+        process.emitWarning = (msg, type) => warnings.push({ msg, type });
+        try {
+            const first = fresh.generateChallenge('bc1qtest', { message: 'Static message' });
+            const second = fresh.generateChallenge('bc1qtest', { message: 'Static message' });
+            expect(first.challenge).to.equal('Static message');
+            expect(first.bound).to.equal(false);
+            expect(second.bound).to.equal(false);
+        } finally {
+            process.emitWarning = original;
+        }
+        expect(warnings).to.have.length(1);
+        expect(warnings[0].type).to.equal('UnboundChallengeWarning');
+    });
+
+    it('should refuse a custom challenge without its nonce under requireNonce', function() {
+        expect(() => auth.generateChallenge('bc1qtest', { message: 'Static message', requireNonce: true }))
+            .to.throw().with.property('code', 'CHALLENGE_UNBOUND');
+        const ok = auth.generateChallenge('bc1qtest', { message: 'Nonce: {nonce}', requireNonce: true });
+        expect(ok.bound).to.equal(true);
+    });
+
+    it('should refuse a counter nonce that is only a substring of static text', function() {
+        expect(() => auth.generateChallenge('bc1qtest', {
+            message: 'Sign in to Web3 Shop 24/7', nonce: '24', requireNonce: true
+        })).to.throw().with.property('code', 'CHALLENGE_UNBOUND');
+    });
+});
+
+describe('AuthUtils custom challenge nonce provenance', function() {
+    const auth = new AuthUtils('bitcoin-regtest');
+
+    it('should not bind a supplied nonce through filled expiry digits', function() {
+        const originalNow = Date.now;
+        Date.now = () => Date.UTC(2026, 0, 2, 3, 4, 5);
+        try {
+            const result = auth.generateChallenge('bc1qtest', {
+                message: 'Expires: {expiresAt}', nonce: '2026'
+            });
+            expect(result.challenge).to.include('2026');
+            expect(result.bound).to.equal(false);
+        } finally {
+            Date.now = originalNow;
+        }
+    });
+
+    it('should require delimiters around an SDK-generated nonce found in custom text', function() {
+        const generatedNonce = 'ab'.repeat(32);
+        const originalRandomBytes = crypto.randomBytes;
+        crypto.randomBytes = () => Buffer.from(generatedNonce, 'hex');
+        try {
+            const result = auth.generateChallenge('bc1qtest', {
+                message: `Sign in. Nonce: ${generatedNonce}.`, requireNonce: true
+            });
+            expect(result.bound).to.equal(true);
+            expect(() => auth.generateChallenge('bc1qtest', {
+                message: `prefix${generatedNonce}suffix`, requireNonce: true
+            })).to.throw().with.property('code', 'CHALLENGE_UNBOUND');
+        } finally {
+            crypto.randomBytes = originalRandomBytes;
+        }
+    });
+
+    it('should report the default challenge as bound', function() {
+        expect(auth.generateChallenge('bc1qtest').bound).to.equal(true);
     });
 });

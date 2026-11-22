@@ -1,3 +1,16 @@
+/*********************************************************************
+ *
+ * Copyright © 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************/
 'use strict';
 
 const assert = require('assert');
@@ -35,12 +48,12 @@ describe('checkpoint verifier structural parity @regression', function () {
     it('refuses unsigned supersession fields below their activation gate', function () {
         const key = signer();
         const cp = signedCheckpoint(key, 'testnet', 146000);
-        const canonical = checkpoint.canonicalCheckpoint(cp);
         assert.strictEqual(follow.verifyCheckpointWithProvenSet(cp, proven(key)).valid, true);
 
         cp.supersedes_from = 3;
         cp.rules_digest = 'ab'.repeat(32);
-        assert.strictEqual(checkpoint.canonicalCheckpoint(cp), canonical);
+        assert.throws(() => checkpoint.canonicalCheckpoint(cp), /not active/);
+        assert.strictEqual(checkpoint.tryCanonicalCheckpoint(cp), null);
         assert.strictEqual(checkpoint.supersessionDisallowed(cp), true);
         assert.strictEqual(follow.verifyCheckpointWithProvenSet(cp, proven(key)).valid, false);
         assert.strictEqual(checkpoint.verifyCheckpoint(cp, proven(key).validators).valid, false);
@@ -74,6 +87,32 @@ describe('checkpoint verifier structural parity @regression', function () {
                     checkpoint: Object.assign({}, trusted, { block_index: 100 }),
                     validators: [{ pubkey: launch.pubkey, source: 'launch', weight: '10' }]
                 })
+            }, served);
+            assert.strictEqual(result.valid, false);
+        } finally {
+            require(followPath).followForward = original;
+            delete require.cache[quorumPath];
+        }
+    });
+});
+
+describe('checkpoint verifier structural parity after a forward walk @regression', function () {
+    it('rejects unsigned below-gate supersession fields after a forward walk', async function () {
+        const followPath = require.resolve('../../../../../src/protocol/light_client/validator_set_follow.js');
+        const quorumPath = require.resolve('../../../../../src/protocol/light_client/quorum_resolution.js');
+        const original = require(followPath).followForward;
+        const trusted = signedCheckpoint(signer(), 'testnet', 146000, { block_index: 146006 });
+        require(followPath).followForward = async () => ({ trusted });
+        delete require.cache[quorumPath];
+        const { resolveQuorum } = require(quorumPath);
+        const served = Object.assign({}, trusted, {
+            supersedes_from: 3,
+            rules_digest: 'ab'.repeat(32)
+        });
+        try {
+            const result = await resolveQuorum(async () => { throw new Error('unexpected fetch'); }, {
+                explorerUrl: 'unused', coin: 'TBTC',
+                pinnedResolver: () => ({ checkpoint: trusted, validators: [] })
             }, served);
             assert.strictEqual(result.valid, false);
         } finally {

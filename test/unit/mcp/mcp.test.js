@@ -26,6 +26,7 @@ const { expect } = require('chai');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
 const { buildServer, COIN_NETWORKS } = require('../../../mcp/server.js');
+const { sdkMethodsCalledByServer } = require('../../helpers/mcp_sdk_calls.js');
 
 // Minimal XChainSDK stand-in: records calls, returns canned values.
 function stubSdk(network) {
@@ -35,6 +36,7 @@ function stubSdk(network) {
         network, calls,
         explorer: { baseUrl: 'https://explorer.example', port: 8080 },
         checkpoint: { fetchAndVerifyCheckpoint: (...a) => { calls.push(['fetchAndVerifyCheckpoint', ...a]); return Promise.resolve({ verified: true }); } },
+        verifyCheckpoint: record('verifyCheckpoint'),
         getStatus: record('getStatus'),
         getFeeSchedule: record('getFeeSchedule'),
         getToken: record('getToken'),
@@ -56,6 +58,7 @@ function stubSdk(network) {
         getExecutions: record('getExecutions'),
         getAttestations: record('getAttestations'),
         getValidators: record('getValidators'),
+        requireEncoder: () => ({ releaseInputs: (id) => { calls.push(['releaseInputs', id]); return Promise.resolve({ reservationId: id, found: false }); } }),
     };
 }
 
@@ -73,6 +76,13 @@ async function connectedPair(options) {
 
 describe('MCP server (read-only)', () => {
 
+    it('the stub SDK has every method the handlers call through sdkFor, so a read handler cannot reach a missing stub', () => {
+        const called = sdkMethodsCalledByServer().filter((name) => name !== 'agentSession');
+        expect(called.length).to.be.greaterThan(20);
+        const stub = stubSdk('bitcoin-regtest');
+        for (const name of called) expect(stub[name], `stubSdk is missing ${name}`).to.be.a('function');
+    });
+
     it('lists the expected tools, all marked read-only', async () => {
         const { client } = await connectedPair();
         const { tools } = await client.listTools();
@@ -83,9 +93,10 @@ describe('MCP server (read-only)', () => {
             'get_contract', 'get_contract_state', 'get_dispensers', 'get_executions',
             'get_fee_schedule', 'get_history', 'get_holders', 'get_market', 'get_markets',
             'get_orderbook', 'get_project', 'get_status', 'get_token', 'get_validators',
-            'search', 'search_tokens', 'verify_checkpoint',
+            'release_reservation', 'search', 'search_tokens', 'verify_checkpoint',
         ]);
         for (const t of tools) {
+            if (t.name === 'compose_action' || t.name === 'release_reservation') continue;
             expect(t.annotations && t.annotations.readOnlyHint, `${t.name} readOnlyHint`).to.equal(true);
             expect(t.description, `${t.name} description`).to.be.a('string').and.not.empty;
         }
@@ -120,6 +131,53 @@ describe('MCP server (read-only)', () => {
         expect(created[0].calls[0]).to.deep.equal(['getHistory', 'bc1qabc', 'address', { page: 2, limit: 5 }]);
         const body = JSON.parse(res.content[0].text);
         expect(body).to.deep.equal({ ok: 'getHistory', network: 'bitcoin-mainnet' });
+    });
+
+});
+
+describe('MCP server (read-only)', () => {
+
+    it('routes balance page arguments and keeps the omitted form explicit', async () => {
+        const paged = await connectedPair();
+        await paged.client.callTool({
+            name: 'get_balances',
+            arguments: { coin: 'BTC', address: 'bc1qabc', page: 2, limit: 5 },
+        });
+        expect(paged.created[0].calls[0])
+            .to.deep.equal(['getBalances', 'bc1qabc', { page: 2, limit: 5 }]);
+
+        const bare = await connectedPair();
+        await bare.client.callTool({ name: 'get_balances', arguments: { coin: 'BTC', address: 'bc1qabc' } });
+        expect(bare.created[0].calls[0])
+            .to.deep.equal(['getBalances', 'bc1qabc', { page: undefined, limit: undefined }]);
+    });
+
+    it('enforces each list route page-size boundary before reaching the SDK', async () => {
+        const capped = [
+            ['search_tokens', { coin: 'BTC', query: 'X' }],
+            ['get_history', { coin: 'BTC', query: 'addr', type: 'address' }],
+            ['get_dispensers', { coin: 'BTC', query: 'addr', type: 'address' }],
+            ['get_executions', { coin: 'BTC', contract_action_index: 42 }],
+            ['get_attestations', { coin: 'BTC' }],
+        ];
+        for (const [name, args] of capped) {
+            const rejected = await connectedPair();
+            const over = await rejected.client.callTool({ name, arguments: { ...args, limit: 101 } });
+            expect(over.isError, name).to.equal(true);
+            expect(rejected.created, name).to.have.lengthOf(0);
+
+            const accepted = await connectedPair();
+            const atMax = await accepted.client.callTool({ name, arguments: { ...args, limit: 100 } });
+            expect(atMax.isError, name).not.to.equal(true);
+            expect(accepted.created, name).to.have.lengthOf(1);
+        }
+
+        const holders = await connectedPair();
+        await holders.client.callTool({ name: 'get_holders', arguments: { coin: 'BTC', tick: 'X', limit: 500 } });
+        expect(holders.created[0].calls[0]).to.deep.equal(['getHolders', 'X', { page: undefined, limit: 500 }]);
+        const tooMany = await holders.client.callTool({ name: 'get_holders', arguments: { coin: 'BTC', tick: 'X', limit: 501 } });
+        expect(tooMany.isError).to.equal(true);
+        expect(holders.created[0].calls).to.have.lengthOf(1);
     });
 });
 
@@ -170,11 +228,9 @@ describe('MCP server (read-only)', () => {
     it('verify_checkpoint builds the explorer base URL and passes coin + height', async () => {
         const { client, created } = await connectedPair();
         await client.callTool({ name: 'verify_checkpoint', arguments: { coin: 'TBTC', block_index: 1234 } });
-        const call = created[0].calls[0];
-        expect(call[0]).to.equal('fetchAndVerifyCheckpoint');
-        expect(call[1]).to.equal('https://explorer.example');
-        expect(call[2]).to.equal('TBTC');
-        expect(call[3]).to.equal(1234);
+        // The tool delegates to the SDK's own verifier, which owns the URL, the coin
+        // binding and the readiness hook; it must not rebuild any of them by hand.
+        expect(created[0].calls).to.deep.equal([['verifyCheckpoint', 1234]]);
     });
 
     it('rejects an unknown coin at the schema layer', async () => {

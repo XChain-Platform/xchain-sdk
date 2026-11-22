@@ -26,12 +26,13 @@ function buildExplorer(sdk, opts) {
     if (!opts) return null;
     if (opts.explorer) return opts.explorer;
     if (!opts.explorerUrl && !opts.explorerPort) return null;
-    let sdkOpts = (sdk && sdk.options) || {};
+    const sdkOpts = (sdk && sdk.options) || {};
     return new ExplorerClient({
         network:      opts.network      || sdkOpts.network || (sdk && sdk.network),
         explorerUrl:  opts.explorerUrl  || 'localhost',
         explorerPort: opts.explorerPort !== undefined ? parseInt(opts.explorerPort) : undefined,
-        timeout:      opts.explorerTimeout || sdkOpts.timeout
+        timeout:      opts.explorerTimeout || sdkOpts.timeout,
+        pool:         sdkOpts.pool
     });
 }
 

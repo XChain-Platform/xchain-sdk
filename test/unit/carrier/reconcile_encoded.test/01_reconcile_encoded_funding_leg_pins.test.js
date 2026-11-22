@@ -56,10 +56,13 @@ const shapedP2tr  = () => bitcoin.script.compile([bitcoin.opcodes.OP_1, crypto.r
 // An unsigned PSBT spending the given [{ script, value }] prevouts.
 function spendingPsbt(prevouts, outputs) {
     const psbt = new bitcoin.Psbt({ network: NET });
-    prevouts.forEach((p, i) => psbt.addInput({
-        hash: 'bb'.repeat(32), index: i,
-        witnessUtxo: { script: p.script, value: Number(p.value) },
-    }));
+    prevouts.forEach((p) => {
+        const prev = new bitcoin.Transaction();
+        prev.addInput(crypto.randomBytes(32), 0);
+        prev.addOutput(p.script, Number(p.value));
+        psbt.addInput({ hash: prev.getHash(), index: 0, nonWitnessUtxo: prev.toBuffer(),
+            witnessUtxo: { script: p.script, value: Number(p.value) } });
+    });
     for (const out of outputs) psbt.addOutput(out);
     return psbt.toHex();
 }

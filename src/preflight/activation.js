@@ -124,6 +124,13 @@ const DISCLOSURE_MIRRORS = Object.freeze({
         unit: 'time',
         table: Object.freeze({ mainnet: 0, testnet: 0, regtest: 0 }),
     }),
+    // A protocol_changes time row (xchain-indexer src/protocol_changes/changes_5.js) whose mainnet
+    // and testnet columns resolve through flag_times.js. checks/trading.js reads it for ORDER.
+    ORDER_GET_ADDRESS_COIN: Object.freeze({
+        key: 'ORDER_GET_ADDRESS_COIN',
+        unit: 'time',
+        table: Object.freeze({ mainnet: 'UNARMED', testnet: 1794873600, regtest: 0 }),
+    }),
 });
 
 function mirrorFor(name) {

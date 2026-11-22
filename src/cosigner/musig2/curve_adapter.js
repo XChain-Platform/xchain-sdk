@@ -179,12 +179,13 @@ function normalizePubkeys(pubkeys) {
         throw new SDKMuSigError('INVALID_INPUT',
             'publicKeys[' + i + '] must be hex string or Uint8Array');
     });
-    // Reject repeated participants: a duplicate collapses the policy threshold,
-    // since MuSig2([X,X]) aggregates to a key X alone can sign and a recovery
-    // key equal to a hot key turns its leaf into a unilateral spending path.
+    // Reject participants controlled by the same scalar. Compressed X and -X
+    // share an x-coordinate and a discrete-log holder, so aggregating either
+    // pair collapses the policy threshold to one signer.
     const seen = new Map();
     keys.forEach((k, i) => {
-        const hex = Buffer.from(k).toString('hex').toLowerCase();
+        const bytes = Buffer.from(k);
+        const hex = (bytes.length === 33 ? bytes.subarray(1) : bytes).toString('hex').toLowerCase();
         if (seen.has(hex))
             throw new SDKMuSigError('INVALID_INPUT',
                 'publicKeys must be pairwise distinct: entries '

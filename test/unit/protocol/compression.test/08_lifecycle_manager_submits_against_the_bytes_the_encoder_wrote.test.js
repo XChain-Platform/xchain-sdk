@@ -63,7 +63,7 @@ const FAKE_WIF = 'L1rkA9mYRjVPVdvMuVbHRMX6SPHM7fNwCEfT3AV2qCGAmJ8wNfp';
 const FILE_ACTION = 'FILE|0|sample.txt|text/plain';
 const FILE_ACTION_WRITTEN = 'FILE|0|sample.txt|text/plain|||||||1';
 const SUPPLIED_RAW = 'x'.repeat(2048);
-const STORED_RAW = 'z'.repeat(300);
+const STORED_RAW = zlib.deflateRawSync(Buffer.from(SUPPLIED_RAW, 'binary')).toString('binary');
 
 // A signed-and-unsigned pair the reconcile gate can parse.
 function buildSignedTx() {
@@ -87,13 +87,14 @@ function buildSignedTx() {
 // compiled behind the XCHN magic word, AES-128-CTR obfuscated under the
 // first input's txid, in a zero-value OP_RETURN, change back to the funding
 // script. Only the carrier's CONTENTS differ between cases.
-function encoderAnswer(carriedAction) {
+function encoderAnswer(carriedAction, rawData) {
     const kp = ECPair.makeRandom();
     const script = bitcoin.payments.p2wpkh({ pubkey: kp.publicKey }).output;
     const prevHash = crypto.randomBytes(32);
     const txid = Buffer.from(prevHash).reverse().toString('hex');
-    const tagged = Buffer.concat([Buffer.from('XCHN'),
-        bitcoin.script.compile([Buffer.from(carriedAction, 'utf8')])]);
+    const pushes = [Buffer.from(carriedAction, 'utf8')];
+    if (rawData !== undefined) pushes.push(Buffer.from(rawData, 'binary'));
+    const tagged = Buffer.concat([Buffer.from('XCHN'), bitcoin.script.compile(pushes)]);
     const cipher = crypto.createCipheriv('aes-128-ctr', txid.substr(0, 16), txid.substr(16, 16));
     const psbt = new bitcoin.Psbt();
     psbt.addInput({ hash: prevHash, index: 0, witnessUtxo: { script, value: 100000 } });
@@ -187,7 +188,7 @@ describe('LifecycleManager submits against the bytes the encoder WROTE', functio
     it('binds the carrier to the WRITTEN string, and reports it as the action string', async function () {
         const calls = [];
         const sdk = makeSdk({
-            createTx: async () => ({ psbt: encoderAnswer(FILE_ACTION_WRITTEN),
+            createTx: async () => ({ psbt: encoderAnswer(FILE_ACTION_WRITTEN, STORED_RAW),
                 encoding: 'OP_RETURN', compression: REPORT }),
         }, calls);
 

@@ -48,22 +48,22 @@ function coinExplorers(resolver) {
 
     if (!resolver.listCoinExplorers) {
         resolver.listCoinExplorers = {};
-        for (const entry of buildCoinExplorers(sdk.explorer, parts.tier, ExplorerClient))
+        for (const entry of buildCoinExplorers(sdk.explorer, parts.tier, ExplorerClient, sdk.options.pool))
             resolver.listCoinExplorers[entry.chain] = entry.explorer;
     }
     resolver.listCoinExplorers[parts.coin] = sdk.explorer;
     return resolver.listCoinExplorers;
 }
 
+// A fresh lookup per action: its id memo dedupes items within one LIST only,
+// because a rollback can free a ticker id for reuse between actions.
 function coinTickLookup(resolver) {
-    if (resolver.listCoinTickLookup) return resolver.listCoinTickLookup;
     const explorers = coinExplorers(resolver);
     if (!explorers) return null;
-    resolver.listCoinTickLookup = createCoinTickLookup({
+    return createCoinTickLookup({
         explorers,
         cap: promise => resolver.withCap(promise, resolver.lookupCapMs)
     });
-    return resolver.listCoinTickLookup;
 }
 
 async function compactListTickItems(resolver, params) {

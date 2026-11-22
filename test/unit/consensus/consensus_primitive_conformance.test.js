@@ -17,18 +17,22 @@
 // Cross-service conformance guard. The stake-weighted quorum
 // predicate and the equivocation-header builder are CONSENSUS-CRITICAL and
 // vendored byte-identically into five services (xchain-hub, xchain-indexer,
+
 // xchain-explorer, xchain-sdk, xchain-sync); a divergence in their logic forks
 // the chain. Their canonical source of record is xchain-indexer/src/consensus,
 // which reconcile-twins.sh vendors into every other copy, including
+
 // xchain-documentation/protocol/reference-impl/consensus; the canonical vectors
 // live in xchain-documentation/protocol/test-vectors. This guard runs in every
 // repo and asserts BOTH:
+
 //   1. BEHAVIOR  - the local copy matches the canonical vectors.
 //   2. IDENTITY  - the local copy is byte-identical to the xchain-documentation copy.
 // (1) catches a logic change that happens to pass the local unit suite; (2)
+
 // catches ANY edit to one copy that was not propagated to the others. When the
-// sibling xchain-documentation repo is not checked out (standalone deploy), skip
-// rather than fail, matching the existing cross-repo guard convention.
+// sibling xchain-documentation repo is absent or refused by siblingCheckout(),
+// the guards skip unless XCHAIN_REQUIRE_SIBLINGS=1 makes coverage mandatory.
 
 const assert = require('assert');
 const fs     = require('fs');
@@ -40,11 +44,14 @@ const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.
 
 const LOCAL_DIR = path.join(__dirname, '../..', '..', 'src');
 // Resolve the canonical xchain-documentation repo: an explicit XCHAIN_DOCS_DIR, then
-// XCHAIN_DOCUMENTATION_DIR (the order tooling/sibling_coverage reports), then the
-// ../xchain-documentation sibling layout that CI and local runs check out.
-// When none resolves (standalone deploy), the guards below skip rather than fail.
+// XCHAIN_DOCUMENTATION_DIR (the order tooling/sibling_coverage reports), then
+// XCHAIN_SIBLING_ROOT and the default sibling layout used by that roster.
+
+// When none resolves, the guards skip unless XCHAIN_REQUIRE_SIBLINGS=1 makes
+// sibling coverage mandatory, in which case they fail.
+const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(__dirname, '../..', '..', '..');
 const DOCS_DIR  = process.env.XCHAIN_DOCS_DIR || process.env.XCHAIN_DOCUMENTATION_DIR
-    || path.join(__dirname, '../..', '..', '..', 'xchain-documentation');
+    || path.join(SIBLING_ROOT, 'xchain-documentation');
 const CANON_DIR = path.join(DOCS_DIR, 'protocol', 'reference-impl');
 const VEC_DIR   = path.join(DOCS_DIR, 'protocol', 'test-vectors');
 const VEC_CHECKOUT   = siblingCheckout(__dirname, VEC_DIR);
@@ -73,7 +80,7 @@ if(VEC_CHECKOUT.usable) try {
 // onto a copy of the validators array here (the real set-building query sets it the
 // same way on its returned array).
 function vecValidators(c){
-    if(c && c.truncated){ let v = (c.validators || []).slice(); v.truncated = true; return v; }
+    if(c && c.truncated){ const v = (c.validators || []).slice(); v.truncated = true; return v; }
     return c.validators;
 }
 function meets(c){ return swq.meetsStakeThreshold(vecValidators(c), c.signers); }
@@ -148,8 +155,18 @@ describe('consensus-primitive conformance: activation predicate vectors @regress
     const groups = activationVec || {};
 
     it('every group this repo runs is a non-empty list', function(){
-        for(const g of ['isStakeWeightedQuorumActive', 'isEquivHeaderActive', 'snapshotBurial'])
-            assert.ok(Array.isArray(groups[g]) && groups[g].length > 0, g + ' is missing or empty');
+        const allGroups = {
+            'stake_weighted_quorum.meetsStakeThreshold': quorumVec.meetsStakeThreshold,
+            'stake_weighted_quorum.totalStake': quorumVec.totalStake,
+            'equivocation_header.equivKey': equivVec.equivKey,
+            'equivocation_header.equivPrefix': equivVec.equivPrefix,
+            'equivocation_header.buildEquivCanonical': equivVec.buildEquivCanonical,
+            'activation_predicates.isStakeWeightedQuorumActive': groups.isStakeWeightedQuorumActive,
+            'activation_predicates.isEquivHeaderActive': groups.isEquivHeaderActive,
+            'activation_predicates.snapshotBurial': groups.snapshotBurial,
+        };
+        for(const [name, vectors] of Object.entries(allGroups))
+            assert.ok(Array.isArray(vectors) && vectors.length > 0, name + ' is missing or empty');
     });
     (groups.isStakeWeightedQuorumActive || []).forEach(function(c){
         it('isStakeWeightedQuorumActive: ' + c.name, function(){
@@ -212,11 +229,25 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
             const rel   = path.join('consensus', 'gate_registry', f);
             const local = fs.readFileSync(path.join(LOCAL_DIR, rel), 'utf8');
             const canon = fs.readFileSync(path.join(CANON_DIR, rel), 'utf8');
-            assert.strictEqual(local, canon,
-                'this repo\'s consensus/gate_registry/' + f + ' has drifted from the canonical source; ' +
-                'edit xchain-documentation/protocol/reference-impl/consensus/gate_registry/' + f +
-                ' and re-vendor every consumer copy, never the vendored copy alone.');
+            assert.strictEqual(local, canon, gateRegistryDriftMessage(f));
         });
+    });
+});
+
+// Name the runtime source for each registry part.
+function gateRegistryDriftMessage(f){
+    const source = f === 'core.js'
+        ? 'xchain-hub/src/consensus/gate_registry/core.js'
+        : 'xchain-indexer/src/protocol_changes/' + f;
+    return 'this repo\'s consensus/gate_registry/' + f + ' has drifted from the canonical source; ' +
+        'edit ' + source + ' and re-run reconcile-twins.sh to re-vendor every copy, never this copy alone.';
+}
+
+describe('gate_registry drift guidance', function(){
+    it('names hub for core and indexer for shared rows', function(){
+        assert.match(gateRegistryDriftMessage('core.js'), /xchain-hub\/src\/consensus\/gate_registry\/core\.js/);
+        assert.match(gateRegistryDriftMessage('shared_rows_1.js'), /xchain-indexer\/src\/protocol_changes\/shared_rows_1\.js/);
+        assert.doesNotMatch(gateRegistryDriftMessage('core.js'), /xchain-documentation/);
     });
 });
 

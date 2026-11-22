@@ -83,12 +83,18 @@ function postPing(port) {
     });
 }
 
-// Resolves true when something accepts a TCP connection on the port.
+// Resolve through a clean child because nock 15 installs a process-wide
+// transport interceptor that can synthesize the parent's raw connect event.
 function portAnswers(port) {
     return new Promise((resolve) => {
-        const sock = net.connect(port, '127.0.0.1');
-        sock.once('connect', () => { sock.end(); resolve(true); });
-        sock.once('error', () => resolve(false));
+        const script = [
+            "const net = require('net');",
+            "const socket = net.connect(Number(process.argv[1]), '127.0.0.1');",
+            'socket.once(\'connect\', () => { socket.end(); process.exit(0); });',
+            'socket.once(\'error\', () => process.exit(1));'
+        ].join('\n');
+        execFile(process.execPath, ['-e', script, String(port)], { timeout: 2000 },
+            (err) => resolve(!err));
     });
 }
 

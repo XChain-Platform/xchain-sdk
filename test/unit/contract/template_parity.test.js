@@ -203,11 +203,11 @@ describe('crowdsale unsold inventory guard', function () {
 
 describe('embedded template hash guard', function () {
     const expected = {
-        escrow: '63d4ab458d26af9675c96a8e48e2f1f45f6f925932ab4170e6a8eb657dd51ad8',
-        escrowDelivery: '8cfdfd753ec063a3145cc166368b162ff01d4864cd3b959aa243d0ad2b7526ea',
-        vesting: '17440e4020d3a62c1325db7b9cd5653e8b096af96817c435ed5e452676c8c5f6',
-        crowdsale: '475999d5d7b783d6e0054e1ca006b64be5b6287b03fe2282828d64720c4324b3',
-        amm: '70c32282d51096dabed9eabe25694081ff7205182bcbdc5f986e5c576aba840a'
+        escrow: '332b54bb60a238d8f27bb2fe66e4c01efc88df7329dead97b853a663af14a2a1',
+        escrowDelivery: '27233b8c46ffc71a3f6c5fcf4485a21bae95ac5814356099189f45c464cde684',
+        vesting: '5ebd103dd365f3c4db267c24580ddde6ac778564d7a9f91e4df8e1f6d9532366',
+        crowdsale: '6530526475e81bb173dec6c4bc76877109e8c823372f82355550a7749b29715c',
+        amm: 'e6328f9fd290930a786fd7d9fef44080a534d44c94bd83b9058015ad11982d58'
     };
 
     it('covers every embedded template', function () {

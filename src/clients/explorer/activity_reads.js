@@ -21,7 +21,29 @@
 const ContractClient = require('../../contract/client.js');
 
 const { seg } = require('./path_segment.js');
+const { readKeyedRow } = require('./keyed_contract_read.js');
 const { coinTier, hasHttpScheme } = require('../../utils/endpoints.js');
+const { SDKExplorerError } = require('../../utils/errors.js');
+const coins = require('../../coins');
+
+function actionIndexSegment(actionIndex) {
+    const validNumber = Number.isSafeInteger(actionIndex) && actionIndex >= 0;
+    const validString = typeof actionIndex === 'string' && /^[0-9]+$/.test(actionIndex);
+    if (!validNumber && !validString)
+        throw new SDKExplorerError('INVALID_ACTION_INDEX',
+            'actionIndex must be a non-negative integer', { actionIndex });
+    return seg(actionIndex);
+}
+
+function unwrapActionDetail(body) {
+    if (!body) return null;
+    let detail = body.data !== undefined && body.data !== null ? body.data : body;
+    if (Array.isArray(detail)) detail = detail.length ? detail[0] : null;
+    if (!detail || typeof detail !== 'object') return null;
+    if (detail.action && typeof detail.action === 'object' && !Array.isArray(detail.action)
+        && detail.action.action_index !== undefined) return detail.action;
+    return detail;
+}
 
 module.exports = {
     async getFiles(query, type, opts = {}) {
@@ -41,7 +63,11 @@ module.exports = {
     // cross-chain action refs carry the base ticker; the tier is implied).
     siblingCoin(baseCoin) {
         if (!baseCoin) return this.coin;
-        return coinTier(this.coin) + String(baseCoin).toUpperCase();
+        const upper = String(baseCoin).toUpperCase();
+        if (!coins.ALLOWED_COINS.includes(upper))
+            throw new SDKExplorerError('UNKNOWN_COIN',
+                'coin must be one of ' + coins.ALLOWED_COINS.join(', '), { coin: baseCoin });
+        return coinTier(this.coin) + upper;
     },
 
     // Absolute URL of a FILE action's raw bytes on this explorer: the
@@ -53,7 +79,8 @@ module.exports = {
         let base = hasHttpScheme(this.baseUrl)
             ? this.baseUrl
             : 'http://' + this.baseUrl + ':' + this.port;
-        return base.replace(/\/+$/, '') + '/' + this.siblingCoin(coin) + '/api/file/' + String(actionIndex) + '/raw';
+        return base.replace(/\/+$/, '') + '/' + seg(this.siblingCoin(coin)) +
+            '/api/file/' + actionIndexSegment(actionIndex) + '/raw';
     },
 
     // Fetch the raw ciphertext bytes for a token-gated FILE action by
@@ -62,8 +89,8 @@ module.exports = {
     // the symmetric key from the corresponding MESSAGE handoff.
     // See xchain-documentation/protocol/token-gated-content.md.
     async getGatedFileRaw(actionIndex, coin = null) {
+        let url = '/' + seg(this.siblingCoin(coin)) + '/api/file/' + actionIndexSegment(actionIndex) + '/raw';
         if (this._readyHook) await this._readyHook();
-        let url = '/' + this.siblingCoin(coin) + '/api/file/' + actionIndex + '/raw';
         let self = this;
         try {
             if (self.hooks.onRequest)
@@ -72,6 +99,26 @@ module.exports = {
             if (self.hooks.onResponse)
                 self.hooks.onResponse({ service: 'explorer', method: 'GET', url, status: response.status });
             return Buffer.from(response.data);
+        } catch (err) {
+            if (self.hooks.onError)
+                self.hooks.onError({ service: 'explorer', method: 'GET', url, error: err.message });
+            self.handleError(err, url);
+        }
+    },
+
+    async getFileAssembly(actionIndex, coin = null) {
+        let url = '/' + seg(this.siblingCoin(coin)) + '/api/action/' + actionIndexSegment(actionIndex);
+        if (this._readyHook) await this._readyHook();
+        let self = this;
+        try {
+            if (self.hooks.onRequest)
+                self.hooks.onRequest({ service: 'explorer', method: 'GET', url });
+            let response = await self.client.get(url);
+            if (self.hooks.onResponse)
+                self.hooks.onResponse({ service: 'explorer', method: 'GET', url, status: response.status });
+            self.recordFreshness(response);
+            let detail = unwrapActionDetail(response.data);
+            return detail && detail.multipart ? detail.multipart : null;
         } catch (err) {
             if (self.hooks.onError)
                 self.hooks.onError({ service: 'explorer', method: 'GET', url, error: err.message });
@@ -210,13 +257,13 @@ module.exports = {
 
     async getContractState(contractActionIndex, key) {
         if (key)
-            return this.get('/contract/' + seg(contractActionIndex) + '/state/' + seg(key));
+            return readKeyedRow(this, '/contract/' + seg(contractActionIndex) + '/state/' + seg(key), 'state_key', key);
         return this.get('/contract/' + seg(contractActionIndex) + '/state');
     },
 
     async getContractBalance(contractActionIndex, tick) {
         if (tick)
-            return this.get('/contract/' + seg(contractActionIndex) + '/balance/' + seg(tick));
+            return readKeyedRow(this, '/contract/' + seg(contractActionIndex) + '/balance/' + seg(tick), 'tick', tick);
         return this.get('/contract/' + seg(contractActionIndex) + '/balance');
     },
 
@@ -229,8 +276,10 @@ module.exports = {
     // query-only path 404s. Thread type like the sibling helpers (getContracts,
     // getContractStakes), defaulting to 'contract' (the common: list a contract's
     // executions by its action index).
+    // Action index 0 is a real index, so only an absent query (undefined, null or
+    // an empty string) takes the unfiltered route.
     async getExecutions(query, type = 'contract', opts = {}) {
-        if (query)
+        if (query !== undefined && query !== null && query !== '')
             return this.get('/executions/' + seg(query) + '/' + seg(type), opts);
         return this.get('/executions', opts);
     },

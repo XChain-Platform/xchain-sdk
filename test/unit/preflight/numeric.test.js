@@ -42,6 +42,14 @@ describe('pre-flight numeric semantics', function () {
         expect(numeric.mulFloor('4', '0.25', 2)).to.equal('1');
     });
 
+    it('mulFloor parses string decimals like the indexer bcmulfloor', function () {
+        expect(numeric.mulFloor('3', '0.333333', '8')).to.equal('0.999999');
+        expect(numeric.mulFloor('3', '0.333333', '2')).to.equal('0.99');
+        expect(numeric.mulFloor('3', '0.333333', null)).to.equal('0');
+        expect(numeric.mulFloor('3', '0.333333', undefined)).to.equal('0');
+        expect(numeric.mulFloor('3', '0.333333', '')).to.equal('0');
+    });
+
     it('mulFloor floors inside the sub-ULP band, where mathjs.floor rounds up', function () {
         // mathjs.floor tests nearlyEqual against relTol (1e-12) before flooring,
         // so it answers 138 here; the indexer's bcmulfloor, and this helper,
@@ -58,5 +66,20 @@ describe('pre-flight numeric semantics', function () {
         expect(numeric.isValidAmountFormat(2, '1.23')).to.equal(true);
         expect(numeric.isValidAmountFormat(0, '1.5')).to.equal(false);   // indivisible
         expect(numeric.isValidAmountFormat(8, '-1')).to.equal(false);
+    });
+});
+
+describe('pre-flight numeric amount width split', function () {
+    it('splits stored amounts from intermediate merge legs at 250 characters', function () {
+        const atLimit = '0'.repeat(249) + '1';
+        const overLimit = '0'.repeat(250) + '1';
+        expect(numeric.isValidAmountFormat(8, overLimit)).to.equal(false);
+        expect(numeric.isValidAmountMergeFormat(8, overLimit)).to.equal(true);
+        expect(numeric.isValidAmountFormatWhere(8, atLimit, false)).to.equal(true);
+        expect(numeric.isValidAmountFormatWhere(8, overLimit, false)).to.equal(false);
+        expect(numeric.isValidAmountFormatWhere(8, overLimit, true)).to.equal(false);
+        expect(numeric.isValidAmountMergeFormatWhere(8, overLimit, false)).to.equal(true);
+        expect(numeric.isValidAmountMergeFormatWhere(8, overLimit, true)).to.equal(true);
+        expect(numeric.isValidAmountMergeFormatWhere(2, '1.234', false)).to.equal(false);
     });
 });

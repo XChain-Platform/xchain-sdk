@@ -25,23 +25,30 @@ const FEE_DEST = 'Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H';
 // deployContract() must follow the registry-backed SDK fee decision or a DEPLOY on a
 // native-fee chain goes out without its required output and is ruled invalid.
 function makeSdk(coin, calls, quote) {
-    const record = (kind) => async (params, enc) => {
-    calls.push({ kind, params, enc });
-    return { txid: kind + '_tx', indexed: { action_index: 3 } };
+    // The real session reaches LifecycleManager, which now owns native-fee
+    // outputs for every action. Mirror that boundary here so these workflow
+    // tests keep proving that each DEPLOY leg carries its submit options.
+    let sdk;
+    const record = (kind) => async (params, enc, opts = {}) => {
+        const customOutputs = await sdk.nativeFeeOutputs({ action: 'DEPLOY', params },
+            { ...opts, source: session.address });
+        if (customOutputs.length) enc = { ...enc, customOutputs };
+        calls.push({ kind, params, enc });
+        return { txid: kind + '_tx', indexed: { action_index: 3 } };
     };
     const session = {
-    address: 'srcAddr',
-    deploy: record('deploy'),
-    deployChunk: record('chunk'),
-    deposit: record('deposit'),
+        address: 'srcAddr',
+        deploy: record('deploy'),
+        deployChunk: record('chunk'),
+        deposit: record('deposit'),
     };
-    const sdk = {
-    actions: new Actions({ config: config.getConfig(), util: new Utility() }),
-    explorer: { coin },
-    session: () => session,
-    preflightContractLint: () => {},
-    getAction: async () => ({ deployed_contract_index: 3 }),
-    quoteNativeFee: sinon.spy(async () => quote),
+    sdk = {
+        actions: new Actions({ config: config.getConfig(), util: new Utility() }),
+        explorer: { coin },
+        session: () => session,
+        preflightContractLint: () => {},
+        getAction: async () => ({ deployed_contract_index: 3 }),
+        quoteNativeFee: sinon.spy(async () => quote),
     };
     session.sdk = sdk;
     sdk.nativeFeeRequired = feeMethods.nativeFeeRequired;

@@ -23,9 +23,9 @@
 const { WebSocket, WS_CONNECTING, WS_OPEN, WS_SCHEMA_VERSION } = require('./websocket/socket_constants.js');
 const { SDKExplorerError } = require('../utils/errors.js');
 const { installMethods } = require('../utils/install_methods.js');
-const { dropCatchUp } = require('./websocket/catch_up.js');
+const { dropCatchUp, replayedAlready } = require('./websocket/catch_up.js');
 const { resetOut } = require('./websocket/pacing.js');
-const { hasHttpScheme, hasWsScheme } = require('../utils/endpoints.js');
+const { hasHttpScheme, hasWsScheme, isSecureUrl } = require('../utils/endpoints.js');
 
 function websocketUrl(client) {
     // A full ws(s) URL is used as given, with any trailing slash stripped and no port added.
@@ -36,7 +36,8 @@ function websocketUrl(client) {
     // explorerUrl when websocketUrl wasn't set). In that case strip any
     // trailing slash and swap http→ws / https→wss for the WebSocket scheme.
     if (hasHttpScheme(client.baseUrl)) {
-        let wsBase = client.baseUrl.replace(/^http/, 'ws').replace(/\/+$/, '');
+        let wsBase = client.baseUrl.replace(/^http(s?):\/\//i, (match, secure) =>
+            'ws' + (secure ? 's' : '') + '://').replace(/\/+$/, '');
         return wsBase + '/' + client.coin + '/api/websocket';
     }
     return client.protocol + '://' + client.baseUrl + ':' + client.port + '/' + client.coin + '/api/websocket';
@@ -65,7 +66,8 @@ function attachSocketListeners(client, url, resolve, reject) {
             return;
         }
 
-        client.onMessage(msg);
+        // A replayed row already dispatched before a drop is not dispatched again (catch_up.js).
+        if (!replayedAlready(client, msg)) client.onMessage(msg);
 
         if (!welcomed && msg.type === 'WELCOME') {
             welcomed = true;
@@ -76,7 +78,7 @@ function attachSocketListeners(client, url, resolve, reject) {
     client.ws.on('close', (code) => {
         client.connected = false;
         client.stopPing();
-        // An unfinished catch-up is abandoned, not applied, so the next one resumes before the gap.
+        // An unfinished catch-up is abandoned, not applied; each subscription resumes after its replayedTo.
         dropCatchUp(client);
         resetOut(client);
 
@@ -101,10 +103,20 @@ function attachSocketListeners(client, url, resolve, reject) {
     });
 }
 
+// The host's injected connection agent for this URL's scheme, or undefined. Chosen at
+// dial time because setBase() can move the client between a ws:// and a wss:// host. The
+// other scheme's agent is never a fallback: an http.Agent cannot carry a TLS dial.
+function agentForUrl(pool, url) {
+    if (!pool) return undefined;
+    return (isSecureUrl(url) ? pool.httpsAgent : pool.httpAgent) || undefined;
+}
+
 function openWebSocket(client, url) {
     return new Promise((resolve, reject) => {
         try {
-            client.ws = new WebSocket(url);
+            // No options argument without an agent, so the browser shim sees the one-argument call.
+            const agent = agentForUrl(client._pool, url);
+            client.ws = agent ? new WebSocket(url, { agent }) : new WebSocket(url);
         } catch (e) {
             reject(new SDKExplorerError('WS_CONNECTION_FAILED', 'WebSocket connection failed: ' + e.message, { url }));
             return;
@@ -114,6 +126,16 @@ function openWebSocket(client, url) {
 }
 
 
+// Read the reconnect backoff options, defaulting each one on its own.
+function retrySettings(retry = {}) {
+    return {
+        maxReconnectAttempts: retry.maxRetries || 10,
+        baseDelay: retry.baseDelay || 1000,
+        maxDelay: retry.maxDelay || 30000,
+        backoffFactor: retry.backoffFactor || 2,
+    };
+}
+
 class WebSocketClient {
 
     constructor(options = {}) {
@@ -122,19 +144,20 @@ class WebSocketClient {
         this.protocol = options.websocketProtocol || 'ws';
         this.coin     = this.deriveCoinPrefix(options.network);
         this.hooks    = options.hooks || {};
+        // The host's injected httpAgent / httpsAgent (for example a SOCKS proxy), used for every dial.
+        this._pool    = options.pool || null;
 
         // Reconnection config
-        let retry = options.retry || {};
-        this.maxReconnectAttempts = retry.maxRetries    || 10;
-        this.baseDelay           = retry.baseDelay      || 1000;
-        this.maxDelay            = retry.maxDelay        || 30000;
-        this.backoffFactor       = retry.backoffFactor   || 2;
+        Object.assign(this, retrySettings(options.retry || {}));
 
         // State
         this.ws                 = null;
         this.connected          = false;
         this.intentionalClose   = false;
         this.reconnectAttempts  = 0;
+        this._reconnectTimer    = null;
+        // Bumped by disconnect() so a connect() parked on the readiness hook can tell it was cancelled.
+        this._closeEpoch        = 0;
         this.serverInfo         = null;
         this._schemaWarned      = false;
         // The catch-up cursor is the exact decimal STRING the v2 wire carries, or null
@@ -182,7 +205,11 @@ class WebSocketClient {
 
         // Await lazy readiness (hub-discovery overlay) before deriving the URL,
         // so a hub-refined explorer host is reflected here on first connect.
+        const epoch = this._closeEpoch;
         if (this._readyHook) await this._readyHook();
+        if (epoch !== this._closeEpoch) {
+            throw new SDKExplorerError('WS_CONNECTION_CLOSED', 'Disconnected while connecting');
+        }
 
         this.intentionalClose = false;
         const url = websocketUrl(this);
@@ -192,6 +219,11 @@ class WebSocketClient {
     // Disconnect intentionally
     disconnect() {
         this.intentionalClose = true;
+        this._closeEpoch++;
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
         this.stopPing();
         dropCatchUp(this);
         this.rejectAllPending('Connection closed');

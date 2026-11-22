@@ -48,6 +48,23 @@ describe('SDK native-fee classification tracks the coin registry', function () {
         }
     });
 
+    it('pins the expected fee mode locally for every coin and route', function () {
+        for (const requiredTick of ['BTC', 'LTC', 'DOGE'])
+            assert.ok(coins.ALLOWED_COINS.includes(requiredTick), `${requiredTick} is missing from ALLOWED_COINS`);
+
+        // Mirrors the coin rule in the indexer's utility/fees.js and config/fee_destination.js.
+        // A future non-BTC coin using xchain fees must update all three rules together.
+        for (const tick of coins.ALLOWED_COINS) {
+            const expectedMode = tick === 'BTC' ? 'xchain' : 'native';
+            for (const { prefix, network } of ROUTE_PREFIXES) {
+                assert.strictEqual(coins.getCoinConfig(tick, network).FEE_PAYMENT_MODE, expectedMode,
+                    `${tick}/${network}: expected FEE_PAYMENT_MODE ${expectedMode}`);
+                assert.strictEqual(required(prefix + tick), tick !== 'BTC',
+                    `${prefix + tick}: native-fee decision disagrees with the coin rule`);
+            }
+        }
+    });
+
     it('reads the registry field instead of inferring the mode from the ticker', function () {
         const stub = sinon.stub(coins, 'getCoinConfig');
         stub.withArgs('BTC', 'mainnet').returns({ FEE_PAYMENT_MODE: 'native' });

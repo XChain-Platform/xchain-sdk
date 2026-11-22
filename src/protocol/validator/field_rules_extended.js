@@ -26,7 +26,7 @@ const {
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateFileKeyHash(validator, action, field, value, allFields, errors) {
-    // FILE v1 gated-content fields
+    // Gated FILE fields (format 0)
     // The /i is deliberate and mirrors consensus: xchain-indexer accepts either
     // case and records the lowercase form, so tightening this to lowercase-only
     // would make the decoder's advisory findings disagree with chain validity on
@@ -46,10 +46,15 @@ function validateFileKeyHash(validator, action, field, value, allFields, errors)
 // Applies one contiguous field-rule group while preserving finding order.
 function validateFileGateTicker(validator, action, field, value, allFields, errors) {
     if (action === 'FILE' && field === 'GATE_TICKER') {
-        // Empty is allowed (= public file); when set, basic TICK constraints apply.
-        if (value !== '' && /[|;./]/.test(String(value)))
+        // Empty is public. A period separates parent and child tick segments.
+        const name = String(value);
+        if (value !== '' && /[|;/]/.test(name))
             errors.push(validator.buildError('INVALID_FIELD_VALUE',
-                'GATE_TICKER cannot contain |, ;, ., or /',
+                'GATE_TICKER cannot contain |, ;, or /',
+                { field, value }));
+        else if (name.includes('.') && name.split('.').some(segment => segment.length === 0))
+            errors.push(validator.buildError('INVALID_FIELD_VALUE',
+                'GATE_TICKER cannot have an empty parent or child segment',
                 { field, value }));
     }
 }
@@ -236,15 +241,16 @@ function validateListVersionFields(validator, fields) {
 
 // Applies one contiguous field-rule group while preserving finding order.
 function validateBinaryFlags(validator, action, field, value, allFields, errors) {
-    // Binary 0/1 flag fields
-    // - SWEEP:               BALANCES / OWNERSHIPS / ORDERS / SWAPS / DISPENSERS
-    // - ORDER / SWAP / DISPENSER: GIVE_OWNERSHIP / GET_OWNERSHIP
-    if (field === 'BALANCES' || field === 'OWNERSHIPS' ||
-        field === 'ORDERS'   || field === 'SWAPS'      || field === 'DISPENSERS' ||
-        field === 'GIVE_OWNERSHIP' || field === 'GET_OWNERSHIP') {
-        if (!validator.util.isValidLockValue(value))
-            errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be 0 or 1', { field, value, constraint: { valid: [0, 1] } }));
-    }
+    // Ownership flags use Number() on the indexer. SWEEP flags retain the
+    // parseInt-based lock rule used by their corresponding indexer fields.
+    const ownership = field === 'GIVE_OWNERSHIP' || field === 'GET_OWNERSHIP';
+    const sweep = field === 'BALANCES' || field === 'OWNERSHIPS' ||
+        field === 'ORDERS' || field === 'SWAPS' || field === 'DISPENSERS';
+    const ownershipValid = (typeof value === 'number' || typeof value === 'string')
+        && [0, 1].includes(Number(value));
+    if ((ownership && !ownershipValid) || (sweep && !validator.util.isValidLockValue(value)))
+        errors.push(validator.buildError('INVALID_FIELD_VALUE', field + ' must be 0 or 1',
+            { field, value, constraint: { valid: [0, 1] } }));
 }
 
 // Applies one contiguous field-rule group while preserving finding order.

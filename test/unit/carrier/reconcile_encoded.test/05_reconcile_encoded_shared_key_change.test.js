@@ -9,6 +9,7 @@
 // contact legal@dankest.llc.
 
 const assert  = require('assert');
+const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
 const ecc     = require('@bitcoinerlab/secp256k1');
 const { reconcileEncoded } = require('../../../../src/carrier/reconcile_encoded.js');
@@ -33,8 +34,13 @@ function sharedKeyScript(wallet, wrap) {
 function psbtWithSharedInput(wallet, shared, witness, changeTo) {
     const own = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(wallet.publicKey), network: NET });
     const psbt = new bitcoin.Psbt({ network: NET });
-    psbt.addInput({ hash: 'aa'.repeat(32), index: 0, witnessUtxo: { script: own.output, value: 100000 } });
-    psbt.addInput(Object.assign({ hash: 'bb'.repeat(32), index: 0, witnessUtxo: { script: shared.output, value: 1000 } },
+    const ownPrev = new bitcoin.Transaction(), sharedPrev = new bitcoin.Transaction();
+    ownPrev.addInput(crypto.randomBytes(32), 0); ownPrev.addOutput(own.output, 100000);
+    sharedPrev.addInput(crypto.randomBytes(32), 0); sharedPrev.addOutput(shared.output, 1000);
+    psbt.addInput({ hash: ownPrev.getHash(), index: 0, nonWitnessUtxo: ownPrev.toBuffer(),
+        witnessUtxo: { script: own.output, value: 100000 } });
+    psbt.addInput(Object.assign({ hash: sharedPrev.getHash(), index: 0,
+        nonWitnessUtxo: sharedPrev.toBuffer(), witnessUtxo: { script: shared.output, value: 1000 } },
         witness ? { witnessScript: shared.redeem.output } : { redeemScript: shared.redeem.output }));
     psbt.addOutput(carrier);
     psbt.addOutput({ script: changeTo || shared.output, value: 99000 });

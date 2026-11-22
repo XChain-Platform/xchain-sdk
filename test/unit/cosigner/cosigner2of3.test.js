@@ -190,4 +190,17 @@ describe('cosigner/account deriveMuSig2P2TR2of3 (recovery)', function () {
         expect(() => deriveMuSig2P2TR2of3({ agent: key().pk, daemon: key().pk }))
             .to.throw(/agent, daemon, recovery/);
     });
+
+    it('rejects a recovery key controlled by either hot-key holder', function () {
+        const agent = key(), daemon = key(), recovery = key();
+        const flippedAgent = Buffer.from(agent.pk), flippedDaemon = Buffer.from(daemon.pk);
+        flippedAgent[0] ^= 1;
+        flippedDaemon[0] ^= 1;
+        expect(() => deriveMuSig2P2TR2of3({ agent: agent.pk, daemon: daemon.pk,
+            recovery: flippedAgent })).to.throw(/pairwise distinct/);
+        expect(() => deriveMuSig2P2TR2of3({ agent: agent.pk, daemon: daemon.pk,
+            recovery: flippedDaemon })).to.throw(/pairwise distinct/);
+        expect(() => deriveMuSig2P2TR2of3({ agent: agent.pk, daemon: daemon.pk,
+            recovery: recovery.pk })).to.not.throw();
+    });
 });

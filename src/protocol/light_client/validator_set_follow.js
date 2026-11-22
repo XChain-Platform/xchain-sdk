@@ -42,6 +42,7 @@ const swq        = require('../../consensus/stake_weighted_quorum.js');
 const srb        = require('../../consensus/snapshot_reorg_buffer.js');
 const { resolveFetch, networkContextCoin, baseUrl, fetchJson, scaled, lowerHex } = require('./fetch_helpers.js');
 const { verifyValidatorSetProof } = require('./proof_checks.js');
+const { sameWireIndex } = require('../../utils/wire_index.js');
 
 // Network: fetch + verify the validator-set proof at BTC snapshot height S.
 async function verifyValidatorSet(opts){
@@ -146,9 +147,31 @@ function bindingMismatch(next, trusted){
         && String(next.network).toLowerCase() !== String(trusted.network).toLowerCase();
 }
 
+// The explorer serves every BIGINT index as a decimal string, so a range step's
+// snapshot_block arrives as "106" as often as 106. Accept a safe non-negative integer
+// or its canonical decimal spelling (no sign, whitespace, exponent or leading zeros,
+// which would change the signed canonical's String() bytes); anything else is null.
+// The step itself is left untouched for the signature check.
+function attestedSnapshotHeight(v){
+    if (typeof v === 'number') return Number.isSafeInteger(v) && v >= 0 ? v : null;
+    if (typeof v !== 'string' || !/^(0|[1-9][0-9]*)$/.test(v)) return null;
+    const n = Number(v);
+    return Number.isSafeInteger(n) ? n : null;
+}
+
+// Resolve the only root that can prove a step's signer set. A range response cannot
+// make a future snapshot trustworthy merely by labelling an old-root proof with it.
+function signerSetProofContext(next, trustedRoots){
+    const declared = attestedSnapshotHeight(next.snapshot_block);
+    if(declared === null) return null;
+    const setBlock = srb.buriedSnapshotBlock(declared, next.network);
+    const stateRoot = trustedRoots.get(Number(setBlock));
+    return stateRoot ? { setBlock, stateRoot } : null;
+}
+
 // Forward-following (spec §7.3): from a trusted BTC checkpoint, walk /checkpoints/range
 // and adopt each next checkpoint whose quorum verifies against a validator set proven at
-// its snapshot_block (against the current trusted BTC state_root). Returns the new rolling
+// its buried snapshot height against a root already trusted at exactly that height. Returns the new rolling
 // trust root + the chain of adopted checkpoints. Stops at the first step that fails to verify.
 // Range steps are explorer-supplied, so a step at or below the trusted height is skipped
 // (no rollback), and a step naming another chain or network stops the walk.
@@ -161,6 +184,7 @@ async function followForward(opts){
     const from = Number(trusted.block_index) + 1;
     const to   = Number(opts.toHeight != null ? opts.toHeight : trusted.block_index);
     const adopted = [];
+    const trustedRoots = new Map([[Number(trusted.block_index), lowerHex(trusted.state_root)]]);
     if (to >= from){
         const rangeUrl = baseUrl(opts.explorerUrl) + '/' + encodeURIComponent(String(btcCoin)) +
                          '/api/checkpoints/range?from=' + from + '&to=' + to;
@@ -176,12 +200,13 @@ async function followForward(opts){
             // quorum check, since the canonical signs both.
             if (bindingMismatch(next, trusted))
                 return { trusted, adopted, reason: 'CHECKPOINT_BINDING_MISMATCH@' + next.block_index, stoppedAt: next.block_index };
+            if (attestedSnapshotHeight(next.snapshot_block) === null)
+                return { trusted, adopted, reason: 'SNAPSHOT_NOT_ATTESTED@' + next.block_index, stoppedAt: next.block_index };
             // Below the commitment flag day a step's roots are unsigned, and adopting one would
             // let the explorer choose the root the NEXT step's signer set is proven against.
             if (!checkpoint.commitmentActive(next))
                 return { trusted, adopted, reason: 'ROOTS_NOT_SIGNED@' + next.block_index, stoppedAt: next.block_index };
-            // Prove the signer set at next.snapshot_block against the current trusted state_root.
-            //
+            // Prove the signer set against the already-trusted root at its buried height.
             // The checkpoint DECLARES the raw height the signing hub was handed, but
             // that hub resolved its oracle_publish set through CapabilitySnapshot, which buries
             // every height by CANONICAL_REORG_BUFFER first (tip stake state is not reorg-safe).
@@ -191,13 +216,19 @@ async function followForward(opts){
             // rejects a valid checkpoint or counts a signer the hub never had. Bury by the same
             // shared constant. Flag-day gated and armed from genesis on mainnet, testnet, and
             // regtest; below any future nonzero gate, the declared height remains verbatim.
-            const setBlock = srb.buriedSnapshotBlock(next.snapshot_block, next.network);
+            const proofContext = signerSetProofContext(next, trustedRoots);
+            if (!proofContext)
+                return { trusted, adopted, reason: 'SNAPSHOT_NOT_ATTESTED@' + next.block_index, stoppedAt: next.block_index };
+            const { setBlock, stateRoot } = proofContext;
             const vs = await verifyValidatorSet({ explorerUrl: opts.explorerUrl, btcCoin,
-                snapshotBlock: setBlock, trustedStateRoot: lowerHex(trusted.state_root), fetchImpl: f });
+                snapshotBlock: setBlock, trustedStateRoot: stateRoot, fetchImpl: f });
             if (!vs.verified) return { trusted, adopted, reason: 'VALIDATOR_SET_UNVERIFIED@' + next.block_index, stoppedAt: next.block_index };
+            if (!sameWireIndex(vs.height, setBlock))
+                return { trusted, adopted, reason: 'VALIDATOR_SET_HEIGHT_MISMATCH@' + next.block_index, stoppedAt: next.block_index };
             const q = verifyCheckpointWithProvenSet(next, vs.capabilities.oracle_publish);
             if (!q.valid) return { trusted, adopted, reason: 'QUORUM_FAILED@' + next.block_index, stoppedAt: next.block_index };
             trusted = next; adopted.push(next);                   // roll the trust root forward
+            trustedRoots.set(height, lowerHex(next.state_root));
         }
     }
     return { trusted, adopted, reason: null, stoppedAt: null };

@@ -71,6 +71,8 @@ function isForbiddenAddress(addr){
         if (ip === '::' || ip === '::1') return true;              // unspecified / loopback
         if (ip.startsWith('::')) return true;                      // v4-compatible / embedded
         if (ip.startsWith('64:ff9b:')) return true;               // NAT64
+        if (ip.startsWith('2002:')) return true;
+        if (/^2001:0{0,4}:/.test(ip)) return true;
         if (/^f[cd]/.test(ip))   return true;                     // fc00::/7 unique-local
         if (/^fe[89ab]/.test(ip)) return true;                    // fe80::/10 link-local
         if (/^ff/.test(ip))      return true;                     // multicast
@@ -107,6 +109,16 @@ const LLM_MAX_REQUEST_BYTES = 8192;
 // is built.
 const LLM_MAX_ENVELOPE_VERSION = 1;
 
+// Numeric options arrive as a number or a plain decimal string. Everything else
+// (null, '', booleans, arrays, hex or exponent strings) is NaN so the callers
+// refuse it, instead of Number() coercing it into a plausible request value.
+const DECIMAL_STRING = /^-?\d+(\.\d+)?$/;
+function strictNumber(value){
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string' && DECIMAL_STRING.test(value)) return Number(value);
+    return NaN;
+}
+
 function buildLlmEnvelope(opts){
     if (!opts || typeof opts.prompt !== 'string' || opts.prompt.length === 0){
         throw new Error('AttestationHelpers.llm: opts.prompt (non-empty string) is required');
@@ -122,7 +134,7 @@ function buildLlmEnvelope(opts){
     }
     let envelopeVersion;
     if (opts.envelopeVersion !== undefined){
-        envelopeVersion = Number(opts.envelopeVersion);
+        envelopeVersion = strictNumber(opts.envelopeVersion);
         if (!Number.isFinite(envelopeVersion) || !Number.isInteger(envelopeVersion) ||
             envelopeVersion <= 0 || envelopeVersion > LLM_MAX_ENVELOPE_VERSION){
             throw new Error('AttestationHelpers.llm: opts.envelopeVersion must be a positive integer <= ' + LLM_MAX_ENVELOPE_VERSION);
@@ -130,14 +142,14 @@ function buildLlmEnvelope(opts){
     }
     let maxTokens;
     if (opts.maxTokens !== undefined){
-        maxTokens = Number(opts.maxTokens);
+        maxTokens = strictNumber(opts.maxTokens);
         if (!Number.isInteger(maxTokens) || maxTokens <= 0){
             throw new Error('AttestationHelpers.llm: opts.maxTokens must be a positive integer');
         }
     }
     let temperature;
     if (opts.temperature !== undefined){
-        temperature = Number(opts.temperature);
+        temperature = strictNumber(opts.temperature);
         if (!Number.isFinite(temperature)){
             throw new Error('AttestationHelpers.llm: opts.temperature must be a finite number');
         }

@@ -80,6 +80,8 @@ describe('WebSocketClient full-URL bases', function () {
 
     it('still maps an https:// base to wss://', async function () {
         expect(await dialledUrl({ websocketUrl: 'https://h' })).to.equal('wss://h/BTC/api/websocket');
+        expect(await dialledUrl({ websocketUrl: 'HTTPS://h' })).to.equal('wss://h/BTC/api/websocket');
+        expect(await dialledUrl({ websocketUrl: 'HTTP://h' })).to.equal('ws://h/BTC/api/websocket');
     });
 
     it('still gives a bare host the protocol and default port', async function () {
@@ -129,6 +131,8 @@ describe('endpoints websocket scheme detection', function () {
         expect(hasWsScheme('wss-gw.internal')).to.equal(false);
         expect(hasWsScheme('http://a')).to.equal(false);
         expect(hasWsScheme(null)).to.equal(false);
+        expect(hasWsScheme('WSS://a')).to.equal(true);
+        expect(hasWsScheme('Ws://a')).to.equal(true);
     });
 
     it('isSecureUrl accepts https:// and wss:// only', function () {
@@ -138,6 +142,9 @@ describe('endpoints websocket scheme detection', function () {
         expect(isSecureUrl('ws://a')).to.equal(false);
         expect(isSecureUrl('httpsevil.example')).to.equal(false);
         expect(isSecureUrl(undefined)).to.equal(false);
+        expect(isSecureUrl('HTTPS://a')).to.equal(true);
+        expect(isSecureUrl('WsS://a')).to.equal(true);
+        expect(isSecureUrl('HTTP://a')).to.equal(false);
     });
 });
 
@@ -147,6 +154,7 @@ describe('isDowngrade with a wss:// websocket base', function () {
 
     it('blocks hub discovery replacing a wss:// websocket base with an http endpoint', function () {
         expect(sdk.isDowngrade('websocket', { baseUrl: 'wss://h' }, 'http://127.0.0.1:8080')).to.equal(true);
+        expect(sdk.isDowngrade('websocket', { baseUrl: 'WSS://h' }, 'http://127.0.0.1:8080')).to.equal(true);
     });
 
     it('blocks hub discovery replacing a wss:// websocket base with a bare host', function () {

@@ -30,7 +30,12 @@
  * or a BigInt up to 2^64-1 (the wire format's true ceiling). Readers return
  * a Number whenever the value is exactly representable and a BigInt only
  * above 2^53-1, so existing Number-based callers see identical behavior for
- * every value they could already handle. The READ-SIDE copies
+ * every value they could already handle. One reader is the exception:
+ * Transaction.fromBuffer returns a BigInt output value at every size, while
+ * Transaction.fromHex narrows to a Number below 2^53. bitcoinjs-lib 7 parses
+ * nonWitnessUtxo through fromBuffer and sums those values as BigInt, so
+ * narrowing there would mix types; callers that read outs[i].value from
+ * fromBuffer must go through BigInt(). The READ-SIDE copies
  * (xchain-decoder/src/chain/apply_bufferutils_patch.js and
  * xchain-utxo-tracker/src/chain/apply_bufferutils_patch.js)
  * lift the same 2^53 wall for block decode but deliberately implement a
@@ -40,7 +45,8 @@
  *
  * Re-sync seam (uuid:311476c7).
  * xchain-encoder/test/unit/build/apply_bufferutils_patch.test.js pins
- * compat.js, u64.js, v7.js and version.js byte-identical to the encoder's,
+ * compat.js, u64.js, v7.js, version.js and ../bitcoinjs_compat/internals.js
+ * byte-identical to the encoder's,
  * and pins the code below this banner identical to the encoder entry body
  * except for the one SDK-only require of the v6 part. v6.js has no encoder
  * twin and no guard.
@@ -56,4 +62,4 @@
 require('./apply_bufferutils_patch/v7')
 require('./apply_bufferutils_patch/v6')
 
-module.exports = require('bitcoinjs-lib/src/bufferutils')
+module.exports = require('./bitcoinjs_compat/internals').bufferutils

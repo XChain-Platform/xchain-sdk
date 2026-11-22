@@ -53,7 +53,7 @@ function validateMarketIdentity(owner, label, outcomes, tick, deadline, now, ctx
     // native-coin wager would need COINPAY-style obligation machinery.
     if (!isSet(tick))
         fail('MISSING_REQUIRED_FIELD',
-            `${ctx}: tick is required. Betting is token-only; native coin (empty TICK) is not supported`,
+            `${ctx}: tick is required. Markets are token-only; native coin (empty TICK) is not supported`,
             { field: 'TICK' });
 
     if (!isSet(deadline)) fail('MISSING_REQUIRED_FIELD', `${ctx}: deadline is required`, { field: 'DEADLINE' });
@@ -63,7 +63,7 @@ function validateMarketIdentity(owner, label, outcomes, tick, deadline, now, ctx
     const nowSec = Number.isFinite(Number(now)) ? Number(now) : Math.floor(Date.now() / 1000);
     if (deadlineNum <= nowSec)
         fail('INVALID_FIELD_VALUE',
-            `${ctx}: deadline ${deadlineNum} is in the past (now ${nowSec}). Betting closes at the deadline, so it must be ahead of the block time`,
+            `${ctx}: deadline ${deadlineNum} is in the past (now ${nowSec}). The market closes at the deadline, so it must be ahead of the block time`,
             { field: 'DEADLINE', value: deadlineNum });
     if (deadlineNum - nowSec > BET_LIMITS.MAX_BET_DEADLINE_HORIZON)
         fail('INVALID_FIELD_VALUE',
@@ -112,7 +112,7 @@ function normalizeMarketLists(owner, allowList, blockList, ctx) {
     const blockOut = isSet(blockList) ? owner.actionIndex(blockList, 'BLOCK_LIST', ctx) : '';
     if (allowOut !== '' && blockOut !== '' && Number(allowOut) === Number(blockOut))
         fail('INVALID_FIELD_VALUE',
-            `${ctx}: allowList and blockList are the same list (${allowOut}). Nobody could ever bet on that market`,
+            `${ctx}: allowList and blockList are the same list (${allowOut}). Nobody could ever participate in that market`,
             { field: 'BLOCK_LIST', value: blockOut });
     return { allowOut, blockOut };
 }

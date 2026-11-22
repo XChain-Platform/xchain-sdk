@@ -37,7 +37,8 @@ function fixture(outputs) {
     prev.addOutput(script, 100000);
     const psbt = new bitcoin.Psbt({ network: net });
     for (const index of [0, 1])
-        psbt.addInput({ hash: prev.getId(), index, sequence: 0xfffffffd, witnessUtxo: { script, value: 100000 } });
+        psbt.addInput({ hash: prev.getId(), index, sequence: 0xfffffffd,
+            witnessUtxo: { script, value: 100000 }, nonWitnessUtxo: prev.toBuffer() });
     for (const out of outputs(script, prev.getId())) psbt.addOutput(out);
     return { wallet, kp, script, psbt, txid: prev.getId() };
 }
@@ -76,6 +77,23 @@ describe('scoped WIF signing on submitAction', function () {
         const view = await capture(sdk, [{ txid: f.txid, vout: 0 }]);
         expect(() => view.wallet.signPsbt(f.psbt.toHex(), f.kp.wif))
             .to.throw().with.property('code', 'UNAPPROVED_INPUT');
+    });
+
+    it('refuses a pre-signed input the caller never named', async function () {
+        const f = fixture(s => [{ script: s, value: 190000 }]);
+        f.psbt.updateInput(1, { finalScriptWitness: Buffer.from('0101aa', 'hex') });
+        const sdk = new XChainSDK({ network: NETWORK });
+        const view = await capture(sdk, [{ txid: f.txid, vout: 0 }]);
+        expect(() => view.wallet.signPsbt(f.psbt.toHex(), f.kp.wif))
+            .to.throw(/pre-signed/).with.property('code', 'UNAPPROVED_INPUT');
+    });
+
+    it('still skips a pre-signed input the caller did name', async function () {
+        const f = fixture(s => [{ script: s, value: 190000 }]);
+        f.psbt.updateInput(1, { finalScriptWitness: Buffer.from('0101aa', 'hex') });
+        const sdk = new XChainSDK({ network: NETWORK });
+        const view = await capture(sdk, [{ txid: f.txid, vout: 0 }, { txid: f.txid, vout: 1 }]);
+        expect(view.wallet.signPsbt(f.psbt.toHex(), f.kp.wif).txHex).to.be.a('string');
     });
 
     it('leaves the sdk unscoped when no utxos are supplied', async function () {
@@ -171,6 +189,51 @@ describe('message send reconciles the encoder PSBT', function () {
         let err;
         try { await p; } catch (e) { err = e; }
         expect(err, 'send should reject').to.exist;
+        expect(sdk.wallet.signPsbt.called).to.be.false;
+    });
+});
+
+describe('message send reconciles the outputs the caller asked the encoder to add', function () {
+    const payTo = () => bitcoin.payments.p2wpkh({
+        pubkey: new WalletUtils(NETWORK).generateKeyPair().publicKey, network: getNetwork(NETWORK)
+    }).output;
+    const addressOf = script => bitcoin.address.fromOutputScript(script, getNetwork(NETWORK));
+    const withExtra = (extra, paid) => fixture((s, txid) => [
+        { script: extra, value: paid }, { script: s, value: 185000 },
+        { script: actionCarrier(txid, REQUESTED), value: 0 }]);
+
+    it('signs a PSBT carrying a customOutputs entry the caller asked for', async function () {
+        const extra = payTo();
+        const f = withExtra(extra, 5000);
+        const { sdk, p } = await run(f, { encoder: { customOutputs: [{ address: addressOf(extra), value: 5000 }] } });
+        await p;
+        expect(sdk.wallet.signPsbt.calledOnce).to.be.true;
+    });
+
+    it('signs a PSBT carrying the output a hub feeQuote asked for', async function () {
+        const extra = payTo();
+        const f = withExtra(extra, 5000);
+        const { sdk, p } = await run(f, { encoder: { feeQuote: { address: addressOf(extra), amount: 5000 } } });
+        await p;
+        expect(sdk.wallet.signPsbt.calledOnce).to.be.true;
+    });
+
+    it('still refuses a customOutputs address paid more than the caller authorized', async function () {
+        const extra = payTo();
+        const f = withExtra(extra, 6000);
+        const { sdk, p } = await run(f, { encoder: { customOutputs: [{ address: addressOf(extra), value: 5000 }] } });
+        const err = await rejection(p);
+        expect(err, 'send should reject an overpaid authorized output').to.exist;
+        expect(err.code).to.equal('OUTPUT_OVER_REQUESTED_VALUE');
+        expect(sdk.wallet.signPsbt.called).to.be.false;
+    });
+
+    it('still refuses a feeQuote output paid to a different address', async function () {
+        const f = withExtra(payTo(), 5000);
+        const { sdk, p } = await run(f, { encoder: { feeQuote: { address: addressOf(payTo()), amount: 5000 } } });
+        const err = await rejection(p);
+        expect(err, 'send should reject an unquoted destination').to.exist;
+        expect(err.code).to.equal('UNRECONCILED_OUTPUT');
         expect(sdk.wallet.signPsbt.called).to.be.false;
     });
 });

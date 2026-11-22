@@ -1,3 +1,16 @@
+/*********************************************************************
+ *
+ * Copyright © 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************/
 // Unit coverage for the SDK's copy of src/utils/apply_bufferutils_patch.js. The SDK
 // patches bitcoinjs bufferutils so 64-bit amount fields round-trip through a
 // BigInt-safe path (values above 2^53 would otherwise silently corrupt on the
@@ -102,6 +115,38 @@ describe('applyBufferutilsPatch', function () {
 
 });
 
+// Drives every raw Transaction value entry point with each invalid Number and the two
+// largest valid values, so a native BigInt conversion error can never escape any of them.
+function assertRawTransactionValueGuards() {
+    const { Transaction } = require('bitcoinjs-lib');
+    const script = Buffer.from('0014' + '22'.repeat(20), 'hex');
+    const callers = [
+        (tx, value) => tx.addOutput(script, value),
+        (tx, value) => tx.hashForWitnessV0(0, script, value, Transaction.SIGHASH_ALL),
+        (tx, value) => tx.hashForWitnessV1(0, [script], [value], Transaction.SIGHASH_DEFAULT),
+    ];
+    const invalid = [
+        [2 ** 53, /value out of range/],
+        [-1, /specified a negative value for writing an unsigned value/],
+        [0.5, /value has a fractional component/],
+        [NaN, /value has a fractional component/],
+    ];
+    for (const call of callers) {
+        for (const [value, expected] of invalid) {
+            const tx = new Transaction();
+            tx.addInput(Buffer.alloc(32, 1), 0);
+            tx.addOutput(script, 1000n);
+            assert.throws(() => call(tx, value), expected);
+            assert.throws(() => call(tx, value), err => !/cannot be converted to a BigInt/.test(err.message));
+        }
+        const tx = new Transaction();
+        tx.addInput(Buffer.alloc(32, 1), 0);
+        tx.addOutput(script, 1000n);
+        assert.doesNotThrow(() => call(tx, 9007199254740991));
+        assert.doesNotThrow(() => call(tx, 9007199254740993n));
+    }
+}
+
 describe('applyBufferutilsPatch', function () {
 
     // A Number past 2^53-1 has already lost its exact value, so every writer refuses it
@@ -113,38 +158,19 @@ describe('applyBufferutilsPatch', function () {
         bufferutils.writeUInt64LE(buf, 9007199254740992n, 0);
         assert.strictEqual(bufferutils.readUInt64LE(buf, 0), 9007199254740992n);
         assert.throws(() => new bufferutils.BufferWriter(Buffer.alloc(8)).writeUInt64(2 ** 53), /value out of range/);
-        const bip174Tools = require('bip174/src/lib/converter/tools');
-        assert.throws(() => bip174Tools.writeUInt64LE(Buffer.alloc(8), 2 ** 53, 0), /value out of range/);
+        const { Psbt } = require('bitcoinjs-lib');
+        assert.throws(() => {
+            const psbt = new Psbt();
+            psbt.addInput({
+                hash: Buffer.alloc(32, 1), index: 0,
+                witnessUtxo: { script: Buffer.alloc(1), value: 2 ** 53 }
+            });
+            psbt.toBuffer();
+        }, /value out of range/);
     });
 
     it('applies the u64 Number guard to raw Transaction value entry points', function () {
-        const { Transaction } = require('bitcoinjs-lib');
-        const script = Buffer.from('0014' + '22'.repeat(20), 'hex');
-        const callers = [
-            (tx, value) => tx.addOutput(script, value),
-            (tx, value) => tx.hashForWitnessV0(0, script, value, Transaction.SIGHASH_ALL),
-            (tx, value) => tx.hashForWitnessV1(0, [script], [value], Transaction.SIGHASH_DEFAULT),
-        ];
-        const invalid = [
-            [2 ** 53, /value out of range/],
-            [-1, /specified a negative value for writing an unsigned value/],
-            [0.5, /value has a fractional component/],
-            [NaN, /value has a fractional component/],
-        ];
-        for (const call of callers) {
-            for (const [value, expected] of invalid) {
-                const tx = new Transaction();
-                tx.addInput(Buffer.alloc(32, 1), 0);
-                tx.addOutput(script, 1000n);
-                assert.throws(() => call(tx, value), expected);
-                assert.throws(() => call(tx, value), err => !/cannot be converted to a BigInt/.test(err.message));
-            }
-            const tx = new Transaction();
-            tx.addInput(Buffer.alloc(32, 1), 0);
-            tx.addOutput(script, 1000n);
-            assert.doesNotThrow(() => call(tx, 9007199254740991));
-            assert.doesNotThrow(() => call(tx, 9007199254740993n));
-        }
+        assertRawTransactionValueGuards();
     });
 
     it('refuses a PSBT witnessUtxo Number value past 2^53-1 and serializes its BigInt form', function () {

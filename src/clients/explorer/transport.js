@@ -27,6 +27,11 @@ const { getSupportedNetworks } = require('../../protocol/networks.js');
 // (Coin prefix mapping lives in endpoints.coinPrefix, single source of truth,
 //  shared with the public-default resolution.)
 
+// Marker each response body arrived with, keyed by the body object itself, so a
+// reader that holds a body can learn how fresh THAT response was even after a
+// later response has replaced the client-wide record.
+const bodyFreshness = new WeakMap();
+
 module.exports = {
     // (Re)build the axios client + keep-alive agent for the current target.
     // Picks an https agent for https bases (axios ignores httpAgent on https),
@@ -199,16 +204,19 @@ module.exports = {
         let marker  = headers['xchain-freshness'];
         let body    = response && response.data;
         let inBody  = (body && typeof body === 'object' && !Array.isArray(body) && body.freshness && typeof body.freshness === 'object') ? body.freshness : null;
-        if (marker === undefined && !inBody) return;
+        if (marker === undefined && !inBody) return null;
         let stale = inBody ? inBody.stale === true : String(marker).toLowerCase() === 'stale';
         let num   = (v) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
-        this._freshness = {
+        const record = {
             stale,
             tipBlock:      inBody && inBody.tip_block !== undefined ? num(inBody.tip_block) : num(headers['xchain-tip-block']),
             tipAgeSeconds: inBody && inBody.tip_age_seconds !== undefined ? num(inBody.tip_age_seconds) : num(headers['xchain-tip-age-s']),
             replicaHalted: inBody && typeof inBody.replica_halted === 'boolean' ? inBody.replica_halted : null,
             observedAt:    Date.now()
         };
+        this._freshness = record;
+        if (body && typeof body === 'object') bodyFreshness.set(body, record);
+        return record;
     },
 
     // The last freshness marker this client saw, or null before any marked
@@ -216,13 +224,30 @@ module.exports = {
     // observedAt }. Read this after a balance or history call to tell
     // served-and-current from served-and-behind; sdk.freshness() is the same
     // record, and sdk.assertFresh() turns a stale one into a typed error for
-    // the paths that must not build on it.
-    freshness() {
-        return this._freshness ? Object.assign({}, this._freshness) : null;
+    // the paths that must not build on it. Given a body this client returned,
+    // it answers with the marker of the response that carried that body, which
+    // a later response cannot replace; any other argument reads the last marker.
+    freshness(body = null) {
+        const own = body && typeof body === 'object' ? bodyFreshness.get(body) : null;
+        const record = own || this._freshness;
+        return record ? Object.assign({}, record) : null;
     },
 
     handleError(err, url) {
+        // A timeout can fire after the headers arrived (a stalled body): axios then rejects
+        // with the 2xx response still attached, as ECONNABORTED or as ERR_BAD_RESPONSE
+        // "stream has been aborted". A success status is never the failure, so it is a
+        // timeout when the stream was aborted and a network failure otherwise.
+        const status = err.response ? err.response.status : 0;
+        const stalledBody = status > 199 && status < 300;
+        if (stalledBody && !/abort|timeout/i.test(String(err.message))) {
+            throw new SDKExplorerError('EXPLORER_NETWORK', 'Explorer response failed after HTTP ' + status + ': ' + err.message, { url, error: err.message });
+        }
+        if (err.code === 'ECONNABORTED' || stalledBody) {
+            throw new SDKExplorerError('EXPLORER_TIMEOUT', 'Explorer request timed out: ' + url, { url, timeout: this.timeout });
+        }
         if (err.response) {
+            const freshness = this.recordFreshness(err.response);
             // A 429 reaching here already survived retry.js's honoured wait, so
             // it is the caller's to handle. Keep the "Explorer returned HTTP
             // 429 for <url>" prefix byte-exact: integrators (and the wallet's
@@ -237,11 +262,8 @@ module.exports = {
             throw new SDKExplorerError(
                 'EXPLORER_HTTP_' + err.response.status,
                 'Explorer returned HTTP ' + err.response.status + ' for ' + url,
-                { url, status: err.response.status, data: err.response.data }
+                { url, status: err.response.status, data: err.response.data, freshness }
             );
-        }
-        if (err.code === 'ECONNABORTED') {
-            throw new SDKExplorerError('EXPLORER_TIMEOUT', 'Explorer request timed out: ' + url, { url, timeout: this.timeout });
         }
         throw new SDKExplorerError('EXPLORER_NETWORK', 'Explorer request failed: ' + err.message, { url, error: err.message });
     },

@@ -202,7 +202,7 @@ function registerSupplyBoundReviewTest() {
         const issue = rows.find((r) => r.handler === 'src/actions/issue/');
         expect(mint, 'mint directory row').to.exist;
         expect(issue, 'issue directory row').to.exist;
-        expect(mint.hash).to.equal('998c2d881eaecf00d0f350d5bb281ed6dabd7841fb37146fcad7b3e6fef26e48');
+        expect(mint.hash).to.equal('8321748e950c0ee3e0b2fdd3a73105e920c6f37714912d97847024841a918e53');
         expect(issue.hash).to.equal('259d00551b5985147a3f253245fb6705362dd53fc248d468b69979f77f93c978');
         const heading = '### 2026-10-14 - MINT and ISSUE total supply bound behind an activation';
         expect(text).to.include(heading);
@@ -243,9 +243,9 @@ function registerTextAmountRefusalReviewTest() {
         expect(send, 'send directory row').to.exist;
         expect(destroy, 'destroy directory row').to.exist;
         expect(dividend, 'dividend directory row').to.exist;
-        expect(send.hash).to.equal('bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc');
-        expect(destroy.hash).to.equal('f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40');
-        expect(dividend.hash).to.equal('7d66516b2584dcce47eecac80f62f90cabf98844ecc862195c03c65a7ff31065');
+        expect(send.hash).to.equal('3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8');
+        expect(destroy.hash).to.equal('a52180e45cacbbb02ee302391bbff6c95eecdee68d6e62b8da97bc25eeb9b348');
+        expect(dividend.hash).to.equal('6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c');
         const heading = '### 2026-10-15 - SEND, DESTROY and DIVIDEND refuse text amounts and unknown-tick legs';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -263,8 +263,8 @@ function registerSupplyPrefetchReviewTest() {
         const rows = parseMap(REAL_MAP);
         expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/order/': '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e',
-            'src/actions/swap/': '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8',
+            'src/actions/order/': 'faa64e31b2a882a6f337db72069b5b5bb8e0ef253f8a15916d5c1626b5d1088b',
+            'src/actions/swap/': '93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e',
         };
         for (const [handler, hash] of Object.entries(expected)) {
             const row = rows.find((r) => r.handler === handler);
@@ -299,8 +299,8 @@ function registerConsolidationLegGateReviewTest() {
     it('pins and records the SEND and DESTROY consolidation leg gate retirement review', function () {
         const text = fs.readFileSync(REAL_MAP, 'utf8');
         const rows = parseMap(REAL_MAP);
-        expect(rows.find((r) => r.handler === 'src/actions/send/').hash).to.equal('bb0ad3880732d882731cbee51df98cc229cc3ebcf030f5e3be1584d1010ec4dc');
-        expect(rows.find((r) => r.handler === 'src/actions/destroy/').hash).to.equal('f6423fc8c16e8ad8d7721b7cf3703e9f852f2dd30b3d80bd8b91c50d47c9be40');
+        expect(rows.find((r) => r.handler === 'src/actions/send/').hash).to.equal('3e4d1e274403cac24057c65453cf2168f5fc761fe15bf6f048aa01cf5a73cdc8');
+        expect(rows.find((r) => r.handler === 'src/actions/destroy/').hash).to.equal('a52180e45cacbbb02ee302391bbff6c95eecdee68d6e62b8da97bc25eeb9b348');
         const heading = '### 2026-10-18 - CONSOLIDATION_LEG_AMOUNT gate is retired';
         expect(text).to.include(heading);
         const start = text.indexOf(heading);
@@ -315,10 +315,10 @@ function registerNotNullRowKeyReviewTest() {
         const rows = parseMap(REAL_MAP);
         expect(rows.find((r) => r.handler === 'src/actions/dispenser/'), 'dispenser directory row').to.exist;
         const expected = {
-            'src/actions/order/': '86b0a7c3d7badbfb6001527fe3597628233cf8a5b72018b97e8725309d450d5e',
-            'src/actions/swap/': '2ee469e1572ed56e78074597577f246c188277016873ea6b9b8bf36eb1ba6bb8',
-            'src/actions/deposit.js': '3e1dd1918d920b6deba4511bf005b62c4a8dba819800ffa37f4416d49904375f',
-            'src/actions/withdraw.js': '99cae8fa45badbe03837b29aaf9baf167931724794c8548016c575bc7a6b6d35',
+            'src/actions/order/': 'faa64e31b2a882a6f337db72069b5b5bb8e0ef253f8a15916d5c1626b5d1088b',
+            'src/actions/swap/': '93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e',
+            'src/actions/deposit.js': '2d8585841185d9948b841eb078f55c843ea6df0801206c6778005a51bf4bcf31',
+            'src/actions/withdraw.js': 'cb8b7bf31b80689ec2c7c53139082b7123f2c9af97becfbb64eb0cf3eb3671af',
         };
         for (const [handler, hash] of Object.entries(expected)) {
             const row = rows.find((r) => r.handler === handler);

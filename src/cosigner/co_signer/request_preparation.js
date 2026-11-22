@@ -135,24 +135,8 @@ function revealCommitTxid(psbt) {
     }
 }
 
-// Decode and evaluate policy before transaction and signature gates run.
-function evaluateRequest(self, psbt, env) {
-    // 2. Recover the action FROM the PSBT (never trust the caller's claim).
-    //    On a COMMIT the action is not in the transaction at all: it lives in
-    //    the leaf the commit output COMMITS to, so it is read from the script
-    //    whose hash this daemon just matched against an output. On a
-    //    REVEAL/CANCEL the leaf is in the PSBT and decodeActionFromPsbt finds
-    //    it there.
-    const decoded = (env && (env.role === 'commit' || env.role === 'cancel'))
-        ? decodeEnvelopeAction(env.script)
-        : decodeActionFromPsbt(psbt, { network: self.network });
-    if (!decoded.ok) return { denial: self.deny('DECODE_' + decoded.reason, decoded.detail) };
-
-    // 3. Policy, against the server-side window snapshot. The decoded VERSION
-    //    is passed too: the evaluator needs the exact (action, version) to know
-    //    whether an amount cap can bind this format at all (G2) and whether the
-    //    format can honour allowedDestinations (G9).
-    //
+// Select rolling-window usage for policy evaluation.
+function policyWindowUsage(self, psbt, env) {
     //    A CANCEL is the one request that skips policy, because it publishes
     //    NO ACTION AT ALL: it spends an unrevealed commit back to the
     //    account, so there is nothing for policy to authorize, and the
@@ -176,17 +160,42 @@ function evaluateRequest(self, psbt, env) {
     //    the window: the reveal is judged on exactly the usage its commit was,
     //    with every other gate (allowedActions, per-action cap, destinations,
     //    confirmAbove) untouched. It applies ONLY where the store holds a live
-    //    entry for the commit outpoint this reveal spends, so a commit this
-    //    daemon never charged keeps the full projection and fails closed.
-    let windowUsage = self.windowStore ? self.windowStore.snapshot() : undefined;
+    //    entry for the commit transaction this reveal spends. A reveal with no
+    //    live entry is refused: it was either funded outside this daemon or its
+    //    authorization has aged out of the rolling window.
+    const windowUsage = self.windowStore ? self.windowStore.snapshot() : undefined;
     if (self.windowStore && env && env.role === 'reveal') {
-        const adjusted = self.windowStore.snapshotExcludingTxid(revealCommitTxid(psbt));
-        if (adjusted) windowUsage = adjusted;
+        const commitTxid = revealCommitTxid(psbt);
+        const adjusted = self.windowStore.snapshotExcludingTxid(commitTxid);
+        if (!adjusted) return { denial: self.deny('ENVELOPE_COMMIT_NOT_AUTHORIZED', {
+            commitTxid,
+            detail: 'the rolling window has no live authorization for this reveal commit',
+        }) };
+        return { windowUsage: adjusted };
     }
+    return { windowUsage };
+}
+
+// Decode and evaluate policy before transaction and signature gates run.
+function evaluateRequest(self, psbt, env) {
+    // 2. Recover the action FROM the PSBT (never trust the caller's claim).
+    //    On a COMMIT the action is not in the transaction at all: it lives in
+    //    the leaf the commit output COMMITS to, so it is read from the script
+    //    whose hash this daemon just matched against an output. On a
+    //    REVEAL/CANCEL the leaf is in the PSBT and decodeActionFromPsbt finds
+    //    it there.
+    const decoded = (env && (env.role === 'commit' || env.role === 'cancel'))
+        ? decodeEnvelopeAction(env.script)
+        : decodeActionFromPsbt(psbt, { network: self.network });
+    if (!decoded.ok) return { denial: self.deny('DECODE_' + decoded.reason, decoded.detail) };
+
+    // 3. Evaluate policy against the server-side window snapshot.
+    const usage = policyWindowUsage(self, psbt, env);
+    if (usage.denial) return usage;
     let verdict = { ok: true, evaluation: {} };
     if (!env || env.role !== 'cancel') {
         verdict = evaluatePolicy(self.policy,
-            { action: decoded.action, version: decoded.version, params: decoded.params }, windowUsage);
+            { action: decoded.action, version: decoded.version, params: decoded.params }, usage.windowUsage);
         if (!verdict.ok) return { denial: self.deny(verdict.violation.code, verdict.violation.details) };
 
         // 4. Confirm-required actions: a headless daemon cannot prompt, so deny by default.
