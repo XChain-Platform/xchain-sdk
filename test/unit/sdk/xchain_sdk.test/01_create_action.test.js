@@ -60,13 +60,7 @@ function registerEnvHooks() {
     });
 }
 
-describe('XChainSDK', function () {
-    registerEnvHooks();
-
-    // ACTION methods
-
-    describe('createAction', function () {
-
+function registerCreateActionCoreTests() {
         it('returns actionString for SEND without encoder', async function () {
             const sdk = makeSDK();
             const result = await sdk.createAction({ action: 'SEND', params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' } });
@@ -105,7 +99,9 @@ describe('XChainSDK', function () {
             expect(result).not.to.have.property('revealPsbt');
             expect(result).not.to.have.property('envelope');
         });
+}
 
+function registerCreateActionFieldTests() {
         it('preserves named carrier and compression fields for single-phase results', async function () {
             const sdk = makeSDK();
             const compression = { compressed: true, data: 'FILE|0|x', rawData: 'aa' };
@@ -160,6 +156,16 @@ describe('XChainSDK', function () {
             expect(sent.pubkey).to.equal('mypubkey');
             expect(sent.data).to.be.a('string');
         });
+}
+
+describe('XChainSDK', function () {
+    registerEnvHooks();
+
+    // ACTION methods
+
+    describe('createAction', function () {
+        registerCreateActionCoreTests();
+        registerCreateActionFieldTests();
     });
 });
 

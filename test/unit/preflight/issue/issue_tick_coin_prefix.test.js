@@ -39,7 +39,7 @@ const expectUnverified = (report, reason) => expect(report.unverified).to.deep.i
     check: 'ISSUE_TICK_COIN_PREFIX', reason,
 });
 
-describe('ISSUE coin-qualified tick prefix pre-flight', function () {
+function registerPrefixBehaviorTests() {
     it('blocks fresh coin and future-root prefixes on regtest', async function () {
         for (const [tick, root] of [['BTC:FOO', 'BTC'], ['eth:FOO', 'ETH']]) {
             const report = await reportFor(tick);
@@ -76,7 +76,9 @@ describe('ISSUE coin-qualified tick prefix pre-flight', function () {
         expect(reservedFinding(report)).to.equal(undefined);
         expectUnverified(report, 'token lookup unavailable');
     });
+}
 
+function registerActivationAvailabilityTests() {
     it('bounds an unavailable activation lookup instead of hanging', async function () {
         const started = Date.now();
         const report = await reportFor('BTC:FOO', {
@@ -94,7 +96,9 @@ describe('ISSUE coin-qualified tick prefix pre-flight', function () {
         expect(reservedFinding(report)).to.equal(undefined);
         expectUnverified(report, 'activation lookup unavailable');
     });
+}
 
+function registerActivationModeTests() {
     it('keeps local mode network-free on armed testnet and regtest planes', async function () {
         for (const plane of [
             { network: 'bitcoin-testnet', coin: 'TBTC' },
@@ -125,7 +129,9 @@ describe('ISSUE coin-qualified tick prefix pre-flight', function () {
         expect(reservedFinding(report)).to.equal(undefined);
         expectUnverified(report, 'activation lookup unavailable');
     });
+}
 
+function registerActivationTipTests() {
     it('distinguishes reached and unreached testnet activation tips', async function () {
         const active = await reportFor('BTC:FOO', {
             network: 'bitcoin-testnet', coin: 'TBTC',
@@ -138,4 +144,11 @@ describe('ISSUE coin-qualified tick prefix pre-flight', function () {
         expect(reservedFinding(active)).to.exist;
         expect(reservedFinding(inactive)).to.equal(undefined);
     });
+}
+
+describe('ISSUE coin-qualified tick prefix pre-flight', function () {
+    registerPrefixBehaviorTests();
+    registerActivationAvailabilityTests();
+    registerActivationModeTests();
+    registerActivationTipTests();
 });

@@ -139,7 +139,7 @@ async function rejection(p) {
     return null;
 }
 
-describe('message send reconciles the encoder PSBT', function () {
+function registerMessageCarrierTests() {
     it('refuses an envelope pair before signing or broadcasting', async function () {
         const f = fixture((s) => [{ script: s, value: 190000 }]);
         const { sdk, p } = await run(f, { actionResult: {
@@ -182,7 +182,9 @@ describe('message send reconciles the encoder PSBT', function () {
         expect(err.code).to.equal('UNRECONCILED_OUTPUT');
         expect(sdk.wallet.signPsbt.called).to.be.false;
     });
+}
 
+function registerMessageFeeTests() {
     it('enforces the encoder maxFeeSats ceiling before signing', async function () {
         const f = fixture((s, txid) => [{ script: s, value: 150000 }, { script: actionCarrier(txid, REQUESTED), value: 0 }]);
         const { sdk, p } = await run(f, { encoder: { maxFeeSats: 1000 } });
@@ -203,6 +205,11 @@ describe('message send reconciles the encoder PSBT', function () {
         expect(err, 'send should reject').to.exist;
         expect(sdk.wallet.signPsbt.called).to.be.false;
     });
+}
+
+describe('message send reconciles the encoder PSBT', function () {
+    registerMessageCarrierTests();
+    registerMessageFeeTests();
 });
 
 describe('message send reconciles the outputs the caller asked the encoder to add', function () {

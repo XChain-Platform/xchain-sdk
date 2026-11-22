@@ -186,8 +186,7 @@ const submit = (lm, opts = {}) => lm.submitAction(
     { action: 'FILE', params: {} }, { pubkey: PUBKEY.toString('hex'), change: CHANGE_ADDRESS },
     Object.assign({ wif: FAKE_WIF, waitForIndexer: false }, opts));
 
-describe('Taproot envelope pair through the lifecycle', function () {
-
+function registerEnvelopeSafetyTests() {
     it('signs BOTH halves before anything is broadcast, then commit -> reveal', async function () {
         const { sdk, trace } = makeEnvelopeSdk();
         await submit(new LifecycleManager(sdk));
@@ -219,7 +218,9 @@ describe('Taproot envelope pair through the lifecycle', function () {
         (error) => error.code === 'UNRECONCILED_OUTPUT');
         assert.deepStrictEqual(trace, []);
     });
+}
 
+function registerEnvelopeResultTests() {
     it('returns the REVEAL txid as the action txid, not the commit (§3.1)', async function () {
         const { sdk } = makeEnvelopeSdk();
         const result = await submit(new LifecycleManager(sdk));
@@ -248,6 +249,11 @@ describe('Taproot envelope pair through the lifecycle', function () {
         assert.ok(Array.isArray(result.spentInputs));
         assert.ok(result.spentInputs.length >= 2, 'commit and reveal inputs both counted');
     });
+}
+
+describe('Taproot envelope pair through the lifecycle', function () {
+    registerEnvelopeSafetyTests();
+    registerEnvelopeResultTests();
 });
 
 describe('Taproot envelope pair through the lifecycle', function () {

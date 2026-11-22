@@ -4,8 +4,8 @@
 'use strict';
 
 const { expect } = require('chai');
-const { XChainSDK } = require('../../../index.js');
-const chunkHelper = require('../../../src/contract/chunk_helper.js');
+const { XChainSDK } = require('../../../../index.js');
+const chunkHelper = require('../../../../src/contract/chunk_helper.js');
 
 function frontier(opts) {
     let low = 1;
