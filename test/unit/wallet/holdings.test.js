@@ -7,7 +7,7 @@ const assert = require('assert');
 
 const { holdingFromBalances } = require('../../../src/utils/wallet/holdings.js');
 
-describe('holdingFromBalances', function () {
+function registerComparisonTests() {
     it('holds when an amount is exactly the minimum', function () {
         const result = holdingFromBalances([{ tick: 'XCP', amount: '1' }], 'XCP', '1');
 
@@ -20,6 +20,15 @@ describe('holdingFromBalances', function () {
         assert.strictEqual(result.holds, false);
     });
 
+    it('matches ticks exactly without case folding', function () {
+        const result = holdingFromBalances([{ tick: 'XCP', amount: '10' }], 'xcp', '1');
+
+        assert.strictEqual(result.amount.eq(0), true);
+        assert.strictEqual(result.holds, false);
+    });
+}
+
+function registerAmountTests() {
     it('accepts a non-negative finite number minimum', function () {
         const result = holdingFromBalances([{ tick: 'XCP', amount: '1.5' }], 'XCP', 1.5);
 
@@ -56,13 +65,6 @@ describe('holdingFromBalances', function () {
         assert.strictEqual(aboveZero.holds, false);
     });
 
-    it('matches ticks exactly without case folding', function () {
-        const result = holdingFromBalances([{ tick: 'XCP', amount: '10' }], 'xcp', '1');
-
-        assert.strictEqual(result.amount.eq(0), true);
-        assert.strictEqual(result.holds, false);
-    });
-
     it('sums duplicate matching rows', function () {
         const result = holdingFromBalances([
             { tick: 'XCP', amount: '0.4' },
@@ -79,7 +81,9 @@ describe('holdingFromBalances', function () {
         assert.strictEqual(result.amount.isBigNumber, true);
         assert.strictEqual(result.amount.eq('12.345'), true);
     });
+}
 
+function registerValidationTests() {
     it('rejects invalid rows, tick, and minimum inputs', function () {
         const invalidCalls = [
             () => holdingFromBalances({}, 'XCP', '1'),
@@ -102,4 +106,10 @@ describe('holdingFromBalances', function () {
             (error) => error instanceof TypeError && /XCP/.test(error.message)
         );
     });
+}
+
+describe('holdingFromBalances', function () {
+    registerComparisonTests();
+    registerAmountTests();
+    registerValidationTests();
 });
