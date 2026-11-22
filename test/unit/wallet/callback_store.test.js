@@ -13,17 +13,13 @@
 const assert = require('assert');
 const { createMemoryCallbackStore } = require('../../../src/utils/wallet/callback_store.js');
 
-describe('memory callback store', function() {
+describe('memory callback store nonces', function() {
     let clock;
     let store;
 
     beforeEach(function() {
         clock = 1000;
-        store = createMemoryCallbackStore({
-            now: () => clock,
-            nonceTtlMs: 100,
-            maxEntries: 2,
-        });
+        store = createMemoryCallbackStore({ now: () => clock, nonceTtlMs: 100, maxEntries: 2 });
     });
 
     it('issues fresh 128-bit unpadded base64url nonces for both modes', function() {
@@ -57,6 +53,17 @@ describe('memory callback store', function() {
 
         assert.strictEqual(store.takeNonce(nonce), null);
         assert.strictEqual(store.takeNonce(nonce), null);
+    });
+
+});
+
+describe('memory callback store records', function() {
+    let clock;
+    let store;
+
+    beforeEach(function() {
+        clock = 1000;
+        store = createMemoryCallbackStore({ now: () => clock, nonceTtlMs: 100, maxEntries: 2 });
     });
 
     it('stores and retrieves records until the same TTL expires', function() {

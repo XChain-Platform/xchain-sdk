@@ -22,11 +22,7 @@ const crypto = require('crypto');
 
 const NONCE_MODES = new Set(['same-device', 'cross-device']);
 
-function createMemoryCallbackStore({
-    now = Date.now,
-    nonceTtlMs = 600000,
-    maxEntries = 2000,
-} = {}) {
+function createMemoryCallbackStore({ now = Date.now, nonceTtlMs = 600000, maxEntries = 2000 } = {}) {
     const nonces = new Map();
     const records = new Map();
 
