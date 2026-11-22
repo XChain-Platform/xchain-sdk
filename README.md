@@ -18,7 +18,7 @@ Developer-facing SDK for the [XChain Platform](https://xchain.io/): generate XCh
 
 ## Features
 
-- **31 ACTION types**: `sdk.send()`, `sdk.issue()`, `sdk.mint()`, `sdk.stake()`, and 27 more convenience methods
+- **32 ACTION types**: `sdk.send()`, `sdk.issue()`, `sdk.mint()`, `sdk.stake()`, and 28 more convenience methods
 - **Transaction lifecycle**: `sdk.submitAction()` handles the full encode -> sign -> broadcast -> wait pipeline in one call
 - **Wallet sessions**: `sdk.session(wif)` bundles address/key/UTXO state for repeated actions from one address
 - **Fee estimation**: `sdk.estimateFees()` returns fee info without signing or broadcasting
@@ -60,7 +60,7 @@ Full SDK developer guide is published at [docs.xchain.io/components/sdk](https:/
 |---|---|
 | [README](https://docs.xchain.io/components/sdk/) | Overview, installation, usage modes |
 | [Configuration](https://docs.xchain.io/components/sdk/configuration) | Constructor options, env vars, hub discovery, retry, pooling, hooks |
-| [Actions](https://docs.xchain.io/components/sdk/actions) | All 31 ACTION types: params, validation rules, format versions, examples |
+| [Actions](https://docs.xchain.io/components/sdk/actions) | All 32 ACTION types: params, validation rules, format versions, examples |
 | [Transaction Lifecycle](https://docs.xchain.io/components/sdk/lifecycle) | submitAction, fee estimation, UTXO chaining, P2SH two-phase handling |
 | [Wallet Sessions](https://docs.xchain.io/components/sdk/sessions) | Bound wallet sessions, convenience methods, UTXO cache |
 | [Workflows](https://docs.xchain.io/components/sdk/workflows) | High-level recipes: issueAndDistribute, deployAndFund, stakeAndDelegate |
