@@ -12,6 +12,7 @@
 
 const assert = require('assert');
 const sinon = require('sinon');
+const bitcoin = require('bitcoinjs-lib');
 const LifecycleManager = require('../../../../src/carrier/lifecycle_manager.js');
 const {
     FAKE_WIF,
@@ -23,6 +24,20 @@ const {
 // submitAction(): P2SH two-phase path
 
 // Tests
+
+function fundingPsbtPayingCustomOutput() {
+    const net = bitcoin.networks.bitcoin;
+    const mine = bitcoin.payments.p2wpkh({ hash: Buffer.alloc(20, 2), network: net });
+    const destination = bitcoin.payments.p2wpkh({ hash: Buffer.alloc(20, 3), network: net });
+    const psbt = new bitcoin.Psbt({ network: net });
+    psbt.addInput({
+        hash: Buffer.alloc(32, 4), index: 0,
+        witnessUtxo: { script: mine.output, value: 100000 },
+    });
+    psbt.addOutput({ script: destination.output, value: 1000 });
+    psbt.addOutput({ script: mine.output, value: 98000 });
+    return { psbtHex: psbt.toHex(), customOutputs: [{ address: destination.address, value: 1000 }] };
+}
 
 describe('LifecycleManager', function () {
 
@@ -74,6 +89,34 @@ describe('LifecycleManager', function () {
             assert.strictEqual(result.txid, 'phase2');
         });
     });
+});
+
+describe('LifecycleManager', function () {
+    afterEach(() => sinon.restore());
+
+    for (const encoding of ['P2SH', 'P2WSH']) {
+        it('refuses customOutputs on the ' + encoding + ' funding transaction', async function () {
+            const signed = buildSignedTx();
+            const funding = fundingPsbtPayingCustomOutput();
+            let broadcasts = 0;
+            const sdk = makeSdk({
+                wallet: {
+                    signPsbt: () => ({ txHex: signed.txHex, txid: 'phase1', psbtHex: signed.psbtHex }),
+                    signRevealPsbt: () => ({ txHex: signed.txHex, txid: 'phase2', psbtHex: signed.psbtHex }),
+                },
+            }, {
+                createTx: async () => ({ psbt: funding.psbtHex, encoding }),
+                spendP2sh: async () => ({ psbt: signed.psbtHex }),
+                broadcastTx: async () => { broadcasts += 1; return {}; },
+            });
+            await assert.rejects(new LifecycleManager(sdk).submitAction(
+                { action: 'SEND', params: {} },
+                { customOutputs: funding.customOutputs },
+                { wif: FAKE_WIF, waitForIndexer: false }),
+            (error) => error.code === 'UNRECONCILED_OUTPUT');
+            assert.strictEqual(broadcasts, 0);
+        });
+    }
 });
 
 describe('LifecycleManager', function () {

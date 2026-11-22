@@ -271,8 +271,16 @@ export interface ActionResult {
     fields: Record<string, any>;
     /** Encoding type used, populated only when a PSBT was also produced */
     encoding?: EncodingType;
-    /** Unsigned PSBT in hex, populated only when encoder options were provided */
-    psbt?: string;
+    /** Unsigned PSBT in hex, or null when an envelope pair must use submitAction */
+    psbt?: string | null;
+    /** Whether the returned PSBT may be signed directly */
+    signable?: boolean;
+    /** Why an encoded result must use the managed submission path */
+    unsignableReason?: 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
+    /** Redeem scripts required to verify and complete a chunked carrier */
+    carrierScripts?: string[];
+    /** Exact bytes reported when the encoder compressed the payload */
+    compression?: { compressed: boolean; data?: string; rawData?: string };
 }
 
 /** Response returned by the encoder for createTx / spendP2sh */

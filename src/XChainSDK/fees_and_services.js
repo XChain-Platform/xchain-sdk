@@ -118,11 +118,11 @@ function assertFeeEstimateCarrier(feeResult, result, encoderOpts, reconcileNetwo
 }
 
 // Apply the same intent gate to an envelope reveal while keeping it local.
-function reconcileEnvelopeEstimateReveal(revealPsbt, reconcileIntent, phaseFunding, customOutputs, quoteOutput) {
+function reconcileEnvelopeEstimateReveal(revealPsbt, reconcileIntent, phaseFunding) {
     if (!revealPsbt) return;
     reconcileEncoded(revealPsbt, Object.assign({}, reconcileIntent, {
         label: 'envelope reveal',
-        customOutputs: quoteOutput ? customOutputs.concat([quoteOutput]) : customOutputs,
+        customOutputs: [],
         requiredSpends: phaseFunding,
     }));
 }
@@ -156,15 +156,15 @@ function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs
         maxPhaseFundingSats: encoderOpts.maxPhaseFundingSats,
     };
     const reconciled = reconcileEncoded(feeResult.psbt, Object.assign({}, reconcileIntent, {
-        customOutputs:       (quoteOutput && !twoPhase) ? customOutputs.concat([quoteOutput]) : customOutputs,
+        customOutputs:       twoPhase ? []
+            : (quoteOutput ? customOutputs.concat([quoteOutput]) : customOutputs),
         label:               'fee estimate',
         // Single-phase only: an estimate carries phase 1 (plus an envelope's reveal
         // when the encoder answered as a pair), never a chunked action's phase 2.
         phaseShapes: twoPhase ? ['p2sh', 'p2wsh'] : (revealPsbt ? ['p2tr'] : []),
         phaseSpends: revealPsbt ? (psbtPrevouts(revealPsbt) || []) : null,
     }));
-    reconcileEnvelopeEstimateReveal(revealPsbt, reconcileIntent, reconciled.phaseFunding,
-        customOutputs, quoteOutput);
+    reconcileEnvelopeEstimateReveal(revealPsbt, reconcileIntent, reconciled.phaseFunding);
 
     // ... and the same carrier bind, for the same reason. The gate above reads
     // outputs, values and the fee and deliberately never reads the data carrier,

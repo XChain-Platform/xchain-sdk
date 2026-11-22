@@ -128,6 +128,24 @@ describe('contract identity (meta): static read + deploy pre-flight', function (
             assert.strictEqual(utils.checkExportedMeta(wrap("{ name: 'N', description: 'D', version: '' }")).error, V.VERSION);
             assert.strictEqual(utils.checkExportedMeta(wrap("{ name: 'N', description: 'D', version: 1 }")).error, V.VERSION);
             assert.strictEqual(utils.checkExportedMeta(wrap("{ name: 'N', description: 'D', version: '" + 'v'.repeat(33) + "' }")).error, V.VERSION);
+
+            const metaBadLast = "module.exports={meta:{name:'Valid',description:'D'},meta:{name:'',description:'D'}};";
+            const metaGoodLast = "module.exports={meta:{name:'',description:'D'},meta:{name:'Valid',description:'D'}};";
+            assert.strictEqual(utils.checkExportedMeta(metaBadLast).error, V.NAME);
+            assert.strictEqual(utils.checkExportedMeta(metaGoodLast).error, null);
+            assert.strictEqual(utils.checkExportedMeta(wrap("{name:'Valid',name:123,description:'D'}")).error, V.NAME);
+            assert.strictEqual(utils.checkExportedMeta(wrap("{name:123,name:'Valid',description:'D'}")).error, null);
+
+            const computedLast = utils.getExportedMeta(
+                "var N='Valid';module.exports={meta:{name:'old',name:N,description:'D'}};");
+            assert.deepStrictEqual(computedLast.computed, ['name']);
+            assert.deepStrictEqual(computedLast.nonStringLiteral, []);
+            const getterLast = utils.getExportedMeta(
+                "module.exports={meta:{name:'old',get name(){return 'Valid';},description:'D'}};");
+            assert.deepStrictEqual(getterLast.computed, ['name']);
+            assert.deepStrictEqual(utils.getExportedMeta(
+                "module.exports={meta:{name:'Valid',description:'D'},get meta(){return {};}};"),
+            { status: 'undecidable' });
         });
 
         it('reports the FIRST failing row, name before description', function () {

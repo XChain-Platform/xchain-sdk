@@ -103,7 +103,7 @@ function withEnvelopeLeaf(psbt, actionString = ACTION_STRING) {
     return psbt;
 }
 
-function buildEnvelopePair(actionString = ACTION_STRING, rawData) {
+function buildEnvelopePair(actionString = ACTION_STRING, rawData, customOutput) {
     const leaf = envelopeLeaf(actionString, rawData);
     const tree = { output: leaf };
     const commitPayment = bitcoin.payments.p2tr({ internalPubkey: X_ONLY, scriptTree: tree, network: NET });
@@ -113,7 +113,8 @@ function buildEnvelopePair(actionString = ACTION_STRING, rawData) {
     commit.addInput({ hash: Buffer.alloc(32, 4), index: 0,
         witnessUtxo: { script: FUNDING.output, value: 100000 } });
     commit.addOutput({ script: commitPayment.output, value: 8000 });
-    commit.addOutput({ script: FUNDING.output, value: 91000 });
+    if (customOutput) commit.addOutput(customOutput);
+    commit.addOutput({ script: FUNDING.output, value: customOutput ? 90000 : 91000 });
     const unsignedHex = commit.toHex();
     const commitId = commit.__CACHE.__TX.getId();
     commit.signInput(0, KEY);
@@ -125,7 +126,8 @@ function buildEnvelopePair(actionString = ACTION_STRING, rawData) {
         tapLeafScript: [{ leafVersion: 0xc0, script: leaf,
             controlBlock: revealPayment.witness[revealPayment.witness.length - 1] }],
     });
-    reveal.addOutput({ script: FUNDING.output, value: 7500 });
+    if (customOutput) reveal.addOutput(customOutput);
+    reveal.addOutput({ script: FUNDING.output, value: customOutput ? 6500 : 7500 });
     return { psbtHex: unsignedHex, revealHex: reveal.toHex(), txHex: tx.toHex(), txid: tx.getId() };
 }
 
@@ -138,8 +140,8 @@ const RECOVERY = {
 };
 
 function makeEnvelopeSdk({ revealSignThrows = false, revealBroadcastThrows = false,
-                           customSigner = null, rawData } = {}) {
-    const signed = buildEnvelopePair(ACTION_STRING, rawData);
+                           customSigner = null, rawData, customOutput } = {}) {
+    const signed = buildEnvelopePair(ACTION_STRING, rawData, customOutput);
     const trace = [];
 
     const encoder = {
@@ -203,6 +205,19 @@ describe('Taproot envelope pair through the lifecycle', function () {
         await assert.rejects(() => submit(new LifecycleManager(sdk)));
         assert.ok(!trace.some(t => t.startsWith('broadcast')),
             'nothing may reach the chain when the reveal cannot be signed; trace was ' + JSON.stringify(trace));
+    });
+
+    it('refuses a caller customOutput paid again by the envelope reveal', async function () {
+        const destination = bitcoin.payments.p2wpkh({ hash: Buffer.alloc(20, 8), network: NET });
+        const customOutput = { address: destination.address, value: 1000 };
+        const { sdk, trace } = makeEnvelopeSdk({ customOutput });
+        await assert.rejects(new LifecycleManager(sdk).submitAction(
+            { action: 'FILE', params: {} },
+            { pubkey: PUBKEY.toString('hex'), change: CHANGE_ADDRESS,
+                customOutputs: [customOutput] },
+            { wif: FAKE_WIF, waitForIndexer: false }),
+        (error) => error.code === 'UNRECONCILED_OUTPUT');
+        assert.deepStrictEqual(trace, []);
     });
 
     it('returns the REVEAL txid as the action txid, not the commit (§3.1)', async function () {

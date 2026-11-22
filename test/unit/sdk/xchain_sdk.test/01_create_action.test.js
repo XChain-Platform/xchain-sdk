@@ -84,7 +84,58 @@ describe('XChainSDK', function () {
             });
             expect(result.psbt).to.equal('aabbcc');
             expect(result.encoding).to.equal('OP_RETURN');
+            expect(result.signable).to.equal(true);
             expect(sdk.encoder.createTx.calledOnce).to.be.true;
+        });
+
+        it('withholds a Taproot commit whose reveal must use submitAction', async function () {
+            const sdk = makeSDK();
+            mockEncoder(sdk, {
+                psbt: 'aabbcc', revealPsbt: 'ddeeff', encoding: 'TAPROOT',
+                carrierScripts: ['51'], envelope: { tapleafHash: '11' },
+            });
+            const result = await sdk.createAction({
+                action: 'SEND',
+                params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
+                encoder: { pubkey: 'mypubkey' }
+            });
+            expect(result.psbt).to.equal(null);
+            expect(result.signable).to.equal(false);
+            expect(result.unsignableReason).to.equal('ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION');
+            expect(result).not.to.have.property('revealPsbt');
+            expect(result).not.to.have.property('envelope');
+        });
+
+        it('preserves named carrier and compression fields for single-phase results', async function () {
+            const sdk = makeSDK();
+            const compression = { compressed: true, data: 'FILE|0|x', rawData: 'aa' };
+            mockEncoder(sdk, {
+                psbt: 'aabbcc', encoding: 'P2SH', carrierScripts: ['51'], compression,
+            });
+            const result = await sdk.createAction({
+                action: 'SEND',
+                params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
+                encoder: { pubkey: 'mypubkey' }
+            });
+            expect(result).to.include({ psbt: 'aabbcc', encoding: 'P2SH', signable: true });
+            expect(result.carrierScripts).to.deep.equal(['51']);
+            expect(result.compression).to.equal(compression);
+        });
+
+        it('refuses compressed results that omit the carried bytes', async function () {
+            const sdk = makeSDK();
+            mockEncoder(sdk, {
+                psbt: 'aabbcc', encoding: 'P2SH', compression: { compressed: true },
+            });
+            let error;
+            try {
+                await sdk.createAction({
+                    action: 'SEND',
+                    params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
+                    encoder: { pubkey: 'mypubkey' }
+                });
+            } catch (e) { error = e; }
+            expect(error).to.have.property('code', 'COMPRESSION_BYTES_UNREPORTED');
         });
 
         // The shared list keeps feeQuote, compress, options and sourceAddress aligned

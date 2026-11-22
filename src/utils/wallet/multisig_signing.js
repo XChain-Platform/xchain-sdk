@@ -24,6 +24,7 @@ const ecc = require('@bitcoinerlab/secp256k1');
 const { SDKWalletError } = require('../errors.js');
 const { ECPair } = require('./key_derivation.js');
 const { assertConsistentPrevouts, findVerifiedPrevout } = require('./psbt_prevout.js');
+const { assertPartialFeeWithinCeiling } = require('./psbt_partial_fee.js');
 
 bitcoin.initEccLib(ecc);
 
@@ -78,8 +79,11 @@ module.exports = {
      *
      * @param {string} psbtHex
      * @param {string} wif
-     * @param {{ inputIndices?: number[] }} [opts]
+     * @param {{ inputIndices?: number[], maximumFeeRate?: number }} [opts]
+     *   maximumFeeRate overrides the sat/vB ceiling resolved from the network.
      * @returns {{ psbtHex: string }}    PSBT with this WIF's partial sigs added
+     * @throws {SDKWalletError} FEE_RATE_TOO_HIGH, or FEE_UNVERIFIABLE when an
+     *   explicit ceiling is given and an input carries no UTXO data
      */
     signMultisigPsbt(psbtHex, wif, opts) {
         if (!psbtHex || typeof psbtHex !== 'string') {
@@ -104,6 +108,8 @@ module.exports = {
         // Refuse disagreeing UTXO fields before signing, so this key signs only the prevout every reader sees
         assertConsistentPrevouts(psbt);
         const targets = multisigSigningTargets(psbt, keyPair.publicKey, opts);
+        // Enforce the ceiling before releasing signatures that another cosigner can finalize.
+        assertPartialFeeWithinCeiling(psbt, this.resolveMaxFeeRate(opts), opts);
         try {
             for (const i of targets) psbt.signInput(i, keyPair);
         } catch (err) {

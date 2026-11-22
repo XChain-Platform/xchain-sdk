@@ -73,6 +73,27 @@ function scopeSigningToUtxos(sdk, utxos) {
     return scoped;
 }
 
+function applyEncodedActionResult(result, encoded) {
+    const compression = encoded.compression;
+    if (compression && compression.compressed
+        && (typeof compression.data !== 'string' || !compression.data.length
+            || typeof compression.rawData !== 'string'))
+        throw new SDKActionError('COMPRESSION_BYTES_UNREPORTED',
+            'the encoder compressed the payload but did not report the action string and ' +
+            'stored bytes it wrote, so the result cannot be checked or reproduced safely');
+    result.encoding = encoded.encoding;
+    if (encoded.revealPsbt) {
+        result.psbt = null;
+        result.signable = false;
+        result.unsignableReason = 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
+        return;
+    }
+    result.psbt = encoded.psbt;
+    result.signable = true;
+    if (encoded.carrierScripts !== undefined) result.carrierScripts = encoded.carrierScripts;
+    if (compression !== undefined) result.compression = compression;
+}
+
 // Keep action delegates together so the public action surface stays easy to audit.
 module.exports = {
 
@@ -81,8 +102,8 @@ module.exports = {
      *  ACTION Methods
      */
 
-    // Create an action string and optionally encode it into a PSBT.
-    // If data.encoder contains pubkey, calls the encoder and returns the PSBT.
+    // Create an action string and optionally encode it into a PSBT. Envelope pairs
+    // are returned as unsignable because submitAction owns their reveal lifecycle.
     async createAction(data) {
         // Compact ticker names and addresses to their `^<id>` wire form before
         // serializing (on by default; each falls back to the supplied value when an
@@ -109,8 +130,7 @@ module.exports = {
                 data:   result.actionString,
                 pubkey: data.encoder.pubkey
             }));
-            result.psbt     = txResult.psbt;
-            result.encoding = txResult.encoding;
+            applyEncodedActionResult(result, txResult);
         }
 
         return result;

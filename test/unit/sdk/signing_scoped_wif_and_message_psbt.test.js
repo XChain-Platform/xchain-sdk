@@ -111,7 +111,7 @@ function build(psbtHex, wallet, opts = {}) {
     const sdk = {
         requireExplorer: () => ({}),
         requireEncoder: () => ({}),
-        createAction: async () => ({ psbt: psbtHex, actionString: REQUESTED }),
+        createAction: async () => Object.assign({ psbt: psbtHex, actionString: REQUESTED }, opts.actionResult),
         wallet: {
             getBitcoinNetwork: () => wallet.getBitcoinNetwork(),
             signPsbt: sinon.stub().returns({ txHex: 'aa', txid: 'bb' }),
@@ -140,6 +140,18 @@ async function rejection(p) {
 }
 
 describe('message send reconciles the encoder PSBT', function () {
+    it('refuses an envelope pair before signing or broadcasting', async function () {
+        const f = fixture((s) => [{ script: s, value: 190000 }]);
+        const { sdk, p } = await run(f, { actionResult: {
+            psbt: null, signable: false,
+            unsignableReason: 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION',
+        } });
+        const err = await rejection(p);
+        expect(err).to.have.property('code', 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION');
+        expect(sdk.wallet.signPsbt.called).to.be.false;
+        expect(sdk.wallet.broadcastTx.called).to.be.false;
+    });
+
     it('signs a PSBT whose outputs it can account for', async function () {
         const f = fixture((s, txid) => [{ script: s, value: 190000 }, { script: actionCarrier(txid, REQUESTED), value: 0 }]);
         const { sdk, p } = await run(f);
