@@ -28,6 +28,10 @@ const { createECPair } = require('./bitcoinjs_compat/ecpair.js');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { getNetwork } = require('../protocol/networks.js');
 const { SDKAuthError } = require('./errors.js');
+const {
+    parseLoginChallenge,
+    checkLoginChallenge,
+} = require('./wallet/login_challenge.js');
 
 const ECPair = createECPair(ecc);
 const BIP322_PREFIX = 'smp';
@@ -162,6 +166,54 @@ function bip322Verify(address, message, signature, net) {
         return false;
     }
 }
+
+function loginFailure(error) {
+    return {
+        valid: false,
+        address: null,
+        chainId: null,
+        addresses: [],
+        error,
+    };
+}
+
+function challengePartsMatch(actual, expected) {
+    if (!actual || typeof actual !== 'object') return false;
+    return ['version', 'appId', 'origin', 'address', 'nonce', 'timestamp', 'expiresAt']
+        .every((field) => actual[field] === expected[field]);
+}
+
+function loginEntryError(auth, entry, expected, index) {
+    if (!entry || typeof entry !== 'object') return `Login address ${index} is invalid.`;
+    for (const field of ['address', 'chainId', 'challenge', 'signature', 'signatureFormat']) {
+        if (typeof entry[field] !== 'string' || entry[field].length === 0) {
+            return `Login address ${index} is missing ${field}.`;
+        }
+    }
+    if (entry.signatureFormat !== 'legacy' && entry.signatureFormat !== 'bip322-simple') {
+        return `Login address ${index} has an unsupported signatureFormat.`;
+    }
+
+    const parsed = parseLoginChallenge(entry.challenge);
+    if (!parsed.ok) return parsed.error;
+    const challengeError = checkLoginChallenge(parsed.parts, {
+        appId: expected.appId,
+        origin: expected.origin,
+        nonce: expected.nonce,
+        address: entry.address,
+    }, expected);
+    if (challengeError) return challengeError;
+    if (entry.challengeParts !== undefined && !challengePartsMatch(entry.challengeParts, parsed.parts)) {
+        return `Login address ${index} challengeParts mismatch.`;
+    }
+
+    const verified = auth.verifyOwnership(entry.address, entry.challenge, entry.signature, entry.chainId, {
+        format: entry.signatureFormat,
+    });
+    if (!verified.valid) return verified.error || `Login address ${index} signature is invalid.`;
+    return null;
+}
+
 function legacyAddress(keyPair, net, opts) {
     if (opts.segwitNative) {
         return bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }).address;
@@ -393,6 +445,66 @@ class AuthUtils {
     verifyMessage(address, message, signature, network, opts) {
         const result = this.verifyOwnership(address, message, signature, network, opts);
         return { valid: result.valid, error: result.error };
+    }
+
+    /**
+     * Verify every signed address in a Login with XChain result.
+     *
+     * @param {Object} result - Successful wallet login result
+     * @param {Object} expected - Server-issued challenge bindings
+     * @param {string} expected.appId
+     * @param {string} expected.origin
+     * @param {string} expected.nonce
+     * @param {number} [expected.maxAgeMs] - Requested age limit, capped at 60 minutes
+     * @returns {{valid: boolean, address: string|null, chainId: string|null, addresses: Object[], error: string|null}}
+     */
+    verifyLogin(result, expected) {
+        try {
+            if (!result || typeof result !== 'object' || result.ok !== true) {
+                return loginFailure('A successful login result is required.');
+            }
+            if (!expected || typeof expected !== 'object') {
+                return loginFailure('Expected login fields are required.');
+            }
+            for (const field of ['appId', 'origin', 'nonce']) {
+                if (typeof expected[field] !== 'string' || expected[field].length === 0) {
+                    return loginFailure(`Expected login ${field} is required.`);
+                }
+            }
+            if (!Array.isArray(result.addresses) || result.addresses.length === 0 ||
+                result.addresses.length > 5) {
+                return loginFailure('Login result must contain between one and five addresses.');
+            }
+
+            const first = result.addresses[0];
+            for (const field of ['address', 'chainId', 'challenge', 'signature', 'signatureFormat']) {
+                if (!first || result[field] !== first[field]) {
+                    return loginFailure(`Login top-level ${field} does not match the first address.`);
+                }
+            }
+
+            const verifiedAddresses = [];
+            for (let index = 0; index < result.addresses.length; index += 1) {
+                const entry = result.addresses[index];
+                const error = loginEntryError(this, entry, expected, index);
+                if (error) return loginFailure(error);
+                verifiedAddresses.push({ address: entry.address, chainId: entry.chainId });
+            }
+
+            const firstParsed = parseLoginChallenge(first.challenge);
+            if (!challengePartsMatch(result.challengeParts, firstParsed.parts)) {
+                return loginFailure('Login top-level challengeParts do not match the first address.');
+            }
+            return {
+                valid: true,
+                address: first.address,
+                chainId: first.chainId,
+                addresses: verifiedAddresses,
+                error: null,
+            };
+        } catch (error) {
+            return loginFailure('Invalid login result.');
+        }
     }
 }
 
