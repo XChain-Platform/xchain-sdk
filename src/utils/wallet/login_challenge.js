@@ -20,7 +20,7 @@
 
 const LOGIN_MAX_AGE_MS = 60 * 60 * 1000;
 const LOGIN_CHALLENGE_PREFIX = 'XChain Sign-In v2';
-const LOGIN_CHALLENGE_SEPARATOR = ' | ';
+const LOGIN_CHALLENGE_SEPARATOR = ' / ';
 const DECIMAL_INTEGER = /^[0-9]+$/;
 
 function parseLoginChallenge(text) {

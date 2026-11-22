@@ -45,7 +45,7 @@ function challenge(overrides = {}) {
         parts.nonce,
         parts.timestamp,
         parts.expiresAt,
-    ].join(' | ');
+    ].join(' / ');
 }
 
 describe('parseLoginChallenge()', function () {
@@ -60,9 +60,10 @@ describe('parseLoginChallenge()', function () {
     });
 
     it('requires exactly seven fields split on the literal separator', function () {
-        expect(parseLoginChallenge(challenge() + ' | extra').ok).to.equal(false);
-        expect(parseLoginChallenge(challenge().replace(' | nonce-123', '')).ok).to.equal(false);
-        expect(parseLoginChallenge(challenge().replaceAll(' | ', '|')).ok).to.equal(false);
+        expect(parseLoginChallenge(challenge() + ' / extra').ok).to.equal(false);
+        expect(parseLoginChallenge(challenge().replace(' / nonce-123', '')).ok).to.equal(false);
+        expect(parseLoginChallenge(challenge().replaceAll(' / ', '/')).ok).to.equal(false);
+        expect(parseLoginChallenge(challenge().replaceAll(' / ', ' | ')).ok).to.equal(false);
     });
 
     it('requires timestamp fields to be decimal safe integers', function () {
