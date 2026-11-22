@@ -30,10 +30,13 @@ const { getNetwork } = require('../protocol/networks.js');
 const { SDKAuthError } = require('./errors.js');
 
 const ECPair = createECPair(ecc);
-
+const BIP322_PREFIX = 'smp';
+const BIP322_TAG = 'BIP0322-signed-message';
+bitcoin.initEccLib(ecc);
 // Refuse segwit signing modes where a witness program is anyone-can-spend, as key_derivation.js does
 function refuseSegwitWithoutSupport(net, opts, networkName) {
-    if ((opts.segwitNative || opts.segwitRedeemScript) && net.supportsSegwit === false) {
+    if ((opts.segwitNative || opts.segwitRedeemScript || opts.format === 'bip322-simple') &&
+        net.supportsSegwit === false) {
         throw new SDKAuthError('SEGWIT_NOT_SUPPORTED',
             `SegWit message signing is not supported on ${networkName}.`);
     }
@@ -63,7 +66,131 @@ function hasDelimitedToken(text, token) {
     return false;
 }
 
+function asBuffer(value) {
+    return Buffer.isBuffer(value) ? value : Buffer.from(value);
+}
+function bip322MessageHash(message) {
+    const tagHash = crypto.createHash('sha256').update(BIP322_TAG, 'utf8').digest();
+    return crypto.createHash('sha256').update(tagHash).update(tagHash).update(message, 'utf8').digest();
+}
 
+function p2trScript(address, network) {
+    const script = asBuffer(bitcoin.address.toOutputScript(address, network));
+    if (script.length !== 34 || script[0] !== bitcoin.opcodes.OP_1 || script[1] !== 0x20) {
+        throw new TypeError('BIP-322 simple signing requires a P2TR address.');
+    }
+    return script;
+}
+
+function bip322Transactions(message, address, network) {
+    const challenge = p2trScript(address, network);
+    const toSpend = new bitcoin.Transaction();
+    toSpend.version = 0;
+    toSpend.locktime = 0;
+    toSpend.addInput(Buffer.alloc(32), 0xffffffff, 0,
+        bitcoin.script.compile([bitcoin.opcodes.OP_0, bip322MessageHash(message)]));
+    toSpend.addOutput(challenge, 0n);
+    const toSign = new bitcoin.Transaction();
+    toSign.version = 0;
+    toSign.locktime = 0;
+    toSign.addInput(asBuffer(toSpend.getHash()), 0, 0, Buffer.alloc(0));
+    toSign.addOutput(Buffer.from([bitcoin.opcodes.OP_RETURN]), 0n);
+    return { challenge, toSign };
+}
+
+function taprootKey(privateKey, publicKey) {
+    const fullPublicKey = asBuffer(publicKey);
+    const internalKey = fullPublicKey.subarray(1, 33);
+    const tweak = asBuffer(bitcoin.crypto.taggedHash('TapTweak', internalKey));
+    const hasOddY = fullPublicKey[0] === 0x03 ||
+        (fullPublicKey[0] === 0x04 && (fullPublicKey[64] & 1) === 1);
+    const evenPrivateKey = hasOddY ? asBuffer(ecc.privateNegate(privateKey)) : asBuffer(privateKey);
+    const tweakedPrivateKey = ecc.privateAdd(evenPrivateKey, tweak);
+    if (!tweakedPrivateKey) throw new Error('Invalid Taproot key tweak.');
+    return { internalKey, privateKey: asBuffer(tweakedPrivateKey) };
+}
+
+function decodeBip322Signature(value) {
+    if (typeof value !== 'string' || value.length === 0) throw new TypeError('Signature is required.');
+    let encoded = value;
+    if (encoded.startsWith(BIP322_PREFIX)) encoded = encoded.slice(BIP322_PREFIX.length);
+    else if (/^(?:ful|pof)/.test(encoded)) throw new TypeError('Signature is not BIP-322 simple format.');
+    if (encoded.length === 0 || encoded.length % 4 !== 0 ||
+        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
+        throw new TypeError('Signature is not valid base64.');
+    }
+    const witness = Buffer.from(encoded, 'base64');
+    const length = witness[1];
+    if (witness[0] !== 1 || (length !== 64 && length !== 65) || witness.length !== length + 2) {
+        throw new TypeError('Invalid BIP-322 simple witness.');
+    }
+    return witness.subarray(2);
+}
+
+function bip322Sign(message, keyPair, net, opts) {
+    if (opts.segwitNative || opts.segwitRedeemScript) {
+        throw new SDKAuthError('INVALID_SIGNATURE_FORMAT',
+            'BIP-322 simple format cannot be combined with legacy SegWit options.');
+    }
+    const key = taprootKey(keyPair.privateKey, keyPair.publicKey);
+    const payment = bitcoin.payments.p2tr({ internalPubkey: key.internalKey, network: net });
+    const { challenge, toSign } = bip322Transactions(message, payment.address, net);
+    const hash = asBuffer(toSign.hashForWitnessV1(0, [challenge], [0n], bitcoin.Transaction.SIGHASH_DEFAULT));
+    let auxRand;
+    if (opts.auxRand !== undefined) {
+        auxRand = asBuffer(opts.auxRand);
+        if (auxRand.length !== 32) throw new TypeError('BIP-322 auxiliary randomness must be 32 bytes.');
+    }
+    const signature = asBuffer(ecc.signSchnorr(hash, key.privateKey, auxRand));
+    const witness = Buffer.concat([Buffer.from([1, signature.length]), signature]);
+    return { address: payment.address, signature: BIP322_PREFIX + witness.toString('base64') };
+}
+
+function bip322Verify(address, message, signature, net) {
+    try {
+        const encodedSignature = decodeBip322Signature(signature);
+        const hashType = encodedSignature.length === 64
+            ? bitcoin.Transaction.SIGHASH_DEFAULT
+            : encodedSignature[64];
+        if (hashType !== bitcoin.Transaction.SIGHASH_DEFAULT &&
+            hashType !== bitcoin.Transaction.SIGHASH_ALL) return false;
+        if (encodedSignature.length === 65 && hashType === bitcoin.Transaction.SIGHASH_DEFAULT) return false;
+        const { challenge, toSign } = bip322Transactions(message, address, net);
+        const hash = asBuffer(toSign.hashForWitnessV1(0, [challenge], [0n], hashType));
+        return ecc.verifySchnorr(hash, challenge.subarray(2), encodedSignature.subarray(0, 64));
+    } catch (err) {
+        return false;
+    }
+}
+function legacyAddress(keyPair, net, opts) {
+    if (opts.segwitNative) {
+        return bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }).address;
+    }
+    if (opts.segwitRedeemScript) {
+        return bitcoin.payments.p2sh({
+            redeem: bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }),
+            network: net
+        }).address;
+    }
+    return bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey, network: net }).address;
+}
+
+function legacySign(message, keyPair, net, opts) {
+    const sigOptions = {};
+    if (opts.segwitRedeemScript) sigOptions.segwitType = 'p2sh(p2wpkh)';
+    if (opts.segwitNative) sigOptions.segwitType = 'p2wpkh';
+    const signature = signedMessage.sign(
+        message,
+        keyPair.privateKey,
+        keyPair.compressed,
+        net.messagePrefix,
+        Object.keys(sigOptions).length > 0 ? sigOptions : undefined
+    );
+    return {
+        signature: signature.toString('base64'),
+        address: legacyAddress(keyPair, net, opts)
+    };
+}
 class AuthUtils {
 
     constructor(network) {
@@ -157,6 +284,8 @@ class AuthUtils {
      * @param {boolean} [opts.segwitRedeemScript=false] - For P2SH-P2WPKH addresses
      * @param {boolean} [opts.segwitNative=false] - For P2WPKH (bech32) addresses
      * @param {string} [opts.network] - Override instance network
+     * @param {'legacy'|'bip322-simple'} [opts.format='legacy'] - Signature format
+     * @param {Uint8Array} [opts.auxRand] - Optional 32-byte BIP-340 auxiliary randomness
      * @returns {{ signature: string, address: string }}
      * @throws {SDKAuthError} SEGWIT_NOT_SUPPORTED when a segwit option is set on a non-segwit network (dogecoin-*)
      */
@@ -179,39 +308,15 @@ class AuthUtils {
         }
 
         try {
-            const privateKey = keyPair.privateKey;
-            const compressed = keyPair.compressed;
-
-            // No extra entropy keeps signing deterministic under RFC 6979.
-            const sigOptions = {};
-            if (opts.segwitRedeemScript) sigOptions.segwitType = 'p2sh(p2wpkh)';
-            if (opts.segwitNative) sigOptions.segwitType = 'p2wpkh';
-
-            const signature = signedMessage.sign(
-                message,
-                privateKey,
-                compressed,
-                net.messagePrefix,
-                Object.keys(sigOptions).length > 0 ? sigOptions : undefined
-            );
-
-            // Derive the address for the return value
-            let address;
-            if (opts.segwitNative) {
-                address = bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }).address;
-            } else if (opts.segwitRedeemScript) {
-                address = bitcoin.payments.p2sh({
-                    redeem: bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }),
-                    network: net
-                }).address;
-            } else {
-                address = bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey, network: net }).address;
+            const format = opts.format || 'legacy';
+            if (format === 'bip322-simple') {
+                return bip322Sign(message, keyPair, net, opts);
             }
-
-            return {
-                signature: signature.toString('base64'),
-                address: address
-            };
+            if (format !== 'legacy') {
+                throw new SDKAuthError('INVALID_SIGNATURE_FORMAT',
+                    `Unsupported message signature format: ${format}.`);
+            }
+            return legacySign(message, keyPair, net, opts);
         } catch (err) {
             if (err.name === 'SDKAuthError') throw err;
             throw new SDKAuthError('SIGN_FAILED', `Message signing failed: ${err.message}`);
@@ -227,10 +332,12 @@ class AuthUtils {
      * @param {string} address - Claimed owner address
      * @param {string} message - The original message that was signed
      * @param {string} signature - Base64 signature from signMessage
-     * @param {string} [network] - Override instance network
+     * @param {string|Object} [network] - Override instance network, or verification options
+     * @param {Object} [opts]
+     * @param {'legacy'|'bip322-simple'} [opts.format='legacy'] - Signature format
      * @returns {{ valid: boolean, address: string, error: string|null }}
      */
-    verifyOwnership(address, message, signature, network) {
+    verifyOwnership(address, message, signature, network, opts = {}) {
         if (!address || typeof address !== 'string') {
             return { valid: false, address: address || null, error: 'Address is required.' };
         }
@@ -241,6 +348,11 @@ class AuthUtils {
             return { valid: false, address: address, error: 'Signature is required.' };
         }
 
+        if (network && typeof network === 'object') {
+            opts = network;
+            network = opts.network;
+        }
+
         let net;
         try {
             net = this.resolveNet(network);
@@ -249,6 +361,18 @@ class AuthUtils {
         }
 
         try {
+            const format = opts.format || 'legacy';
+            if (format === 'bip322-simple') {
+                const valid = bip322Verify(address, message, signature, net);
+                return {
+                    valid,
+                    address: address,
+                    error: valid ? null : 'Invalid BIP-322 simple signature.'
+                };
+            }
+            if (format !== 'legacy') {
+                return { valid: false, address: address, error: `Unsupported message signature format: ${format}.` };
+            }
             const valid = signedMessage.verify(message, address, signature, net.messagePrefix);
             return { valid: !!valid, address: address, error: null };
         } catch (err) {
@@ -262,11 +386,12 @@ class AuthUtils {
      * @param {string} address
      * @param {string} message
      * @param {string} signature - Base64
-     * @param {string} [network] - Override instance network
+     * @param {string|Object} [network] - Override instance network, or verification options
+     * @param {Object} [opts] - Verification options
      * @returns {{ valid: boolean, error: string|null }}
      */
-    verifyMessage(address, message, signature, network) {
-        const result = this.verifyOwnership(address, message, signature, network);
+    verifyMessage(address, message, signature, network, opts) {
+        const result = this.verifyOwnership(address, message, signature, network, opts);
         return { valid: result.valid, error: result.error };
     }
 }
