@@ -18,6 +18,7 @@ const XChainSDK = require('../../../src/XChainSDK.js');
 const AuthUtils = require('../../../src/utils/auth.js');
 
 const DTS = path.join(__dirname, '..', '..', '..', 'index.d.ts');
+const dts = fs.readFileSync(DTS, 'utf8');
 
 function interfaceBody(dts, name) {
     const start = dts.search(new RegExp('export interface ' + name + '\\b[^{]*\\{'));
@@ -49,9 +50,7 @@ function assertFields(dts, name, expected) {
     assert.deepStrictEqual(topLevelProps(interfaceBody(dts, name)), expected);
 }
 
-describe('wallet login authentication types', function () {
-    const dts = fs.readFileSync(DTS, 'utf8');
-
+describe('wallet login challenge types', function () {
     it('declares the supported message signature formats and signing option', function () {
         assert.match(dts, /export type MessageSignatureFormat = 'legacy' \| 'bip322-simple';/);
         assert.strictEqual(topLevelProps(interfaceBody(dts, 'SignMessageOptions')).format.type,
@@ -69,7 +68,9 @@ describe('wallet login authentication types', function () {
             expiresAt: { optional: false, type: 'number' },
         });
     });
+});
 
+describe('wallet login proof types', function () {
     it('declares LoginAddressProof with required and optional fields', function () {
         assertFields(dts, 'LoginAddressProof', {
             address: { optional: false, type: 'string' },
@@ -94,7 +95,9 @@ describe('wallet login authentication types', function () {
             addresses: { optional: false, type: 'LoginAddressProof[]' },
         });
     });
+});
 
+describe('wallet login verification result types', function () {
     it('declares LoginExpected without a caller-provided clock', function () {
         assertFields(dts, 'LoginExpected', {
             appId: { optional: false, type: 'string' },
@@ -113,7 +116,9 @@ describe('wallet login authentication types', function () {
             error: { optional: false, type: 'string | null' },
         });
     });
+});
 
+describe('wallet login authentication API', function () {
     it('declares the AuthUtils message format options and verifyLogin', function () {
         const body = classBody(dts, 'AuthUtils');
         const opts = 'opts\\?: \\{ format\\?: MessageSignatureFormat \\}';
