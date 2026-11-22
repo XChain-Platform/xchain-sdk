@@ -165,6 +165,11 @@ async function receiveCallback(body, options = {}) {
     }
 }
 
-module.exports = { holdsAtLeast, receiveCallback };
-Object.defineProperty(module.exports, 'defaultStoreFor', { value: defaultStoreFor });
-installMethods(AuthUtils.prototype, module.exports);
+const authCallbackMethods = { holdsAtLeast, receiveCallback };
+
+installMethods(AuthUtils.prototype, authCallbackMethods);
+Object.defineProperties(module.exports, {
+    holdsAtLeast: { value: holdsAtLeast },
+    receiveCallback: { value: receiveCallback },
+    defaultStoreFor: { value: defaultStoreFor },
+});

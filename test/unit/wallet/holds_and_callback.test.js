@@ -58,8 +58,10 @@ describe('AuthUtils.holdsAtLeast()', function () {
         const auth = authUtils();
         assert.strictEqual(typeof auth.holdsAtLeast, 'function');
         assert.strictEqual(typeof auth.receiveCallback, 'function');
-        assert.strictEqual(typeof WalletUtils.prototype.holdsAtLeast, 'function');
-        assert.strictEqual(typeof WalletUtils.prototype.receiveCallback, 'function');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(
+            WalletUtils.prototype, 'holdsAtLeast'), false);
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(
+            WalletUtils.prototype, 'receiveCallback'), false);
         assert.strictEqual(typeof Object.getPrototypeOf(auth).holdsAtLeast, 'function');
         assert.strictEqual(typeof Object.getPrototypeOf(auth).receiveCallback, 'function');
         assert.deepStrictEqual(Object.keys(Object.getPrototypeOf(auth)), []);
