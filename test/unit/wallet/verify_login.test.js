@@ -60,9 +60,9 @@ function verifyAt(auth, result, maxAgeMs) {
     }
 }
 
-describe('AuthUtils.verifyLogin()', function () {
-    const auth = new AuthUtils(NETWORK);
+const auth = new AuthUtils(NETWORK);
 
+describe('AuthUtils.verifyLogin() address proofs', function () {
     it('verifies every returned address in its declared signature format', function () {
         const legacy = signedEntry(auth, 'legacy');
         const taproot = signedEntry(auth, 'bip322-simple');
@@ -90,7 +90,9 @@ describe('AuthUtils.verifyLogin()', function () {
         expect(result.addresses).to.deep.equal([]);
         expect(result.error).to.match(/signature/i);
     });
+});
 
+describe('AuthUtils.verifyLogin() bindings', function () {
     it('binds app, origin, nonce, address, format, chain, and top-level identity', function () {
         const entry = signedEntry(auth, 'legacy');
         const base = loginResult([entry]);

@@ -1,25 +1,5 @@
-/*********************************************************************
- *
- * Copyright © 2025–2026 Dankest, LLC
- * Based on XChain Platform by Dankest, LLC – https://dankest.llc
- *
- * SPDX-License-Identifier: AGPL-3.0-or-later
- *
- * This file is part of XChain Platform. Licensed under the GNU Affero
- * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available -
- * contact legal@dankest.llc.
- *
- **********************************************************************
- *
- * XChain Platform SDK - Auth Utilities
- *
- * Challenge-response wallet ownership verification.
- * signMessage and verifyMessage work with any arbitrary string.
- * Sites can generate their own messages and verify independently
- * of this SDK.
- *
- ********************************************************************/
+// Copyright © 2025-2026 Dankest, LLC
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 const crypto = require('crypto');
 const bitcoin = require('bitcoinjs-lib');
@@ -28,10 +8,7 @@ const { createECPair } = require('./bitcoinjs_compat/ecpair.js');
 const ecc = require('@bitcoinerlab/secp256k1');
 const { getNetwork } = require('../protocol/networks.js');
 const { SDKAuthError } = require('./errors.js');
-const {
-    parseLoginChallenge,
-    checkLoginChallenge,
-} = require('./wallet/login_challenge.js');
+const { parseLoginChallenge, checkLoginChallenge } = require('./wallet/login_challenge.js');
 
 const ECPair = createECPair(ecc);
 const BIP322_PREFIX = 'smp';
@@ -45,7 +22,6 @@ function refuseSegwitWithoutSupport(net, opts, networkName) {
             `SegWit message signing is not supported on ${networkName}.`);
     }
 }
-
 // Fill the supported placeholders in a custom challenge. A replacer function keeps
 // a "$" in the message or values literal. signMessage refuses a non-string message
 // with the same code, so refusing it here only moves the error earlier.
@@ -168,21 +144,13 @@ function bip322Verify(address, message, signature, net) {
 }
 
 function loginFailure(error) {
-    return {
-        valid: false,
-        address: null,
-        chainId: null,
-        addresses: [],
-        error,
-    };
+    return { valid: false, address: null, chainId: null, addresses: [], error };
 }
-
 function challengePartsMatch(actual, expected) {
     if (!actual || typeof actual !== 'object') return false;
-    return ['version', 'appId', 'origin', 'address', 'nonce', 'timestamp', 'expiresAt']
-        .every((field) => actual[field] === expected[field]);
+    return ['version', 'appId', 'origin', 'address', 'nonce', 'timestamp', 'expiresAt'].every(
+        (field) => actual[field] === expected[field]);
 }
-
 function loginEntryError(auth, entry, expected, index) {
     if (!entry || typeof entry !== 'object') return `Login address ${index} is invalid.`;
     for (const field of ['address', 'chainId', 'challenge', 'signature', 'signatureFormat']) {
@@ -193,7 +161,6 @@ function loginEntryError(auth, entry, expected, index) {
     if (entry.signatureFormat !== 'legacy' && entry.signatureFormat !== 'bip322-simple') {
         return `Login address ${index} has an unsupported signatureFormat.`;
     }
-
     const parsed = parseLoginChallenge(entry.challenge);
     if (!parsed.ok) return parsed.error;
     const challengeError = checkLoginChallenge(parsed.parts, {
@@ -206,14 +173,11 @@ function loginEntryError(auth, entry, expected, index) {
     if (entry.challengeParts !== undefined && !challengePartsMatch(entry.challengeParts, parsed.parts)) {
         return `Login address ${index} challengeParts mismatch.`;
     }
-
-    const verified = auth.verifyOwnership(entry.address, entry.challenge, entry.signature, entry.chainId, {
-        format: entry.signatureFormat,
-    });
+    const verified = auth.verifyOwnership(entry.address, entry.challenge, entry.signature,
+        entry.chainId, { format: entry.signatureFormat });
     if (!verified.valid) return verified.error || `Login address ${index} signature is invalid.`;
     return null;
 }
-
 function legacyAddress(keyPair, net, opts) {
     if (opts.segwitNative) {
         return bitcoin.payments.p2wpkh({ pubkey: keyPair.publicKey, network: net }).address;
@@ -244,7 +208,6 @@ function legacySign(message, keyPair, net, opts) {
     };
 }
 class AuthUtils {
-
     constructor(network) {
         this.network = network || null;
         this._netParams = network ? getNetwork(network) : null;
@@ -258,31 +221,7 @@ class AuthUtils {
             'Network not configured. Provide network in SDK options or pass it to this method.');
     }
 
-    /**
-     * Generate a challenge for the user to sign.
-     *
-     * If opts.message is provided, its {nonce}, {address}, {timestamp} and
-     * {expiresAt} placeholders are filled and the rest is used as-is.
-     * Otherwise a default structured message is generated including the
-     * address and nonce.
-     *
-     * Stateless: the caller stores the nonce and enforces expiry/single-use.
-     * That only guards against replay when `bound` is true. For custom
-     * messages, that requires the SDK to fill {nonce}, or an SDK-generated
-     * nonce to appear as a whole delimited token. Literal matches for a
-     * caller-supplied nonce do not count as binding.
-     *
-     * @param {string} address - The address being verified
-     * @param {Object} [opts]
-     * @param {string} [opts.appId='XChain'] - Application identifier
-     * @param {string} [opts.nonce] - Override auto-generated nonce; custom messages bind it only via {nonce}
-     * @param {string} [opts.message] - Custom message; may use {nonce}, {address}, {timestamp}, {expiresAt}
-     * @param {boolean} [opts.requireNonce=false] - Refuse a custom message whose nonce is not bound
-     * @param {number} [opts.expiresInMs=300000] - Expiry window in ms (default 5 min)
-     * @returns {{ challenge: string, nonce: string, timestamp: string, expiresAt: string, bound: boolean }}
-     * @throws {SDKAuthError} INVALID_MESSAGE when a custom message is not a string (signMessage refuses it too)
-     * @throws {SDKAuthError} CHALLENGE_UNBOUND when opts.requireNonce is set and the nonce is not bound
-     */
+    // Generate a default or custom nonce-bound challenge for a site to store and later verify.
     generateChallenge(address, opts = {}) {
         if (!address || typeof address !== 'string') {
             throw new SDKAuthError('INVALID_ADDRESS', 'Address is required for challenge generation.');
@@ -325,22 +264,7 @@ class AuthUtils {
         }
     }
 
-    /**
-     * Sign a message with a WIF private key using Bitcoin message signing.
-     * Works with any string: a challenge from generateChallenge, a custom
-     * site message, or anything else.
-     *
-     * @param {string} message - The message to sign
-     * @param {string} wif - WIF-encoded private key
-     * @param {Object} [opts]
-     * @param {boolean} [opts.segwitRedeemScript=false] - For P2SH-P2WPKH addresses
-     * @param {boolean} [opts.segwitNative=false] - For P2WPKH (bech32) addresses
-     * @param {string} [opts.network] - Override instance network
-     * @param {'legacy'|'bip322-simple'} [opts.format='legacy'] - Signature format
-     * @param {Uint8Array} [opts.auxRand] - Optional 32-byte BIP-340 auxiliary randomness
-     * @returns {{ signature: string, address: string }}
-     * @throws {SDKAuthError} SEGWIT_NOT_SUPPORTED when a segwit option is set on a non-segwit network (dogecoin-*)
-     */
+    // Sign any message with a WIF key in legacy or BIP-322 simple format.
     signMessage(message, wif, opts = {}) {
         if (!message || typeof message !== 'string') {
             throw new SDKAuthError('INVALID_MESSAGE', 'Message is required for signing.');
@@ -375,20 +299,7 @@ class AuthUtils {
         }
     }
 
-    /**
-     * Verify wallet ownership: confirm a signature was produced by the private
-     * key corresponding to the given address.
-     *
-     * Works with any message string.
-     *
-     * @param {string} address - Claimed owner address
-     * @param {string} message - The original message that was signed
-     * @param {string} signature - Base64 signature from signMessage
-     * @param {string|Object} [network] - Override instance network, or verification options
-     * @param {Object} [opts]
-     * @param {'legacy'|'bip322-simple'} [opts.format='legacy'] - Signature format
-     * @returns {{ valid: boolean, address: string, error: string|null }}
-     */
+    // Verify wallet ownership using the requested network and signature format.
     verifyOwnership(address, message, signature, network, opts = {}) {
         if (!address || typeof address !== 'string') {
             return { valid: false, address: address || null, error: 'Address is required.' };
@@ -432,32 +343,12 @@ class AuthUtils {
         }
     }
 
-    /**
-     * Verify a signed message (generic form).
-     *
-     * @param {string} address
-     * @param {string} message
-     * @param {string} signature - Base64
-     * @param {string|Object} [network] - Override instance network, or verification options
-     * @param {Object} [opts] - Verification options
-     * @returns {{ valid: boolean, error: string|null }}
-     */
     verifyMessage(address, message, signature, network, opts) {
         const result = this.verifyOwnership(address, message, signature, network, opts);
         return { valid: result.valid, error: result.error };
     }
 
-    /**
-     * Verify every signed address in a Login with XChain result.
-     *
-     * @param {Object} result - Successful wallet login result
-     * @param {Object} expected - Server-issued challenge bindings
-     * @param {string} expected.appId
-     * @param {string} expected.origin
-     * @param {string} expected.nonce
-     * @param {number} [expected.maxAgeMs] - Requested age limit, capped at 60 minutes
-     * @returns {{valid: boolean, address: string|null, chainId: string|null, addresses: Object[], error: string|null}}
-     */
+    // Verify every signed address and the server-issued challenge bindings in a login result.
     verifyLogin(result, expected) {
         try {
             if (!result || typeof result !== 'object' || result.ok !== true) {
@@ -471,11 +362,9 @@ class AuthUtils {
                     return loginFailure(`Expected login ${field} is required.`);
                 }
             }
-            if (!Array.isArray(result.addresses) || result.addresses.length === 0 ||
-                result.addresses.length > 5) {
+            if (!Array.isArray(result.addresses) || result.addresses.length === 0 || result.addresses.length > 5) {
                 return loginFailure('Login result must contain between one and five addresses.');
             }
-
             const first = result.addresses[0];
             for (const field of ['address', 'chainId', 'challenge', 'signature', 'signatureFormat']) {
                 if (!first || result[field] !== first[field]) {
