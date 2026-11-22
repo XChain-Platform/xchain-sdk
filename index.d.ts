@@ -1804,6 +1804,7 @@ export declare class XChainSDK {
     encoder: EncoderClient | null;
     /** Browser-safe action and PSBT decoding helpers. */
     readonly decoder: DecoderApi;
+    readonly auth: AuthUtils;
 
     constructor(options?: SDKOptions);
 
@@ -2634,10 +2635,13 @@ export interface ChallengeResult {
     bound: boolean;
 }
 
+export type MessageSignatureFormat = 'legacy' | 'bip322-simple';
+
 export interface SignMessageOptions {
     segwitRedeemScript?: boolean;
     segwitNative?: boolean;
     network?: XChainNetwork;
+    format?: MessageSignatureFormat;
 }
 
 export interface SignMessageResult {
@@ -2648,6 +2652,52 @@ export interface SignMessageResult {
 export interface VerifyResult {
     valid: boolean;
     address?: string;
+    error: string | null;
+}
+
+export interface LoginChallengeParts {
+    appId: string;
+    origin: string;
+    address: string;
+    nonce: string;
+    version: number;
+    timestamp: number;
+    expiresAt: number;
+}
+
+export interface LoginAddressProof {
+    address: string;
+    chainId: string;
+    challenge: string;
+    signature: string;
+    signatureFormat: MessageSignatureFormat;
+    addressType?: string;
+    challengeParts?: LoginChallengeParts;
+}
+
+export interface LoginResult {
+    ok: true;
+    address: string;
+    chainId: string;
+    challenge: string;
+    signature: string;
+    signatureFormat: MessageSignatureFormat;
+    challengeParts: LoginChallengeParts;
+    addresses: LoginAddressProof[];
+}
+
+export interface LoginExpected {
+    appId: string;
+    origin: string;
+    nonce: string;
+    maxAgeMs?: number;
+}
+
+export interface LoginVerifyResult {
+    valid: boolean;
+    address: string | null;
+    chainId: string | null;
+    addresses: Array<{ address: string; chainId: string }>;
     error: string | null;
 }
 
@@ -2680,8 +2730,9 @@ export declare class AuthUtils {
 
     generateChallenge(address: string, opts?: ChallengeOptions): ChallengeResult;
     signMessage(message: string, wif: string, opts?: SignMessageOptions): SignMessageResult;
-    verifyOwnership(address: string, message: string, signature: string, network?: XChainNetwork): VerifyResult;
-    verifyMessage(address: string, message: string, signature: string, network?: XChainNetwork): VerifyResult;
+    verifyOwnership(address: string, message: string, signature: string, network?: XChainNetwork, opts?: { format?: MessageSignatureFormat }): VerifyResult;
+    verifyMessage(address: string, message: string, signature: string, network?: XChainNetwork, opts?: { format?: MessageSignatureFormat }): VerifyResult;
+    verifyLogin(result: LoginResult, expected: LoginExpected): LoginVerifyResult;
 }
 
 
