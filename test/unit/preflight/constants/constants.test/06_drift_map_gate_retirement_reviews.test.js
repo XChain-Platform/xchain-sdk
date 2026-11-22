@@ -14,6 +14,8 @@ const path = require('path');
 const { parseMap } = require('../../../../../bin/check-preflight-drift.js');
 
 const REAL_MAP = path.join(__dirname, '..', '..', '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md');
+// The live batch pin; every review that re-pinned batch checks the map still carries it.
+const BATCH_PIN = 'ed92d5a2ab67d7dafd5f971aaf762316bf479028ee13beaaf6676e8b0f9825a0';
 
 function entryOf(text, heading) {
     const start = text.indexOf(heading);
@@ -62,8 +64,7 @@ function sendHandoffRetirementReview() {
 // The batch pin follows the hash origin develop carries, so each entry must name the pairing.
 function batchSnapshotReviews() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
-    expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('1c42ba29d46e2d5f6ef9689c90336c8fea2d68f841abf1063f79878b7b1b11d2');
+    expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash).to.equal(BATCH_PIN);
     const reviews = [
         ['### 2026-10-19 - BATCH probe sub-verdicts carry their own match snapshot', '`7e138a16` to `e7d7825d`'],
         ['### 2026-10-20 - a BATCH\'s own status is restored off the probe path too', '`e7d7825d` to `9f1e45a3`']
@@ -270,8 +271,7 @@ function batchLegFoldReview() {
 // The BATCH probe's DISPENSE note re-pins batch and moves the anchor to the origin develop head.
 function batchDispenseNoteReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
-    expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('1c42ba29d46e2d5f6ef9689c90336c8fea2d68f841abf1063f79878b7b1b11d2');
+    expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash).to.equal(BATCH_PIN);
     const heading = '### 2026-11-15 - a BATCH probe says why it cannot judge a payment-triggered DISPENSE';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
@@ -336,7 +336,7 @@ function guardGasBillingReview() {
         'src/actions/swap/': '93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e',
         'src/actions/airdrop/': '188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace',
         'src/actions/dividend/': '6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c',
-        'src/actions/batch/': '1c42ba29d46e2d5f6ef9689c90336c8fea2d68f841abf1063f79878b7b1b11d2',
+        'src/actions/batch/': BATCH_PIN,
         'src/actions/deposit.js': '2d8585841185d9948b841eb078f55c843ea6df0801206c6778005a51bf4bcf31',
         'src/actions/withdraw.js': 'cb8b7bf31b80689ec2c7c53139082b7123f2c9af97becfbb64eb0cf3eb3671af',
         'src/actions/stake/': '791da27d6f8a49fc3498344b8a6bc4044bf9bdf4ff5811d88c9503077845e025',
@@ -359,8 +359,7 @@ function guardGasBillingReview() {
 function coinpayDryRunStatusReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     const rows = parseMap(REAL_MAP);
-    expect(rows.find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('1c42ba29d46e2d5f6ef9689c90336c8fea2d68f841abf1063f79878b7b1b11d2');
+    expect(rows.find((r) => r.handler === 'src/actions/batch/').hash).to.equal(BATCH_PIN);
     const heading = '### 2026-11-19 - an authenticated BATCH dry-run reports a skipped COINPAY sub-command as unjudged';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');

@@ -296,10 +296,11 @@ const TIER1_DENYLIST = Object.freeze(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
  *
  * This exists because the two indexer probe surfaces stopped agreeing, and
  * TIER1_DENYLIST mirrors only one of them. `FEE_QUOTE_DENYLIST` is still the
- * literal it mirrors and BATCH is still on it - `computeFeeQuote` refuses a batch
- * for a reason this list does not touch, that a batch's native fee is the SUM of
- * its sub-actions' state-dependent fees and a partial quote UNDER-SIZES the output
- * and burns the payer's miner fee. `computePreflight` took a different door:
+ * literal it mirrors and BATCH is still on it - `computeFeeQuote` never prices a batch
+ * from separate legs, since a batch's native fee is the SUM of its sub-actions'
+ * state-dependent fees and a partial quote UNDER-SIZES the output and burns the payer's
+ * miner fee. On LTC and DOGE it quotes a batch from one in-order dry-run of the exact
+ * wire instead; on BTC it still refuses. `computePreflight` took a different door:
  * rather than lift BATCH out of the denylist (which would re-open the
  * unauthenticated VM-compute-under-mutex the denylist exists to close) it refuses
  * PER SUB-COMMAND and runs the rest, returning each one's own verdict.
