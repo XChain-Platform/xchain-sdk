@@ -78,6 +78,14 @@ function readExportAssignments(ast, walker) {
     return { exportObj, exportName, exportAssignments, metaAssignments, metaAssignmentCounts };
 }
 
+function lastObjectProperty(properties, name) {
+    for (let i = properties.length - 1; i >= 0; i--) {
+        let property = properties[i];
+        if ((property.key && (property.key.name || property.key.value)) === name) return property;
+    }
+    return null;
+}
+
 module.exports = {
     // The contract's exported callable method names (the `module.exports = { fn... }`
     // surface). Acorn-only (no V8 / isolate); returns [] on unparseable source or
@@ -165,7 +173,7 @@ module.exports = {
             for (let p of exportObj.properties) {
                 if (p.type !== 'Property' || p.computed) return { status: 'undecidable' };
             }
-            let metaProp = exportObj.properties.find((p) => (p.key && (p.key.name || p.key.value)) === 'meta');
+            let metaProp = lastObjectProperty(exportObj.properties, 'meta');
             if (!metaProp) return { status: 'absent' };
             if (!metaProp.value || metaProp.value.type !== 'ObjectExpression') return { status: 'undecidable' };
             return readMetaLiterals(metaProp.value);

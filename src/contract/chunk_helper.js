@@ -27,6 +27,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { wireNumberString } = require('../utils/utility/number_format.js');
 
 // Vendored single source of truth: ./protocol/constants.js, which is a REORDERED
 // SUBSET of xchain-documentation/protocol/constants.js in VALUE PARITY with it,
@@ -117,7 +118,8 @@ function tailField(value) {
 }
 
 // The non-code part of the inline DEPLOY string, in the shape the format selector
-// would pick for these opts.
+// would pick for these opts. Numeric fields use the composer's canonical wire
+// spelling before their bytes are counted.
 //   v0: 'DEPLOY|0|<base64>|<gas>|<ctor...>'                     (formats.js DEPLOY 0)
 //   v1: 'DEPLOY|1|<base64>|<gas>|<ctor>|<cooldown>|<slashDst>'  (formats.js DEPLOY 1)
 // Either staking field being populated is what selects v1, so budgeting the v0
@@ -133,9 +135,9 @@ function tailField(value) {
 // emitting their separators over-counts bytes, which is enough to chunk a source
 // whose real compiled push lands exactly on MAX_ACTION_DATA_LENGTH.
 function deployOverhead(opts) {
-    const gas      = String(opts.gasLimit || 0);
+    const gas      = String(wireNumberString(opts.gasLimit || 0));
     const ctor     = ctorString(opts.constructorParams);
-    const cooldown = tailField(opts.cooldownBlocks);
+    const cooldown = tailField(wireNumberString(opts.cooldownBlocks));
     const slashDst = tailField(opts.slashDestination);
     if (cooldown === '' && slashDst === '')
         return 'DEPLOY|0||' + gas + (ctor === '' ? '' : '|' + ctor);

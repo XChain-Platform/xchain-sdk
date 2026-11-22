@@ -155,10 +155,9 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
     const envelopeFunding = envelopeFundingFor(encoded, opts, network);
     const phase1 = reconcileEncoded(encoded.psbt, Object.assign({}, reconcileIntent, {
         label: 'transaction',
-        // Phase-aware: a chunked P2SH/P2WSH action is indexed from its reveal, so
-        // phase 1 only funds and emits no protocol-fee output; authorizing one
-        // there would excuse an output the encoder must not add.
-        customOutputs: twoPhase ? encoderOpts.customOutputs
+        // A chunk funding transaction emits none of the caller-requested outputs.
+        // They remain authorized on its reveal, where the action is indexed.
+        customOutputs: twoPhase ? []
             : appendFeeQuoteOutput(quoteOutput, encoderOpts.customOutputs),
         phaseShapes: twoPhase ? ['p2sh', 'p2wsh']
             : (encoded.revealPsbt ? ['p2tr'] : []),
@@ -168,7 +167,7 @@ function reconcileTransaction(manager, encoded, createResult, encoderOpts, opts)
     if (encoded.revealPsbt)
         reconcileEncoded(encoded.revealPsbt, Object.assign({}, reconcileIntent, {
             label: 'envelope reveal',
-            customOutputs: appendFeeQuoteOutput(quoteOutput, encoderOpts.customOutputs),
+            customOutputs: [],
             requiredSpends: phase1.phaseFunding,
         }));
 

@@ -12,6 +12,7 @@ const { expect } = require('chai');
 const bitcoin = require('bitcoinjs-lib');
 const WalletUtils = require('../../../../src/utils/wallet.js');
 const { getNetwork } = require('../../../../src/protocol/networks.js');
+const { ECPair } = require('../../../../src/utils/wallet/key_derivation.js');
 
 // The coordinator flow's extraction step is the one place a fully
 // threshold-signed transaction can still be unspendable: bitcoinjs's
@@ -36,6 +37,24 @@ function absurdFeePsbt(netName) {
     // margin ever stops biting, so this can never pass vacuously.
     psbt.addOutput({ script: p2sh.output, value: 1_000 });
     return { wallet, kp, net, psbtHex: psbt.toHex() };
+}
+
+function dustReturnMultisigPsbt() {
+    const wallet = new WalletUtils('bitcoin-regtest');
+    const net = getNetwork('bitcoin-regtest');
+    const keys = [wallet.generateKeyPair(), wallet.generateKeyPair()];
+    const redeem = bitcoin.payments.p2ms({
+        m: 2, pubkeys: keys.map((key) => Buffer.from(key.publicKey)), network: net,
+    });
+    const inputScript = bitcoin.payments.p2wsh({ redeem, network: net }).output;
+    const psbt = new bitcoin.Psbt({ network: net });
+    psbt.addInput({
+        hash: Buffer.alloc(32, 9), index: 0,
+        witnessUtxo: { script: inputScript, value: 1_000_000 },
+        witnessScript: redeem.output,
+    });
+    psbt.addOutput({ script: inputScript, value: 546 });
+    return { wallet, keys, psbtHex: psbt.toHex() };
 }
 
 describe('WalletUtils', function() {
@@ -129,16 +148,30 @@ describe('WalletUtils', function() {
         });
 
         it('leaves the bitcoin absurd-fee guard intact', function() {
-            const { wallet, kp, psbtHex } = absurdFeePsbt('bitcoin-regtest');
-            const partial = wallet.signMultisigPsbt(psbtHex, kp.wif);
-            expect(() => wallet.finalizeMultisigPsbt(partial.psbtHex)).to.throw(/satoshi per byte/);
+            const { wallet, kp, net, psbtHex } = absurdFeePsbt('bitcoin-regtest');
+            expect(() => wallet.signMultisigPsbt(psbtHex, kp.wif))
+                .to.throw().with.property('code', 'FEE_RATE_TOO_HIGH');
+
+            const partial = bitcoin.Psbt.fromHex(psbtHex, { network: net });
+            partial.signInput(0, ECPair.fromWIF(kp.wif, net));
+            expect(() => wallet.finalizeMultisigPsbt(partial.toHex())).to.throw(/satoshi per byte/);
         });
 
         it('honors an explicit opts.maximumFeeRate, so a caller can tighten the ceiling', function() {
             const { wallet, kp, psbtHex } = absurdFeePsbt('dogecoin-regtest');
+            expect(() => wallet.signMultisigPsbt(psbtHex, kp.wif, { maximumFeeRate: 100 }))
+                .to.throw().with.property('code', 'FEE_RATE_TOO_HIGH');
             const partial = wallet.signMultisigPsbt(psbtHex, kp.wif);
             expect(() => wallet.finalizeMultisigPsbt(partial.psbtHex, { maximumFeeRate: 100 }))
                 .to.throw(/satoshi per byte/);
+        });
+
+        it('refuses dust-return multisig signatures before releasing either cosigner signature', function() {
+            const { wallet, keys, psbtHex } = dustReturnMultisigPsbt();
+            for (const key of keys) {
+                expect(() => wallet.signMultisigPsbt(psbtHex, key.wif))
+                    .to.throw().with.property('code', 'FEE_RATE_TOO_HIGH');
+            }
         });
     });
 });

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Applied the partial PSBT fee ceiling before classical multisig signatures are released.
+- Bound co-signer envelope decoding to validated envelope context instead of PSBT leaf metadata.
+- Authorized two-transaction custom outputs only on the transaction leg that emits them.
+
 ## [0.28.0] - 2026-11-22
 
 ### Added

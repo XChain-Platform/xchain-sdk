@@ -21,7 +21,7 @@
 const bitcoin = require('bitcoinjs-lib');
 const { evaluatePolicy } = require('../policy_evaluator.js');
 const { decodeActionFromPsbt, decodeEnvelopeAction } = require('../psbt_action_decode.js');
-const { deriveEnvelopeCommit, classifyEnvelopeRole } = require('../envelope.js');
+const { deriveEnvelopeCommit, classifyEnvelopeRole, envelopeLeafFromPsbtInput } = require('../envelope.js');
 const { isBytes, toBuffer, bytesEqual } = require('../../utils/bytes');
 
 // Parse and bound the request before any input-specific work begins.
@@ -116,6 +116,13 @@ function deriveEnvelope(self, req, psbt) {
             'this PSBT neither creates nor spends the commit output this envelope script derives') };
         env = { commit, role, script };
     }
+    // Policy may read leaf metadata only after the derived envelope context binds it.
+    for (let index = 0; index < psbt.data.inputs.length; index++) {
+        if (!envelopeLeafFromPsbtInput(psbt.data.inputs[index])) continue;
+        if (!env) return { denial: self.deny('ENVELOPE_CONTEXT_MISSING', { index }) };
+        if (env.role !== 'reveal' || index !== 0)
+            return { denial: self.deny('ENVELOPE_LEAF_UNEXPECTED', { index, role: env.role }) };
+    }
     return { env };
 }
 
@@ -181,12 +188,13 @@ function evaluateRequest(self, psbt, env) {
     // 2. Recover the action FROM the PSBT (never trust the caller's claim).
     //    On a COMMIT the action is not in the transaction at all: it lives in
     //    the leaf the commit output COMMITS to, so it is read from the script
-    //    whose hash this daemon just matched against an output. On a
-    //    REVEAL/CANCEL the leaf is in the PSBT and decodeActionFromPsbt finds
-    //    it there.
+    //    whose hash this daemon just matched against an output. A REVEAL
+    //    carries the validated leaf in the PSBT. With no envelope
+    //    context, decode only the inline carrier and never route from metadata.
     const decoded = (env && (env.role === 'commit' || env.role === 'cancel'))
         ? decodeEnvelopeAction(env.script)
-        : decodeActionFromPsbt(psbt, { network: self.network });
+        : decodeActionFromPsbt(psbt, { network: self.network,
+            carrier: env && env.role === 'reveal' ? 'envelope' : 'inline' });
     if (!decoded.ok) return { denial: self.deny('DECODE_' + decoded.reason, decoded.detail) };
 
     // 3. Evaluate policy against the server-side window snapshot.

@@ -44,6 +44,30 @@ function envelopePair(revealDestination, revealValue) {
     return { psbt: commit.toHex(), revealPsbt: reveal.toHex(), encoding: 'TAPROOT', fee: 1000 };
 }
 
+function envelopePairPayingCustomOutputTwice() {
+    const mine = destination(1);
+    const custom = destination(6);
+    const leg = bitcoin.script.compile([bitcoin.opcodes.OP_1, Buffer.alloc(32, 7)]);
+    const carrier = bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, Buffer.from('XCHAIN')]);
+    const commit = new bitcoin.Psbt({ network: NET });
+    commit.addInput({ hash: 'aa'.repeat(32), index: 0,
+        witnessUtxo: { script: mine.output, value: 100000 } });
+    commit.addOutput({ script: carrier, value: 0 });
+    commit.addOutput({ script: leg, value: 50000 });
+    commit.addOutput({ script: custom.output, value: 1000 });
+    commit.addOutput({ script: mine.output, value: 48000 });
+    const reveal = new bitcoin.Psbt({ network: NET });
+    reveal.addInput({ hash: 'cc'.repeat(32), index: 0,
+        witnessUtxo: { script: leg, value: 50000 } });
+    reveal.addOutput({ script: custom.output, value: 1000 });
+    reveal.addOutput({ script: mine.output, value: 48000 });
+    return {
+        pair: { psbt: commit.toHex(), revealPsbt: reveal.toHex(), encoding: 'TAPROOT' },
+        opts: { pubkey: 'caller', change: mine.address,
+            customOutputs: [{ address: custom.address, value: 1000 }] },
+    };
+}
+
 async function estimate(pair, opts) {
     const sdk = {
         actions: { createAction: () => ACTION_RESULT },
@@ -81,6 +105,13 @@ describe('estimateFees envelope reveal reconciliation', function () {
         const change = destination(4);
         const error = await estimateError(envelopePair(destination(5), 49000),
             { pubkey: 'caller', change: change.address, maxFeeSats: 10000 });
+        assert.strictEqual(error.code, 'UNRECONCILED_OUTPUT');
+        assert.match(error.message, /envelope reveal/);
+    });
+
+    it('refuses a caller customOutput paid again by the envelope reveal', async function () {
+        const doubled = envelopePairPayingCustomOutputTwice();
+        const error = await estimateError(doubled.pair, doubled.opts);
         assert.strictEqual(error.code, 'UNRECONCILED_OUTPUT');
         assert.match(error.message, /envelope reveal/);
     });
