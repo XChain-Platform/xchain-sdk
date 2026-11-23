@@ -2709,6 +2709,56 @@ export interface LoginVerifyResult {
     error: string | null;
 }
 
+export type HoldingMinimum = string | number;
+
+export interface HoldsAtLeastOptions {
+    chainId: string;
+    explorer?: {
+        getBalances(address: string): Promise<unknown>;
+    };
+}
+
+export interface HoldingResult {
+    holds: boolean;
+    amount: import('mathjs').BigNumber;
+}
+
+export type CallbackNonceMode = 'same-device' | 'cross-device';
+
+export interface CallbackStore {
+    issueNonce(mode: CallbackNonceMode): string | Promise<string>;
+    takeNonce(nonce: string): { mode: CallbackNonceMode } | null | Promise<{ mode: CallbackNonceMode } | null>;
+    put(id: string, rec: unknown): void | Promise<void>;
+    get(id: string): unknown | Promise<unknown>;
+}
+
+export interface CallbackBody {
+    v: 1;
+    id: string;
+    method: string;
+    ok: boolean;
+    result?: object;
+    error?: unknown;
+    state?: string;
+    claim?: string;
+}
+
+export interface ReceiveCallbackOptions {
+    store?: CallbackStore;
+    appId?: string;
+    origin?: string;
+    maxAgeMs?: number;
+}
+
+export interface ReceiveCallbackResult {
+    accepted: boolean;
+    id: string | null;
+    status: 'approved' | 'approved-unclaimed' | 'received' | 'rejected';
+    claimed?: boolean;
+    verified?: LoginVerifyResult;
+    error?: string;
+}
+
 
 /*
  *  WalletUtils class
@@ -2741,6 +2791,8 @@ export declare class AuthUtils {
     verifyOwnership(address: string, message: string, signature: string, network?: XChainNetwork, opts?: { format?: MessageSignatureFormat }): VerifyResult;
     verifyMessage(address: string, message: string, signature: string, network?: XChainNetwork, opts?: { format?: MessageSignatureFormat }): VerifyResult;
     verifyLogin(result: LoginResult, expected: LoginExpected): LoginVerifyResult;
+    holdsAtLeast(address: string, tick: string, min: HoldingMinimum, options: HoldsAtLeastOptions): Promise<HoldingResult>;
+    receiveCallback(body: CallbackBody, options?: ReceiveCallbackOptions): Promise<ReceiveCallbackResult>;
 }
 
 
