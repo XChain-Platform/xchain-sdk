@@ -332,7 +332,11 @@ async function waitForFileComplete(actionIndex, opts = {}) {
             const classified = modules.classifyAssembly(observed, actionIndex);
             if (classified.satisfied) return classified.result;
             lastError = null;
-        } catch (error) { lastError = error; }
+        } catch (error) {
+            // A locally rejected index never becomes valid by polling again; transient errors still retry.
+            if (error && error.code === 'INVALID_ACTION_INDEX') throw error;
+            lastError = error;
+        }
         const remaining = deadline - Date.now();
         if (remaining > 0) await new Promise(resolve => setTimeout(resolve, Math.min(interval, remaining)));
     } while (Date.now() < deadline);

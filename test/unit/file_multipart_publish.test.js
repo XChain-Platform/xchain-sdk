@@ -289,6 +289,22 @@ describe('waitForFileComplete', function () {
         const mismatch = await workflow.waitForFileComplete.call(mismatchSdk.sdk, 8, { timeout: 50, pollInterval: 1 });
         assert.strictEqual(mismatch.multipart.status, 'mismatch');
     });
+
+    it('fails at once on a locally invalid index but still retries transient errors', async function () {
+        restore = installDependencies(dependencyStubs());
+        const workflow = require(WORKFLOW);
+        let calls = 0;
+        const bad = { getFileAssembly: async () => { calls++; const e = new Error('bad index'); e.code = 'INVALID_ACTION_INDEX'; throw e; } };
+        const started = Date.now();
+        await assert.rejects(() => workflow.waitForFileComplete.call(bad, '0x10', { timeout: 5000, pollInterval: 500 }), e => e.code === 'INVALID_ACTION_INDEX');
+        assert(Date.now() - started < 500);
+        assert.strictEqual(calls, 1);
+        let n = 0;
+        const flaky = { getFileAssembly: async () => { if (n++ === 0) { const e = new Error('refused'); e.code = 'ECONNREFUSED'; throw e; } return { status: 'complete' }; } };
+        const done = await workflow.waitForFileComplete.call(flaky, 7, { timeout: 500, pollInterval: 1 });
+        assert.strictEqual(done.multipart.status, 'complete');
+        assert.strictEqual(n, 2);
+    });
 });
 
 describe('SDK multipart methods', function () {
