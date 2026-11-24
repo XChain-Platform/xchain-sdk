@@ -1813,6 +1813,7 @@ export declare class XChainSDK {
     /** Browser-safe action and PSBT decoding helpers. */
     readonly decoder: DecoderApi;
     readonly auth: AuthUtils;
+    readonly connect: ConnectApi;
 
     constructor(options?: SDKOptions);
 
@@ -2808,9 +2809,6 @@ export interface ConnectApi {
         options?: ConnectRequestOptions,
     ): SignActionRequest<TParams>;
 }
-
-export declare const connect: ConnectApi;
-
 
 /*
  *  WalletUtils class

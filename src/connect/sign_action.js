@@ -14,12 +14,8 @@
 
 'use strict';
 
-function codec() {
-    return require('@dankest-llc/xchain-connect');
-}
-
 function signAction(params, options = {}) {
-    const { buildRequest, requestLink } = codec();
+    const { buildRequest, requestLink } = require('@dankest-llc/xchain-connect');
     const request = buildRequest('signAction', params, options);
     const codecOptions = {};
     if (options.now !== undefined) codecOptions.now = options.now;

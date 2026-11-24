@@ -11,8 +11,6 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "auth.js",
-    "auth.d.ts",
     "src/",
     "NOTICE.md",
     "SECURITY.md",

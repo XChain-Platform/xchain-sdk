@@ -16,7 +16,7 @@ const Module = require('module');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..', '..');
-const CONNECT_PATH = path.join(ROOT, 'src', 'connect.js');
+const CONNECT_PATH = path.join(ROOT, 'src', 'connect', 'sign_action.js');
 
 function withConnect(codec, run) {
     const originalLoad = Module._load;
@@ -74,8 +74,20 @@ function returnsRequestAndLink() {
 }
 
 function loadsLazily() {
-    const connect = require(CONNECT_PATH);
-    assert.strictEqual(typeof connect.signAction, 'function');
+    const originalLoad = Module._load;
+    let codecLoads = 0;
+    delete require.cache[require.resolve(CONNECT_PATH)];
+    Module._load = function (request, parent, isMain) {
+        if (request === '@dankest-llc/xchain-connect') codecLoads += 1;
+        return originalLoad.call(this, request, parent, isMain);
+    };
+    try {
+        const connect = require(CONNECT_PATH);
+        assert.strictEqual(typeof connect.signAction, 'function');
+        assert.strictEqual(codecLoads, 0);
+    } finally {
+        Module._load = originalLoad;
+    }
 }
 
 function propagatesFailure() {
@@ -103,28 +115,35 @@ function connectSignActionTests() {
 }
 
 function packageSurfaceTests() {
-    it('ships the connect dependency and lightweight auth entry', function shipsSurfaces() {
+    it('wires sdk.connect immediately after sdk.auth', function wiresSdkConnect() {
+        const sdkPath = path.join(ROOT, 'src', 'XChainSDK.js');
+        delete require.cache[require.resolve(sdkPath)];
+        delete require.cache[require.resolve(CONNECT_PATH)];
+        const XChainSDK = require(sdkPath);
+        const sdk = new XChainSDK({ network: 'bitcoin-regtest' });
+        const keys = Object.keys(sdk);
+
+        assert.strictEqual(sdk.connect.signAction, require(CONNECT_PATH).signAction);
+        assert.strictEqual(keys[keys.indexOf('auth') + 1], 'connect');
+    });
+
+    it('ships the connect dependency without adding root entries', function shipsSurfaces() {
         const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
         assert.strictEqual(pkg.dependencies['@dankest-llc/xchain-connect'], '^1.0.0');
-        assert.ok(pkg.files.includes('auth.js'));
-        assert.ok(pkg.files.includes('auth.d.ts'));
-
-        const authEntry = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
-        assert.match(authEntry, /require\('\.\/src\/utils\/auth\.js'\)/);
-        assert.match(authEntry, /require\('\.\/src\/utils\/wallet\/auth_callbacks\.js'\)/);
-        assert.match(authEntry, /module\.exports = \{ AuthUtils \};/);
+        assert.ok(!pkg.files.includes('auth.js'));
+        assert.ok(!pkg.files.includes('auth.d.ts'));
+        assert.ok(!fs.existsSync(path.join(ROOT, 'auth.js')));
+        assert.ok(!fs.existsSync(path.join(ROOT, 'auth.d.ts')));
     });
 
-    it('declares connect.signAction and the auth entry types', function declaresTypes() {
+    it('declares sdk.connect.signAction', function declaresTypes() {
         const dts = fs.readFileSync(path.join(ROOT, 'index.d.ts'), 'utf8');
-        const authDts = fs.readFileSync(path.join(ROOT, 'auth.d.ts'), 'utf8');
 
-        assert.match(dts, /export declare const connect: ConnectApi;/);
+        assert.match(dts, /readonly connect: ConnectApi;/);
         assert.match(dts, /signAction<TParams = Record<string, unknown>>\(/);
-        assert.match(authDts, /export \{ AuthUtils \} from '\.\/index';/);
     });
 
-    it('documents 32 actions and the new public surfaces', function documentsSurfaces() {
+    it('documents 32 actions and sdk.connect.signAction', function documentsSurfaces() {
         const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
         const changelog = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
 
@@ -132,7 +151,6 @@ function packageSurfaceTests() {
         assert.match(readme, /All 32 ACTION types/);
         assert.match(readme, /sdk\.connect\.signAction\(\)/);
         assert.match(changelog, /sdk\.connect\.signAction/);
-        assert.match(changelog, /xchain-sdk\/auth/);
     });
 }
 
