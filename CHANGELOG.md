@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added BIP-322 simple message signing and verification for taproot addresses through the `format: 'bip322-simple'` option of `sdk.auth.signMessage`.
+- Added `sdk.auth.verifyLogin` to check a wallet login and every shared address in its own format within a 60 minute window without throwing.
+- Added `sdk.auth.holdsAtLeast` to compare a proven address's token balance with a minimum.
+- Added `sdk.auth.receiveCallback` with a single-use nonce store for wallet request callbacks.
+- Added TypeScript declarations for these auth methods in `index.d.ts`.
+
 ### Security
 - Applied the partial PSBT fee ceiling before classical multisig signatures are released.
 - Bound co-signer envelope decoding to validated envelope context instead of PSBT leaf metadata.
