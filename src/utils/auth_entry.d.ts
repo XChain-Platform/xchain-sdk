@@ -12,10 +12,4 @@
  *
  ********************************************************************/
 
-'use strict';
-
-const AuthUtils = require('./auth.js');
-
-require('./wallet/auth_callbacks.js');
-
-module.exports = AuthUtils;
+export { AuthUtils } from '../../index';

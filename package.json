@@ -25,9 +25,9 @@
       "default": "./index.js"
     },
     "./auth": {
-      "types": "./index.d.ts",
-      "require": "./src/utils/auth_entry.d.ts",
-      "default": "./src/utils/auth_entry.d.ts"
+      "types": "./src/utils/auth_entry.d.ts",
+      "require": "./src/utils/auth_entry.js",
+      "default": "./src/utils/auth_entry.js"
     },
     "./package.json": "./package.json",
     "./*": "./*"
