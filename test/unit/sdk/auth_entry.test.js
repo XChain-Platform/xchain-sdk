@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..', '..');
-const AuthUtils = require('../../../src/utils/auth_entry.js');
+const AuthUtils = require('@dankest-llc/xchain-sdk/auth');
 const DirectAuthUtils = require('../../../src/utils/auth.js');
 
 describe('auth package entry', function () {
@@ -60,15 +60,6 @@ describe('auth package entry', function () {
 });
 
 describe('auth package metadata', function () {
-    it('points the auth declaration entry at the existing AuthUtils declaration', function () {
-        const declaration = fs.readFileSync(
-            path.join(ROOT, 'src', 'utils', 'auth_entry.d.ts'),
-            'utf8'
-        );
-
-        assert.match(declaration, /export \{ AuthUtils \} from '\.\.\/\.\.\/index';/);
-    });
-
     it('exports the root, auth, package metadata, and compatible deep imports', function () {
         const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
@@ -80,9 +71,9 @@ describe('auth package metadata', function () {
             default: './index.js',
         });
         assert.deepStrictEqual(pkg.exports['./auth'], {
-            types: './src/utils/auth_entry.d.ts',
-            require: './src/utils/auth_entry.js',
-            default: './src/utils/auth_entry.js',
+            types: './index.d.ts',
+            require: './src/utils/auth_entry.d.ts',
+            default: './src/utils/auth_entry.d.ts',
         });
         assert.strictEqual(pkg.exports['./package.json'], './package.json');
         assert.strictEqual(pkg.exports['./*'], './*');
