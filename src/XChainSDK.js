@@ -25,6 +25,7 @@ const HubConnector   = require('./clients/hub.js');
 const ContractUtils  = require('./contract/utils.js');
 const WalletUtils    = require('./utils/wallet.js');
 const AuthUtils      = require('./utils/auth.js');
+const { signAction } = require('./connect/sign_action.js');
 const MessagingUtils = require('./actions/messaging.js');
 const GatedFileUtils = require('./actions/gated_file.js');
 const CompressionUtils = require('./protocol/compression.js');
@@ -84,6 +85,7 @@ function initializeCoreModules(sdk) {
 function initializeNetworkUtilities(sdk, network) {
     sdk.wallet     = new WalletUtils(network);
     sdk.auth       = new AuthUtils(network);
+    sdk.connect    = { signAction };
     sdk.messaging  = new MessagingUtils(network);
     sdk.gatedFile  = new GatedFileUtils();
     // FILE payload compression is stateless and needs no network. Every serve
