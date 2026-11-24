@@ -57,7 +57,9 @@ describe('auth package entry', function () {
             loadedSDK: false,
         });
     });
+});
 
+describe('auth package metadata', function () {
     it('points the auth declaration entry at the existing AuthUtils declaration', function () {
         const declaration = fs.readFileSync(
             path.join(ROOT, 'src', 'utils', 'auth_entry.d.ts'),
