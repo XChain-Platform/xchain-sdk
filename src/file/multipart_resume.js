@@ -43,6 +43,21 @@ function fileHashOfDigests(partDigests) {
     return crypto.createHash('sha256').update(Buffer.concat(digestBytes)).digest('hex');
 }
 
+// Explorer rows carry action_index as a decimal string, so a raw `<` would order '10' before '9'.
+// Unparseable values become null and never beat a parseable index.
+function actionIndexValue(value) {
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+    if (typeof value === 'string' && /^\d+$/.test(value)) return BigInt(value);
+    return null;
+}
+
+function beatsWinner(piece, winner) {
+    const next = actionIndexValue(piece.actionIndex);
+    const current = actionIndexValue(winner.actionIndex);
+    if (next === null) return false;
+    return current === null || next < current;
+}
+
 function winningParts(onChainPieces, fileHash, totalParts) {
     const winners = new Map();
     for (const piece of onChainPieces) {
@@ -50,7 +65,7 @@ function winningParts(onChainPieces, fileHash, totalParts) {
         if (!Number.isInteger(piece.partIndex) || piece.partIndex < 0) continue;
         if (piece.partIndex >= totalParts) continue;
         const winner = winners.get(piece.partIndex);
-        if (!winner || piece.actionIndex < winner.actionIndex) {
+        if (!winner || beatsWinner(piece, winner)) {
             winners.set(piece.partIndex, piece);
         }
     }
