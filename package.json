@@ -18,6 +18,20 @@
   ],
   "main": "index.js",
   "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
+    "./auth": {
+      "types": "./src/utils/auth_entry.d.ts",
+      "require": "./src/utils/auth_entry.js",
+      "default": "./src/utils/auth_entry.js"
+    },
+    "./package.json": "./package.json",
+    "./*": "./*"
+  },
   "license": "AGPL-3.0-or-later",
   "comment:browser": "Browserify's resolver predates the package `exports` field, so it can't map @brandonblack/musig's './base_crypto' subpath to lib/base_crypto.js. Alias it to the concrete file for bundling only; Node still resolves the subpath via exports.",
   "browser": {
