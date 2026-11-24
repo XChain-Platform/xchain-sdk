@@ -21,13 +21,11 @@
   "exports": {
     ".": {
       "types": "./index.d.ts",
-      "require": "./index.js",
       "default": "./index.js"
     },
     "./auth": {
-      "types": "./src/utils/auth_entry.d.ts",
-      "require": "./src/utils/auth_entry.js",
-      "default": "./src/utils/auth_entry.js"
+      "types": "./src/utils/wallet/auth_entry.d.ts",
+      "default": "./src/utils/wallet/auth_entry.js"
     },
     "./package.json": "./package.json",
     "./*": "./*"

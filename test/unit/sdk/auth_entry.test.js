@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..', '..');
-const AuthUtils = require('../../../src/utils/auth_entry.js');
+const AuthUtils = require('../../../src/utils/wallet/auth_entry.js');
 const DirectAuthUtils = require('../../../src/utils/auth.js');
 
 describe('auth package entry', function () {
@@ -62,11 +62,12 @@ describe('auth package entry', function () {
 describe('auth package metadata', function () {
     it('points the auth declaration entry at the existing AuthUtils declaration', function () {
         const declaration = fs.readFileSync(
-            path.join(ROOT, 'src', 'utils', 'auth_entry.d.ts'),
+            path.join(ROOT, 'src', 'utils', 'wallet', 'auth_entry.d.ts'),
             'utf8'
         );
 
-        assert.match(declaration, /export \{ AuthUtils \} from '\.\.\/\.\.\/index';/);
+        assert.match(declaration, /export \{ AuthUtils \} from '\.\.\/\.\.\/\.\.\/index';/);
+        assert.doesNotMatch(declaration, /\brequire\s*\(|\bmodule\.exports\b/);
     });
 
     it('exports the root, auth, package metadata, and compatible deep imports', function () {
@@ -76,13 +77,11 @@ describe('auth package metadata', function () {
         assert.strictEqual(pkg.types, 'index.d.ts');
         assert.deepStrictEqual(pkg.exports['.'], {
             types: './index.d.ts',
-            require: './index.js',
             default: './index.js',
         });
         assert.deepStrictEqual(pkg.exports['./auth'], {
-            types: './src/utils/auth_entry.d.ts',
-            require: './src/utils/auth_entry.js',
-            default: './src/utils/auth_entry.js',
+            types: './src/utils/wallet/auth_entry.d.ts',
+            default: './src/utils/wallet/auth_entry.js',
         });
         assert.strictEqual(pkg.exports['./package.json'], './package.json');
         assert.strictEqual(pkg.exports['./*'], './*');
