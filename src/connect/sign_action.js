@@ -14,7 +14,18 @@
 
 'use strict';
 
-const loadCodec = () => require('@dankest-llc/xchain-connect');
+const CONNECT_PACKAGE = '@dankest-llc/xchain-connect';
+
+const loadCodec = () => {
+    try {
+        return require(CONNECT_PACKAGE);
+    } catch (error) {
+        if (error?.code === 'MODULE_NOT_FOUND' && error.message.includes(`'${CONNECT_PACKAGE}'`)) {
+            throw new Error(`${CONNECT_PACKAGE} is not installed; install it to sign wallet action requests`);
+        }
+        throw error;
+    }
+};
 
 function signAction(params, options = {}) {
     const { buildRequest, requestLink } = loadCodec();

@@ -22,7 +22,10 @@ function withConnect(codec, run) {
     const originalLoad = Module._load;
     delete require.cache[require.resolve(CONNECT_PATH)];
     Module._load = function (request, parent, isMain) {
-        if (request === '@dankest-llc/xchain-connect') return codec;
+        if (request === '@dankest-llc/xchain-connect') {
+            if (codec instanceof Error) throw codec;
+            return codec;
+        }
         return originalLoad.call(this, request, parent, isMain);
     };
     try {
@@ -90,6 +93,16 @@ function loadsLazily() {
     }
 }
 
+function reportsMissingDependency() {
+    const missing = Object.assign(
+        new Error("Cannot find module '@dankest-llc/xchain-connect'"),
+        { code: 'MODULE_NOT_FOUND' },
+    );
+    assert.throws(() => withConnect(missing, (connect) => {
+        connect.signAction({}, {});
+    }), new Error('@dankest-llc/xchain-connect is not installed; install it to sign wallet action requests'));
+}
+
 function propagatesFailure() {
     let linkCalls = 0;
     const failure = Object.assign(new TypeError('action is invalid'), { code: 'INVALID_PARAMS' });
@@ -111,6 +124,7 @@ function propagatesFailure() {
 function connectSignActionTests() {
     it('returns the connect request and its link', returnsRequestAndLink);
     it('loads the dependency only when the helper is called', loadsLazily);
+    it('reports how to install a missing connect dependency', reportsMissingDependency);
     it('propagates request validation failures without encoding a link', propagatesFailure);
 }
 
@@ -127,9 +141,11 @@ function packageSurfaceTests() {
         assert.strictEqual(keys[keys.indexOf('auth') + 1], 'connect');
     });
 
-    it('ships the connect dependency without adding root entries', function shipsSurfaces() {
+    it('declares the connect dependency as an optional peer', function shipsSurfaces() {
         const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-        assert.strictEqual(pkg.dependencies['@dankest-llc/xchain-connect'], '^1.0.0');
+        assert.strictEqual(pkg.dependencies['@dankest-llc/xchain-connect'], undefined);
+        assert.strictEqual(pkg.peerDependencies['@dankest-llc/xchain-connect'], '^1.0.0');
+        assert.strictEqual(pkg.peerDependenciesMeta['@dankest-llc/xchain-connect'].optional, true);
         assert.ok(!pkg.files.includes('auth.js'));
         assert.ok(!pkg.files.includes('auth.d.ts'));
         assert.ok(!fs.existsSync(path.join(ROOT, 'auth.js')));

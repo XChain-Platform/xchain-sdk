@@ -40,7 +40,6 @@
     "url": "git+https://github.com/XChain-Platform/xchain-sdk.git"
   },
   "dependencies": {
-    "@dankest-llc/xchain-connect": "^1.0.0",
     "@bitcoinerlab/secp256k1": "^2.0.0",
     "@brandonblack/musig": "0.0.1-alpha.1",
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -63,6 +62,14 @@
     "valibot": "^1.2.0",
     "ws": "^8.23.0",
     "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@dankest-llc/xchain-connect": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@dankest-llc/xchain-connect": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@babel/core": "^7.29.13",
