@@ -2761,6 +2761,58 @@ export interface ReceiveCallbackResult {
 
 
 /*
+ *  Wallet request helpers
+ */
+
+export interface ConnectRequestOptions {
+    id?: string;
+    return?: string;
+    callback?: string;
+    state?: string;
+    exp?: number;
+    app?: { name: string };
+    browser?: 'chrome' | 'firefox' | 'edge' | 'safari' | 'samsung';
+    now?: number;
+    developerMode?: boolean;
+    randomBytes?: (size: number) => Uint8Array;
+}
+
+export interface SignActionRequestParams<TParams = Record<string, unknown>> {
+    chainId: string;
+    from: string;
+    action: string;
+    params: TParams;
+}
+
+export interface WalletRequestEnvelope<TParams = Record<string, unknown>> {
+    v: 1;
+    id: string;
+    method: 'signAction';
+    params: SignActionRequestParams<TParams>;
+    return?: string;
+    callback?: string;
+    state?: string;
+    exp: number;
+    app?: { name: string };
+    browser?: 'chrome' | 'firefox' | 'edge' | 'safari' | 'samsung';
+}
+
+export interface SignActionRequest<TParams = Record<string, unknown>> {
+    request: WalletRequestEnvelope<TParams>;
+    link: string;
+}
+
+export interface ConnectApi {
+    signAction<TParams = Record<string, unknown>>(
+        params: SignActionRequestParams<TParams>,
+        options?: ConnectRequestOptions,
+    ): SignActionRequest<TParams>;
+}
+
+export declare const connect: ConnectApi;
+
+
+/*
  *  WalletUtils class
  */
 

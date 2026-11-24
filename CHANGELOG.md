@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `sdk.auth.holdsAtLeast` to compare a proven address's token balance with a minimum.
 - Added `sdk.auth.receiveCallback` with a single-use nonce store for wallet request callbacks.
 - Added TypeScript declarations for these auth methods in `index.d.ts`.
+- Added `sdk.connect.signAction` to build a validated wallet action request and link.
+- Added the lightweight `@dankest-llc/xchain-sdk/auth` entry for server-side authentication checks.
 
 ### Security
 - Applied the partial PSBT fee ceiling before classical multisig signatures are released.

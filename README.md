@@ -44,6 +44,7 @@ Developer-facing SDK for the [XChain Platform](https://xchain.io/): generate XCh
 - **Ticker compaction**: on by default; resolves token tickers to their compact `^id` wire form via the explorer before encoding to shrink on-chain payload size; opt out with `{ compactTickers: false }`
 - **MCP server**: `npx xchain-mcp` exposes all explorer query tools as Model Context Protocol tools for AI agent use
 - **Wallet & auth**: key management, PSBT signing, challenge-response verification
+- **Wallet request authoring**: `sdk.connect.signAction()` returns a validated request object and its wallet link for servers and agents
 - **Smart contracts**: deploy, execute, deposit, withdraw via xchain-vm integration
 - **Contract identity pre-flight**: a deployed contract must export `meta: { name, description, version }` (`CONTRACT_META_REQUIRED`). `sdk.deploy()`, `session.deploy()`, `session.deployChunk()`, `sdk.deployAndFund()` and `sdk.deployStakeableContract()` read it statically before the action is composed and refuse with the chain's own verdict string, so a contract the indexer will reject never costs a fee. `sdk.contracts.getExportedMeta(source)` exposes the same read
 - **Hub discovery**: auto-resolves service endpoints from xchain-hub
