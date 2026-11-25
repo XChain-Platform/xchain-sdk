@@ -271,8 +271,16 @@ export interface ActionResult {
     fields: Record<string, any>;
     /** Encoding type used, populated only when a PSBT was also produced */
     encoding?: EncodingType;
-    /** Unsigned PSBT in hex, populated only when encoder options were provided */
-    psbt?: string;
+    /** Unsigned PSBT in hex, or null when an envelope pair must use submitAction */
+    psbt?: string | null;
+    /** Whether the returned PSBT may be signed directly */
+    signable?: boolean;
+    /** Why an encoded result must use the managed submission path */
+    unsignableReason?: 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
+    /** Redeem scripts required to verify and complete a chunked carrier */
+    carrierScripts?: string[];
+    /** Exact bytes reported when the encoder compressed the payload */
+    compression?: { compressed: boolean; data?: string; rawData?: string };
 }
 
 /** Response returned by the encoder for createTx / spendP2sh */
@@ -1804,6 +1812,8 @@ export declare class XChainSDK {
     encoder: EncoderClient | null;
     /** Browser-safe action and PSBT decoding helpers. */
     readonly decoder: DecoderApi;
+    readonly auth: AuthUtils;
+    readonly connect: ConnectApi;
 
     constructor(options?: SDKOptions);
 
@@ -2634,10 +2644,13 @@ export interface ChallengeResult {
     bound: boolean;
 }
 
+export type MessageSignatureFormat = 'legacy' | 'bip322-simple';
+
 export interface SignMessageOptions {
     segwitRedeemScript?: boolean;
     segwitNative?: boolean;
     network?: XChainNetwork;
+    format?: MessageSignatureFormat;
 }
 
 export interface SignMessageResult {
@@ -2651,6 +2664,151 @@ export interface VerifyResult {
     error: string | null;
 }
 
+export interface LoginChallengeParts {
+    appId: string;
+    origin: string;
+    address: string;
+    nonce: string;
+    version: number;
+    timestamp: number;
+    expiresAt: number;
+}
+
+export interface LoginAddressProof {
+    address: string;
+    chainId: string;
+    challenge: string;
+    signature: string;
+    signatureFormat: MessageSignatureFormat;
+    addressType?: string;
+    challengeParts?: LoginChallengeParts;
+}
+
+export interface LoginResult {
+    ok: true;
+    address: string;
+    chainId: string;
+    challenge: string;
+    signature: string;
+    signatureFormat: MessageSignatureFormat;
+    challengeParts: LoginChallengeParts;
+    addresses: LoginAddressProof[];
+}
+
+export interface LoginExpected {
+    appId: string;
+    origin: string;
+    nonce: string;
+    maxAgeMs?: number;
+}
+
+export interface LoginVerifyResult {
+    valid: boolean;
+    address: string | null;
+    chainId: string | null;
+    addresses: Array<{ address: string; chainId: string }>;
+    error: string | null;
+}
+
+export type HoldingMinimum = string | number;
+
+export interface HoldsAtLeastOptions {
+    chainId: string;
+    explorer?: {
+        getBalances(address: string): Promise<unknown>;
+    };
+}
+
+export interface HoldingResult {
+    holds: boolean;
+    amount: import('mathjs').BigNumber;
+}
+
+export type CallbackNonceMode = 'same-device' | 'cross-device';
+
+export interface CallbackStore {
+    issueNonce(mode: CallbackNonceMode): string | Promise<string>;
+    takeNonce(nonce: string): { mode: CallbackNonceMode } | null | Promise<{ mode: CallbackNonceMode } | null>;
+    put(id: string, rec: unknown): void | Promise<void>;
+    get(id: string): unknown | Promise<unknown>;
+}
+
+export interface CallbackBody {
+    v: 1;
+    id: string;
+    method: string;
+    ok: boolean;
+    result?: object;
+    error?: unknown;
+    state?: string;
+    claim?: string;
+}
+
+export interface ReceiveCallbackOptions {
+    store?: CallbackStore;
+    appId?: string;
+    origin?: string;
+    maxAgeMs?: number;
+}
+
+export interface ReceiveCallbackResult {
+    accepted: boolean;
+    id: string | null;
+    status: 'approved' | 'approved-unclaimed' | 'received' | 'rejected';
+    claimed?: boolean;
+    verified?: LoginVerifyResult;
+    error?: string;
+}
+
+
+/*
+ *  Wallet request helpers
+ */
+
+export interface ConnectRequestOptions {
+    id?: string;
+    return?: string;
+    callback?: string;
+    state?: string;
+    exp?: number;
+    app?: { name: string };
+    browser?: 'chrome' | 'firefox' | 'edge' | 'safari' | 'samsung';
+    now?: number;
+    developerMode?: boolean;
+    randomBytes?: (size: number) => Uint8Array;
+}
+
+export interface SignActionRequestParams<TParams = Record<string, unknown>> {
+    chainId: string;
+    from: string;
+    action: string;
+    params: TParams;
+}
+
+export interface WalletRequestEnvelope<TParams = Record<string, unknown>> {
+    v: 1;
+    id: string;
+    method: 'signAction';
+    params: SignActionRequestParams<TParams>;
+    return?: string;
+    callback?: string;
+    state?: string;
+    exp: number;
+    app?: { name: string };
+    browser?: 'chrome' | 'firefox' | 'edge' | 'safari' | 'samsung';
+}
+
+export interface SignActionRequest<TParams = Record<string, unknown>> {
+    request: WalletRequestEnvelope<TParams>;
+    link: string;
+}
+
+export interface ConnectApi {
+    signAction<TParams = Record<string, unknown>>(
+        params: SignActionRequestParams<TParams>,
+        options?: ConnectRequestOptions,
+    ): SignActionRequest<TParams>;
+}
 
 /*
  *  WalletUtils class
@@ -2680,8 +2838,11 @@ export declare class AuthUtils {
 
     generateChallenge(address: string, opts?: ChallengeOptions): ChallengeResult;
     signMessage(message: string, wif: string, opts?: SignMessageOptions): SignMessageResult;
-    verifyOwnership(address: string, message: string, signature: string, network?: XChainNetwork): VerifyResult;
-    verifyMessage(address: string, message: string, signature: string, network?: XChainNetwork): VerifyResult;
+    verifyOwnership(address: string, message: string, signature: string, network?: XChainNetwork, opts?: { format?: MessageSignatureFormat }): VerifyResult;
+    verifyMessage(address: string, message: string, signature: string, network?: XChainNetwork, opts?: { format?: MessageSignatureFormat }): VerifyResult;
+    verifyLogin(result: LoginResult, expected: LoginExpected): LoginVerifyResult;
+    holdsAtLeast(address: string, tick: string, min: HoldingMinimum, options: HoldsAtLeastOptions): Promise<HoldingResult>;
+    receiveCallback(body: CallbackBody, options?: ReceiveCallbackOptions): Promise<ReceiveCallbackResult>;
 }
 
 

@@ -118,16 +118,18 @@ function boundedRestFormat(action, version) {
 
 function decodeActionFromPsbt(psbtOrHex, opts = {}) {
     // An envelope reveal carries no OP_RETURN action at all, so route on the
-    // shape of the PSBT rather than on a caller-supplied flag. The inline path
-    // is unchanged for every other transaction.
+    // shape of the PSBT by default. Security-sensitive callers may pin the
+    // carrier after validating its transaction context.
     let psbtObj = null;
     if (typeof psbtOrHex !== 'string') psbtObj = psbtOrHex;
     else {
         try { psbtObj = bitcoin.Psbt.fromHex(psbtOrHex, opts.network ? { network: opts.network } : undefined); }
         catch (e) { return fail('PSBT_PARSE_FAILED', e.message); }
     }
-    const carriesEnvelope = psbtObj && psbtObj.data && Array.isArray(psbtObj.data.inputs)
+    const metadataCarriesEnvelope = psbtObj && psbtObj.data && Array.isArray(psbtObj.data.inputs)
         && psbtObj.data.inputs.some((inp) => !!envelopeLeafFromPsbtInput(inp));
+    const carriesEnvelope = opts.carrier === 'inline' ? false
+        : opts.carrier === 'envelope' ? true : metadataCarriesEnvelope;
 
     const extracted = carriesEnvelope
         ? extractEnvelopeActionString(psbtObj)

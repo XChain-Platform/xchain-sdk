@@ -116,6 +116,30 @@ describe('piecesToSend conflicts', function () {
         expect(result.conflicting).to.deep.equal([wrong]);
     });
 
+    it('orders string action indexes numerically, as the explorer returns them', function () {
+        const wrong = part(0, '10', 'f'.repeat(64));
+        const result = piecesToSend(plan(), [part(0, '9'), wrong]);
+        expect(result.conflicting).to.deep.equal([]);
+        expect(result.missingParts).to.deep.equal([1, 2]);
+        const reversed = piecesToSend(plan(), [wrong, part(0, '9')]);
+        expect(reversed.conflicting).to.deep.equal([]);
+    });
+
+    it('reports the numerically lower string index as conflicting when its digest is wrong', function () {
+        const wrong = part(0, '9', 'f'.repeat(64));
+        const result = piecesToSend(plan(), [wrong, part(0, '10')]);
+        expect(result.conflicting).to.deep.equal([wrong]);
+    });
+
+    it('orders numbers and mixed numbers and strings the same way', function () {
+        const wrong = part(0, 100, 'f'.repeat(64));
+        expect(piecesToSend(plan(), [part(0, 99), wrong]).conflicting).to.deep.equal([]);
+        expect(piecesToSend(plan(), [part(0, '9'), part(0, 10, 'f'.repeat(64))]).conflicting)
+            .to.deep.equal([]);
+        expect(piecesToSend(plan(), [part(0, 9, 'f'.repeat(64)), part(0, '10')]).conflicting)
+            .to.have.length(1);
+    });
+
     it('ignores pieces belonging to another file hash', function () {
         const foreign = { ...part(0, 10), fileHash: 'f'.repeat(64) };
         expect(piecesToSend(plan(), [foreign]).missingParts).to.deep.equal([0, 1, 2]);

@@ -69,6 +69,12 @@ function getStatusWithTimeout(sdk, explorer){
     });
 }
 
+function listTickCoinActiveAt(status, coin, threshold){
+    const tip = status && status.last_block && status.last_block[coin];
+    if(!Number.isFinite(tip)) return null;
+    return tip + 1 >= threshold;
+}
+
 async function isListTickCoinActive(sdk){
     let threshold;
     try {
@@ -82,8 +88,7 @@ async function isListTickCoinActive(sdk){
     if(!explorer || typeof explorer.getStatus !== 'function') return false;
     try {
         const status = await getStatusWithTimeout(sdk, explorer);
-        const tip = status && status.last_block && status.last_block[explorer.coin];
-        return Number.isFinite(tip) && tip + 1 >= threshold;
+        return listTickCoinActiveAt(status, explorer.coin, threshold) === true;
     } catch (e) {
         return false;
     }
@@ -95,5 +100,6 @@ module.exports = {
     coinQualifierRoot,
     parseTickCoinItem,
     isTickCoinRestWellFormed,
+    listTickCoinActiveAt,
     isListTickCoinActive,
 };

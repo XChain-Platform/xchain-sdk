@@ -93,6 +93,13 @@ function normalizeActionFields(context, actionName, params) {
             fields.ITEM = fields.ITEM.map(i => String(i));
     }
 
+    // [3d2] VOTE v0 CALLBACK_PARAMS is a JSON array on the wire (the indexer
+    // refuses anything else as a binding poll). serialize() String()-joins an
+    // array pushed into a plain field, so ['1'] would reach the wire as the bare
+    // scalar 1; encode it here, matching voting.createPollParams.
+    if (actionName === 'VOTE' && Array.isArray(fields.CALLBACK_PARAMS))
+        fields.CALLBACK_PARAMS = JSON.stringify(fields.CALLBACK_PARAMS);
+
     // [3e] LEGS (multi-destination SEND, multi-tick DESTROY/AIRDROP): each
     // leg is its own field map, so it needs the same camelCase->UPPER_SNAKE
     // and numeric normalization the top-level map gets. Mis-shaped entries

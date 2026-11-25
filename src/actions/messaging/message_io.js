@@ -188,6 +188,9 @@ module.exports = {
             params: actionParams,
             encoder
         });
+        if (actionResult.signable === false)
+            throw new SDKMessagingError('ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION',
+                'a Taproot envelope message must be signed and broadcast through submitAction');
 
         // Reconcile the encoder's outputs and fee on every wallet; a missing network only means an address it cannot parse authorizes nothing
         let network;

@@ -70,7 +70,8 @@ const {
 const { tokenField } = require('./mint.js');
 const { ALLOWED_COINS, getCoinConfig } = require('../../coins/index.js');
 const { GAS_TICK } = require('../../protocol/constants.js');
-const listTickCoin = require('../../protocol/list_tick_coin.js');
+const { listTickCoinActiveAt } = require('../../protocol/list_tick_coin.js');
+const { activationThreshold } = require('../activation.js');
 const Utility = require('../../utils/utility.js');
 const { parseCoinCode } = require('../../utils/endpoints.js');
 const { tickCoinPrefixVerdict } = require('./issue/tick_coin_prefix.js');
@@ -79,24 +80,6 @@ const { checkIssueStoredWidths, checkMinDepthWidth } = require('./issue/stored_w
 
 const util = new Utility();
 const LIST_TICK_COIN_ACTIVATION_TIMEOUT_MS = 2000;
-const readListTickCoinActive = listTickCoin.isListTickCoinActive;
-
-function activationSdk(sdk, failed) {
-    const explorer = sdk && sdk.explorer;
-    if (!explorer || typeof explorer.getStatus !== 'function') return sdk;
-    const sdkView = Object.create(sdk);
-    const explorerView = Object.create(explorer);
-    explorerView.getStatus = async (...args) => {
-        try {
-            return await explorer.getStatus(...args);
-        } catch (e) {
-            failed.value = true;
-            throw e;
-        }
-    };
-    sdkView.explorer = explorerView;
-    return sdkView;
-}
 
 function withActivationTimeout(promise) {
     promise.catch(() => {});
@@ -113,19 +96,22 @@ function withActivationTimeout(promise) {
     });
 }
 
-async function listTickCoinActivation(sdk) {
-    const failed = { value: false };
+async function listTickCoinActivation(ctx) {
+    let threshold;
     try {
-        const active = await withActivationTimeout(Promise.resolve().then(
-            () => readListTickCoinActive(activationSdk(sdk, failed))
-        ));
-        return { active, unavailable: failed.value };
+        threshold = activationThreshold('LIST_TICK_COIN', ctx.sdk);
     } catch (e) {
-        return { active: false, unavailable: true };
+        return { active: false, unavailable: false };
     }
+    if (!Number.isFinite(threshold)) return { active: false, unavailable: false };
+    if (threshold === 0) return { active: true, unavailable: false };
+    const explorer = ctx.sdk && ctx.sdk.explorer;
+    const response = await ctx.fetch('ISSUE_TICK_COIN_PREFIX', ['status'], () =>
+        withActivationTimeout(Promise.resolve().then(() => explorer.getStatus())));
+    if (!response.ok) return { active: false, unavailable: true };
+    const active = listTickCoinActiveAt(response.value, explorer.coin, threshold);
+    return { active: active === true, unavailable: active === null };
 }
-
-listTickCoin.isListTickCoinActive = async (sdk) => (await listTickCoinActivation(sdk)).active;
 
 // The indexer's RESERVED_TICKS: the coin roots plus the gas tick, matched against
 // the upper-cased wire tick (config.js in xchain-indexer builds the same list).
@@ -236,7 +222,7 @@ function checkTickRules(ctx, tick, token) {
 
 async function checkTickCoinPrefix(ctx, tick, token) {
     let activation = { active: false, unavailable: false };
-    if (String(ctx.parsed.version) === '0') activation = await listTickCoinActivation(ctx.sdk);
+    if (String(ctx.parsed.version) === '0') activation = await listTickCoinActivation(ctx);
     if (activation.unavailable) {
         ctx.addUnverified('ISSUE_TICK_COIN_PREFIX', 'activation lookup unavailable');
         return;

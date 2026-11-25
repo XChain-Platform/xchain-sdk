@@ -167,9 +167,21 @@ function readMetaLiterals(metaObj) {
         nonStringLiteral: [],   // keys present whose value is a literal but not a string
         line: (metaObj.loc && metaObj.loc.start && metaObj.loc.start.line) || null
     };
-    for (let p of metaObj.properties) {
+    let lastIndexByKey = new Map();
+    for (let i = 0; i < metaObj.properties.length; i++) {
+        let p = metaObj.properties[i];
+        let key = p.key && (p.key.name || p.key.value);
+        if (key === 'name' || key === 'description' || key === 'version') {
+            lastIndexByKey.set(key, i);
+        }
+    }
+    for (let i = 0; i < metaObj.properties.length; i++) {
+        let p = metaObj.properties[i];
         let key = p.key && (p.key.name || p.key.value);
         if (key !== 'name' && key !== 'description' && key !== 'version') continue;
+        // Object literal properties are evaluated in source order, so only the
+        // last occurrence determines the value the chain observes.
+        if (lastIndexByKey.get(key) !== i) continue;
         let v = p.value;
         if (v && v.type === 'Literal' && typeof v.value === 'string') out[key] = v.value;
         else if (v && v.type === 'Literal') out.nonStringLiteral.push(key);

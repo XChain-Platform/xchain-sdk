@@ -21,6 +21,19 @@
 const mathjs = require('mathjs');
 const { SDKValidationError } = require('../errors.js');
 
+function isNumericValue(value){
+    return typeof value === 'bigint' || (!isNaN(parseFloat(value)) && isFinite(value));
+}
+
+// Canonical decimal spelling used by the action composer on numeric wire fields.
+// This helper deliberately does not apply the unsafe-JS-number refusal because
+// callers that only estimate size must retain their existing no-throw behavior.
+function wireNumberString(value){
+    if(value === null || value === undefined || value === '' || !isNumericValue(value))
+        return value;
+    return mathjs.format(mathjs.bignumber(String(value).trim()), { notation: 'fixed' });
+}
+
 // The amount shape rule without the stored-width refusal: the indexer's
 // isValidAmountMergeFormat, which judges a raw SEND or DESTROY leg before legs sharing
 // a key are summed. Runs with `this` bound to a Utility. It is attached below as a
@@ -61,7 +74,7 @@ function isValidAmountMergeFormat(decimals, amount){
 
 module.exports = {
     isNumeric(value){
-        return typeof value === 'bigint' || (!isNaN(parseFloat(value)) && isFinite(value));
+        return isNumericValue(value);
     },
 
     isFloat(value){
@@ -222,7 +235,7 @@ module.exports = {
                         'digits), so its value may have been already rounded before the SDK ' +
                         'saw it; send an amount of this size as a decimal string',
                         { field: name });
-                data[name] = mathjs.format(mathjs.bignumber(String(value).trim()), { notation: 'fixed' });
+                data[name] = wireNumberString(value);
             }
         }
         return data;
@@ -242,4 +255,7 @@ module.exports = {
 
 Object.defineProperty(module.exports, 'isValidAmountMergeFormat', {
     value: isValidAmountMergeFormat, enumerable: false, writable: false, configurable: false,
+});
+Object.defineProperty(module.exports, 'wireNumberString', {
+    value: wireNumberString, enumerable: false, writable: false, configurable: false,
 });

@@ -26,6 +26,11 @@ require('./apply_bufferutils_patch');
 const { getNetwork } = require('../protocol/networks.js');
 const { SDKWalletError } = require('./errors.js');
 const { installMethods } = require('./install_methods.js');
+const keyDerivationMethods = require('./wallet/key_derivation.js');
+const multisigSigningMethods = require('./wallet/multisig_signing.js');
+const psbtSigningMethods = require('./wallet/psbt_signing.js');
+const psbtInspectionMethods = require('./wallet/psbt_inspection.js');
+const authCallbackMethods = require('./wallet/auth_callbacks.js');
 
 class WalletUtils {
 
@@ -53,6 +58,13 @@ class WalletUtils {
     }
 }
 
-installMethods(WalletUtils.prototype, require('./wallet/key_derivation.js'), require('./wallet/multisig_signing.js'), require('./wallet/psbt_signing.js'), require('./wallet/psbt_inspection.js'));
+installMethods(
+    WalletUtils.prototype,
+    keyDerivationMethods,
+    multisigSigningMethods,
+    psbtSigningMethods,
+    psbtInspectionMethods,
+    authCallbackMethods
+);
 
 module.exports = WalletUtils;
