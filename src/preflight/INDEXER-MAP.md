@@ -85,14 +85,6 @@ commit, not a re-pin back.
 
 **Pins taken at indexer commit:** `33fbabce2`
 
-(Not re-anchored 2026-11-22. The `batch` pin alone moves to `8047029e`, the hash of indexer
-`b89e4dc55`, where a BATCH fee quote reads a filling ORDER or SWAP fee from its original action
-index. The anchor stays on `33fbabce2`; the review log below records the seven hashed parts.)
-
-(Not re-anchored 2026-11-22. The `batch` pin alone moves to `ed92d5a2`, the hash of indexer
-`fea02d561`, the mandatory-native BATCH fee quote, which lands on develop paired with this
-commit; the review log below says what was read. The anchor stays on `33fbabce2`.)
-
 (Not re-anchored 2026-11-19. The `batch` pin alone moves to `1c42ba29`, the hash of indexer
 `a11e0d7be`, a commit of the next review-round branch that sits ahead of this anchor and is not yet
 on origin develop; the other fifteen rows hash as pinned at both commits. The anchor stays on
@@ -658,7 +650,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace` |
 | `checks/dividend.js` | `src/actions/dividend/` | `6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c` |
-| `checks/batch.js` | `src/actions/batch/` | `8047029e85b6f17bec53abed2d57c50a13ea46f41c51734e411b7e9bfe8554c4` |
+| `checks/batch.js` | `src/actions/batch/` | `1c42ba29d46e2d5f6ef9689c90336c8fea2d68f841abf1063f79878b7b1b11d2` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `2d8585841185d9948b841eb078f55c843ea6df0801206c6778005a51bf4bcf31` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `cb8b7bf31b80689ec2c7c53139082b7123f2c9af97becfbb64eb0cf3eb3671af` |
 | `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
@@ -689,57 +681,6 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
-
-### 2026-11-22 - a filling BATCH offer reads its fee from the originating action
-
-The `batch` pin moves from `ed92d5a2` to `8047029e`, hashed from committed indexer `b89e4dc55`
-by `node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` and read from the map anchor
-`33fbabce2` through that HEAD. The gate printed these seven normalized parts:
-
-    b19e6a088facfac26bd67855a59bfddbb1d28f6bbbfff0149724979c00b6d039  fees.js
-    f5c765aa7b605772050d90c6c4d61650df40e9b04e5aec39f617a7b951067e00  index.js
-    693aa2d033af778c86089f2113e802c666c5fbe2642d765ea90766ea39cd6b75  limits.js
-    321cf64a145bfb338c519663c6a2d97c7e4786e83c4070271c8ea5dca22aff4c  mint_cap.js
-    96b78122449efed596ed53535d9aedc481350077728a7a958c3cbd2858fea76b  probe.js
-    d236111c50707f972a4909c5c0ce244b4fa0a10810a48ae28ea9f755b1ceda26  sub_command.js
-    582b7844ae32d30d5c600120dab7985c8f06a90688e01d0131ee86aa108c7ecc  validate.js
-
-Only `index.js` and `probe.js` move from the preceding pin. `dispatchSubCommands` now passes the
-sub-command's primary verdict snapshot into `recordSubFee`, which uses its original action index
-after a filling ORDER or SWAP replaces `ACTION_INDEX` with the match index. This changes which
-already-staged fee a mandatory-native BATCH quote reports. It does not change command dispatch,
-status, validation, persisted rows, or any check in `checks/batch.js`.
-
-On a decoded transaction `collect` is false. On the SDK's BATCH pre-flight path
-`BATCH_FEE_QUOTE` is false, so `PROBE_BATCH_FEES` is absent and `recordSubFee` returns before the
-new lookup. The only observable change is the public quote amount for a filling offer, not a
-client-visible validity rule. NO CLIENT CHECK MOVES.
-
-**Direction: NEUTRAL for validity.** One row re-pins and the anchor stays.
-
-### 2026-11-22 - a mandatory-native BATCH fee quote dispatches EXECUTE and records each sub-command's fee
-
-The `batch` pin moves from `1c42ba29` to `ed92d5a2`, hashed from the committed indexer branch at
-`fea02d561` by `node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` and read against
-the indexer develop tip `9f6d7aafb` it sits on. Of the seven parts `index.js` and `probe.js` move;
-`fees.js`, `limits.js`, `mint_cap.js`, `sub_command.js` and `validate.js` hash as before.
-
-- **BATCH, `batch/index.js`:** the structural VM refusal on the inert-guard path now lets an
-  `EXECUTE` sub-command through only when `data['BATCH_FEE_QUOTE']` is true, a flag set by nothing
-  but `computeFeeQuote`'s synthetic transaction for a mandatory-native (LTC, DOGE) BATCH quote. Every
-  other forbidden sub-action, and `EXECUTE` on every other run, is refused as before. When the probe
-  collectors are seeded (`collect`, from `DRY_RUN`), each sub-command's staged fee is recorded after
-  it runs.
-- **BATCH, `batch/probe.js`:** `seedProbeCollectors` seeds `PROBE_BATCH_FEES` only under
-  `BATCH_FEE_QUOTE`, and the new `recordSubFee` returns at once when it is absent, so a
-  feequote, preflight or feequotedryrun run without the flag writes nothing new.
-
-**Client side:** on a decoded transaction neither `DRY_RUN` nor `BATCH_FEE_QUOTE` is set, so no
-verdict, error text or fee written to a block moves. The pre-flight surface never sets
-`BATCH_FEE_QUOTE`, so `applyTier1` reads the same `status` and `subCommands`, and BATCH stays in
-`TIER1_DENYLIST` (see the note beside it in `src/preflight/constants.js`). NO CLIENT CHECK MOVES.
-
-**Direction: NEUTRAL for validity.** One row re-pins and the anchor stays.
 
 ### 2026-11-19 - the client mirrors the 250-character amount width on stored amounts and lone SEND and DESTROY legs
 
