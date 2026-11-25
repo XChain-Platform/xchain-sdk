@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.2] - 2026-11-25
+
+### Added
+- Added wallet login challenges, login address proofs and BIP-322 simple Taproot message signing.
+- Added wallet action request helpers, an in-memory wallet callback store and a lightweight auth entry point.
+
+### Changed
+- Made the connect codec an optional peer dependency that loads lazily.
+- Synced the embedded contract templates with xchain-contracts.
+
+### Fixed
+- Bounded deep regular expression literals that follow `await` in deploy lint, matching the indexer.
+- Serialized an array VOTE callbackParams as a JSON array.
+- Ordered multipart resume action indexes numerically and failed a file wait at once on an invalid action index.
+
 ### Added
 - Added BIP-322 simple message signing and verification for taproot addresses through the `format: 'bip322-simple'` option of `sdk.auth.signMessage`.
 - Added `sdk.auth.verifyLogin` to check a wallet login and every shared address in its own format within a 60 minute window without throwing.
