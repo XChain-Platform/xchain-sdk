@@ -24,12 +24,14 @@ const { MAX_U64, MAX_SAFE_BIG, verifyU64, narrowU64 } = require('./u64')
 
 // bip174 3 exposes only its public package root and bitcoinjs-lib 7 already
 // uses its BigInt serializers. Load these v2 internals only for the v6 fallback.
-const bip174Tools = IS_BITCOINJS_V7 || typeof module.require !== 'function'
+// The specifier is joined at run time because bundlers resolve every literal
+// require, even an unreachable one, and bip174 3 refuses these paths, which
+// stopped Vite production builds of any consumer (xchain-sdk issue 41).
+const loadBip174V2Converter = (name) => IS_BITCOINJS_V7 || typeof module.require !== 'function'
     ? null
-    : module.require('bip174/src/lib/converter/tools')
-const witnessUtxoConverter = IS_BITCOINJS_V7 || typeof module.require !== 'function'
-    ? null
-    : module.require('bip174/src/lib/converter/input/witnessUtxo')
+    : module.require(['bip174', 'src', 'lib', 'converter', name].join('/'))
+const bip174Tools = loadBip174V2Converter('tools')
+const witnessUtxoConverter = loadBip174V2Converter('input/witnessUtxo')
 
 // Probe with a 2^53 uint64, one past the stock serializers' ceiling: stock
 // code throws, the patched reader returns it. Idempotence guard (the patch
