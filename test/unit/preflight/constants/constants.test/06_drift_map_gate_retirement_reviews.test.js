@@ -348,7 +348,7 @@ function guardGasBillingReview() {
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     expect(entry).to.include('the `batch` pin moves from `ca3e05eb` to `cb526c2f`');
     expect(entry).to.include('billGuardGas');
-    expect(text).to.include('**Pins taken at indexer commit:** `33fbabce2`');
+    expect(text).to.include('(Re-anchored 2026-11-18 to `33fbabce2`');
     expect(text).to.include('(Re-anchored 2026-11-18 to `33fbabce2`');
     expect(entry).to.include('NO CLIENT CHECK MOVES');
     expect(entry).to.include('**Direction: NEUTRAL for validity.**');
@@ -365,7 +365,7 @@ function coinpayDryRunStatusReview() {
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     expect(entry).to.include('The `batch` pin moves from `cb526c2f` to `1c42ba29`');
     expect(entry).to.include('`a11e0d7be`');
-    expect(text).to.include('**Pins taken at indexer commit:** `33fbabce2`');
+    expect(text).to.include('(Re-anchored 2026-11-18 to `33fbabce2`');
     expect(text).to.include('(Not re-anchored 2026-11-19.');
     expect(entry).to.include('NO CLIENT CHECK MOVES');
     expect(entry).to.include('**Direction: NEUTRAL for validity.**');
