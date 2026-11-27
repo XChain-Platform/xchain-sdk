@@ -24,15 +24,28 @@ function entryOf(text, heading) {
 function batchFeeQuoteReview() {
     const text = fs.readFileSync(REAL_MAP, 'utf8');
     expect(parseMap(REAL_MAP).find((r) => r.handler === 'src/actions/batch/').hash)
-        .to.equal('8047029e85b6f17bec53abed2d57c50a13ea46f41c51734e411b7e9bfe8554c4');
+        .to.equal('ffabf6745abe572be6405f939424612e42c399dcbf40704a5bb38f812ed73bae');
     const heading = '### 2026-11-22 - a mandatory-native BATCH fee quote dispatches EXECUTE';
     expect(text).to.include(heading);
     const entry = entryOf(text, heading).replace(/\s+/g, ' ');
     expect(entry).to.include('The `batch` pin moves from `1c42ba29` to `ed92d5a2`');
     expect(entry).to.include('`fea02d561`');
     expect(entry).to.include('BATCH_FEE_QUOTE');
-    expect(text).to.include('**Pins taken at indexer commit:** `33fbabce2`');
+    expect(text).to.include('**Pins taken at indexer commit:** `441c6c84e`');
     expect(text).to.include('(Not re-anchored 2026-11-22.');
+    expect(entry).to.include('NO CLIENT CHECK MOVES');
+    expect(entry).to.include('**Direction: NEUTRAL for validity.**');
+}
+
+function batchFeeQuoteActivationReview() {
+    const text = fs.readFileSync(REAL_MAP, 'utf8');
+    const heading = '### 2026-11-27 - a mandatory-native BATCH quote dispatches EXECUTE only after activation';
+    expect(text).to.include(heading);
+    const entry = entryOf(text, heading).replace(/\s+/g, ' ');
+    expect(entry).to.include('The `batch` pin moves from `8047029e` to `ffabf674`');
+    expect(entry).to.include('`441c6c84e`');
+    expect(entry).to.include('EXECUTE_NATIVE_METERED_GAS_ACTIVATION');
+    expect(entry).to.include('BATCH_FEE_QUOTE');
     expect(entry).to.include('NO CLIENT CHECK MOVES');
     expect(entry).to.include('**Direction: NEUTRAL for validity.**');
 }
@@ -53,4 +66,5 @@ function batchMatchFeeReview() {
 describe('pre-flight constants + registry drift map (§8.5) gate retirement reviews', function () {
     it('pins and records the mandatory-native BATCH fee quote review', batchFeeQuoteReview);
     it('pins and records the filling-offer fee lookup review', batchMatchFeeReview);
+    it('pins and records the BATCH fee quote activation review', batchFeeQuoteActivationReview);
 });

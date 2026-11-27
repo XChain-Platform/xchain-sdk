@@ -83,7 +83,11 @@ a green gate here against an indexer tree WITHOUT that change as the finding it
 is: the nine rows will report drift, and the answer is the missing indexer
 commit, not a re-pin back.
 
-**Pins taken at indexer commit:** `33fbabce2`
+**Pins taken at indexer commit:** `441c6c84e`
+
+(Re-anchored 2026-11-27 to `441c6c84e`, the committed indexer tip containing the activation-bound
+mandatory-native BATCH fee quote review below. Only the `batch` pin moves, from `8047029e` to
+`ffabf674`; the other fifteen rows match this tree. The previous anchor `33fbabce2` is an ancestor.)
 
 (Not re-anchored 2026-11-22. The `batch` pin alone moves to `8047029e`, the hash of indexer
 `b89e4dc55`, where a BATCH fee quote reads a filling ORDER or SWAP fee from its original action
@@ -575,7 +579,7 @@ stands and only its anchor is unreachable.)
 That anchor is the left-hand side of the review. To see what a drifted
 handler actually did since it was pinned:
 
-    git -C ../xchain-indexer diff 33fbabce2..HEAD -- src/actions/<handler>.js
+    git -C ../xchain-indexer diff 441c6c84e..HEAD -- src/actions/<handler>.js
 
 Re-anchor this line whenever you re-pin the table, in the same edit. The gate
 asserts it: `checkAnchorConsistency` reads the commit id out of the command
@@ -658,7 +662,7 @@ behind by a move is a finding instead of the value that happens to be read.
 | `checks/trading.js` (SWAP) | `src/actions/swap/` | `93af1143be284be5bd2007ab4b8f0df509065ece59367bcbd737648d7134939e` |
 | `checks/airdrop.js` | `src/actions/airdrop/` | `188c409ef4027a2291657c4db6050f72c3921bd0ae43f01d7ea03dfc6f7d7ace` |
 | `checks/dividend.js` | `src/actions/dividend/` | `6f30915832b6c50d037914f9a0bd58f9d9ab72cc4ea926fd27aec114a99b094c` |
-| `checks/batch.js` | `src/actions/batch/` | `8047029e85b6f17bec53abed2d57c50a13ea46f41c51734e411b7e9bfe8554c4` |
+| `checks/batch.js` | `src/actions/batch/` | `ffabf6745abe572be6405f939424612e42c399dcbf40704a5bb38f812ed73bae` |
 | `checks/misc.js` (DEPOSIT) | `src/actions/deposit.js` | `2d8585841185d9948b841eb078f55c843ea6df0801206c6778005a51bf4bcf31` |
 | `checks/misc.js` (WITHDRAW) | `src/actions/withdraw.js` | `cb8b7bf31b80689ec2c7c53139082b7123f2c9af97becfbb64eb0cf3eb3671af` |
 | `universal.js` (PRICE v1 TICK, VALUE and FEE width) | `src/actions/price/` | `0b7385b14af8430c951e586eb2ec7955eee24d6189a15a25830cb133548aec62` |
@@ -689,6 +693,42 @@ agrees with it.
 
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
+
+### 2026-11-27 - a mandatory-native BATCH quote dispatches EXECUTE only after activation
+
+The `batch` pin moves from `8047029e` to `ffabf674`, hashed from committed indexer
+`441c6c84e` by `node bin/preflight_handler_dirs.js <indexer> src/actions/batch/` and read from
+the previous anchor `33fbabce2` through that HEAD. Of the seven normalized parts only `index.js`
+moves from the preceding pin:
+
+    b19e6a088facfac26bd67855a59bfddbb1d28f6bbbfff0149724979c00b6d039  fees.js
+    38f95b3df5b91fbb3b6f2dc563e8cfcda70a5170efd6ce02966ae1c7a059336b  index.js
+    693aa2d033af778c86089f2113e802c666c5fbe2642d765ea90766ea39cd6b75  limits.js
+    321cf64a145bfb338c519663c6a2d97c7e4786e83c4070271c8ea5dca22aff4c  mint_cap.js
+    96b78122449efed596ed53535d9aedc481350077728a7a958c3cbd2858fea76b  probe.js
+    d236111c50707f972a4909c5c0ce244b4fa0a10810a48ae28ea9f755b1ceda26  sub_command.js
+    582b7844ae32d30d5c600120dab7985c8f06a90688e01d0131ee86aa108c7ecc  validate.js
+
+The full `33fbabce2..441c6c84e` range also contains the COINPAY dry-run status isolation,
+initial mandatory-native fee collection and filling-offer fee lookup already reviewed in the
+2026-11-19 and two 2026-11-22 entries below. Their client conclusions remain unchanged.
+
+- **BATCH, `batch/index.js`:** the mandatory-native fee quote exception that dispatches an
+  `EXECUTE` sub-command now also requires `EXECUTE_NATIVE_METERED_GAS_ACTIVATION` to be active at
+  the synthetic transaction's block index. Before activation the inert guard refuses that
+  sub-command as it did before the fee quote exception existed. At and after activation the quote
+  still executes it and records its settled metered fee.
+- **BATCH, `batch/probe.js`:** no bytes move from the preceding pin. Its collectors still create
+  `PROBE_BATCH_FEES` only for the synthetic `BATCH_FEE_QUOTE` run and return without fee work on
+  every other probe path.
+
+**Client side:** decoded transactions and the SDK pre-flight surface never set
+`BATCH_FEE_QUOTE`, so this activation condition cannot change their command dispatch, status or
+sub-command verdicts. BATCH remains in `TIER1_DENYLIST`, and `checks/batch.js` neither refuses nor
+allows a new transaction shape. The only observable change is the synthetic public quote below
+activation. NO CLIENT CHECK MOVES.
+
+**Direction: NEUTRAL for validity.** One row re-pins and the anchor moves.
 
 ### 2026-11-27 - the ISSUE coin-qualified tick check runs on every ISSUE format
 
