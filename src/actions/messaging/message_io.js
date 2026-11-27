@@ -183,14 +183,19 @@ module.exports = {
 
         const encoder = Object.assign({}, params.encoder);
         if (encoder.attachPrevTx === undefined) encoder.attachPrevTx = true;
-        let actionResult = await sdk.createAction({
+        const actionResult = await sdk.createAction({
             action: 'MESSAGE',
             params: actionParams,
             encoder
         });
-        if (actionResult.signable === false)
-            throw new SDKMessagingError('ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION',
-                'a Taproot envelope message must be signed and broadcast through submitAction');
+        if (actionResult.signable === false) {
+            const reason = actionResult.unsignableReason
+                || 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
+            const detail = reason === 'TWO_PHASE_SIGN_VIA_SUBMIT_ACTION'
+                ? 'a two-phase message must be signed and broadcast through submitAction'
+                : 'a Taproot envelope message must be signed and broadcast through submitAction';
+            throw new SDKMessagingError(reason, detail);
+        }
 
         // Reconcile the encoder's outputs and fee on every wallet; a missing network only means an address it cannot parse authorizes nothing
         let network;

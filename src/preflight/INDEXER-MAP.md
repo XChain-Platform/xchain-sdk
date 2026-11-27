@@ -690,6 +690,21 @@ agrees with it.
 A hash refresh is only honest if someone actually read the diff. What was
 read, and what it changed on the client side, goes here.
 
+### 2026-11-27 - the ISSUE coin-qualified tick check runs on every ISSUE format
+
+No handler pin moves. The SDK now applies `LIST_TICK_COIN` to ISSUE formats 0 through 7,
+matching `validateTickCoinPrefix`, whose call path and probe predicate have no FORMAT condition.
+The gate is active from genesis on regtest and at its pinned per-chain height on testnet, but it
+remains unarmed on mainnet. This supersedes the 2026-10-01 entry's statement that testnet is
+unarmed.
+
+The indexer predicate lives under `src/utility/list_tick/`, outside every mapped `src/actions/`
+hash row, so the drift gate cannot detect a change to it. The format coverage is bound by
+`test/unit/preflight/issue/issue_tick_coin_prefix.test.js`, while
+`test/unit/preflight/issue/tick_coin_prefix_verdict.test.js` binds candidate tick behavior.
+
+**Direction: WIDENS rejection, behind the LIST_TICK_COIN activation.**
+
 ### 2026-11-22 - a filling BATCH offer reads its fee from the originating action
 
 The `batch` pin moves from `ed92d5a2` to `8047029e`, hashed from committed indexer `b89e4dc55`

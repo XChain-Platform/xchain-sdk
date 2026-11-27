@@ -10,7 +10,7 @@ const VERDICT = 'invalid: TICK (reserved)';
 
 function reportFor(tick, { network = 'bitcoin-regtest', coin = 'RBTC', existing = false,
     lookupError = false, tokenPending = false, statusPending = false, statusError = false,
-    status, onStatus, preflight = 'report', timeoutMs } = {}) {
+    status, onStatus, preflight = 'report', timeoutMs, version = '0' } = {}) {
     const sdk = mockSdk({
         network,
         explorerSpec: {
@@ -30,7 +30,7 @@ function reportFor(tick, { network = 'bitcoin-regtest', coin = 'RBTC', existing 
         },
     });
     sdk.explorer.coin = coin;
-    return sdk.preflight(`ISSUE|0|${tick}|1000`, { source: 'me', preflight, timeoutMs });
+    return sdk.preflight(`ISSUE|${version}|${tick}|1000`, { source: 'me', preflight, timeoutMs });
 }
 
 const reservedFinding = (report) => report.findings.find(
@@ -63,6 +63,26 @@ function registerPrefixBehaviorTests() {
 
     it('passes an existing coin-qualified tick', async function () {
         const report = await reportFor('BTC:OLD', { existing: true });
+        expect(reservedFinding(report)).to.equal(undefined);
+    });
+
+    it('blocks fresh coin-qualified ticks on ISSUE formats 1 through 6', async function () {
+        for (const version of ['1', '2', '3', '4', '5', '6']) {
+            const report = await reportFor('BTC:FOO', { version });
+            expect(reservedFinding(report), `format ${version}`).to.include({
+                code: 'VALIDATOR_SEMANTICS', severity: 'error', message: VERDICT,
+            });
+        }
+    });
+
+    it('reports both the reservation and missing token on ISSUE format 7', async function () {
+        const report = await reportFor('BTC:FOO', { version: '7' });
+        expect(reservedFinding(report)).to.exist;
+        expect(report.findings.some((finding) => finding.code === 'TOKEN_NOT_FOUND')).to.equal(true);
+    });
+
+    it('passes an existing coin-qualified tick on an edit format', async function () {
+        const report = await reportFor('BTC:OLD', { existing: true, version: '1' });
         expect(reservedFinding(report)).to.equal(undefined);
     });
 
@@ -139,6 +159,19 @@ function registerActivationTipTests() {
         });
         const inactive = await reportFor('BTC:FOO', {
             network: 'bitcoin-testnet', coin: 'TBTC',
+            status: { last_block: { TBTC: 1000 } },
+        });
+        expect(reservedFinding(active)).to.exist;
+        expect(reservedFinding(inactive)).to.equal(undefined);
+    });
+
+    it('applies the testnet activation tip to ISSUE format 1', async function () {
+        const active = await reportFor('BTC:FOO', {
+            network: 'bitcoin-testnet', coin: 'TBTC', version: '1',
+            status: { last_block: { TBTC: 154776 } },
+        });
+        const inactive = await reportFor('BTC:FOO', {
+            network: 'bitcoin-testnet', coin: 'TBTC', version: '1',
             status: { last_block: { TBTC: 1000 } },
         });
         expect(reservedFinding(active)).to.exist;

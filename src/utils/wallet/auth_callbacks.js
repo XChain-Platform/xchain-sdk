@@ -101,8 +101,8 @@ function loginBindings(result, options) {
     return {
         nonce: parsed.parts.nonce,
         expected: {
-            appId: options.appId === undefined ? parsed.parts.appId : options.appId,
-            origin: options.origin === undefined ? parsed.parts.origin : options.origin,
+            appId: options.appId,
+            origin: options.origin,
             nonce: parsed.parts.nonce,
             maxAgeMs: options.maxAgeMs,
         },
@@ -110,6 +110,10 @@ function loginBindings(result, options) {
 }
 
 async function receiveLoginCallback(receiver, body, options, store) {
+    if (typeof options.appId !== 'string' || options.appId.length === 0
+        || typeof options.origin !== 'string' || options.origin.length === 0) {
+        return callbackFailure(body.id, 'Expected login appId/origin are required.');
+    }
     const result = loginResult(body);
     const bindings = loginBindings(result, options);
     if (bindings.error) return callbackFailure(body.id, bindings.error);

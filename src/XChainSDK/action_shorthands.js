@@ -20,6 +20,7 @@
 
 const EncoderClient = require('../clients/encoder.js');
 const LifecycleManager = require('../carrier/lifecycle_manager.js');
+const { reconcileSignableResult } = require('../carrier/reconcile_signable_result.js');
 const bitcoin = require('bitcoinjs-lib');
 const { SDKActionError } = require('../utils/errors.js');
 
@@ -73,7 +74,7 @@ function scopeSigningToUtxos(sdk, utxos) {
     return scoped;
 }
 
-function applyEncodedActionResult(result, encoded) {
+function applyEncodedActionResult(sdk, result, encoded, encoderOpts) {
     const compression = encoded.compression;
     if (compression && compression.compressed
         && (typeof compression.data !== 'string' || !compression.data.length
@@ -88,10 +89,26 @@ function applyEncodedActionResult(result, encoded) {
         result.unsignableReason = 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
         return;
     }
+    reconcileSignableResult(sdk, encoded, result.actionString, encoderOpts, {
+        customOutputs: encoderOpts.customOutputs,
+        label: 'createAction',
+        requireCarrier: true,
+    });
     result.psbt = encoded.psbt;
-    result.signable = true;
     if (encoded.carrierScripts !== undefined) result.carrierScripts = encoded.carrierScripts;
     if (compression !== undefined) result.compression = compression;
+    const twoPhase = encoded.encoding === 'P2SH' || encoded.encoding === 'P2WSH';
+    result.signable = !twoPhase;
+    if (twoPhase) result.unsignableReason = 'TWO_PHASE_SIGN_VIA_SUBMIT_ACTION';
+}
+
+function createActionRequest(result, encoderOpts) {
+    const request = EncoderClient.pickCreateTxOptions(encoderOpts, {
+        data: result.actionString,
+        pubkey: encoderOpts.pubkey,
+    });
+    if (request.attachPrevTx === undefined) request.attachPrevTx = true;
+    return request;
 }
 
 // Keep action delegates together so the public action surface stays easy to audit.
@@ -102,8 +119,8 @@ module.exports = {
      *  ACTION Methods
      */
 
-    // Create an action string and optionally encode it into a PSBT. Envelope pairs
-    // are returned as unsignable because submitAction owns their reveal lifecycle.
+    // Create an action string and optionally encode it into a checked PSBT. Replies
+    // that cannot be reconciled throw; managed two-phase results stay unsignable.
     async createAction(data) {
         // Compact ticker names and addresses to their `^<id>` wire form before
         // serializing (on by default; each falls back to the supplied value when an
@@ -115,10 +132,10 @@ module.exports = {
             params = await this.addressResolver.resolveActionParams(data.action, params);
             data = Object.assign({}, data, { params });
         }
-        let result = this.actions.createAction(data);
+        const result = this.actions.createAction(data);
 
         if (data.encoder && data.encoder.pubkey) {
-            let encoder = this.requireEncoder();
+            const encoder = this.requireEncoder();
             // Forward every optional createTx field through the ONE shared list
             // (EncoderClient.CREATE_TX_OPTION_FIELDS), never a hand-copied subset:
             // the hand-copied version had silently fallen behind createTx and was
@@ -126,11 +143,8 @@ module.exports = {
             // Same serialized-boundary gate submitAction crosses: a halt-class field
             // in any spelling is refused before the encoder is contacted.
             LifecycleManager.assertNoHaltClassFields(this, result.actionString);
-            let txResult = await encoder.createTx(EncoderClient.pickCreateTxOptions(data.encoder, {
-                data:   result.actionString,
-                pubkey: data.encoder.pubkey
-            }));
-            applyEncodedActionResult(result, txResult);
+            const txResult = await encoder.createTx(createActionRequest(result, data.encoder));
+            applyEncodedActionResult(this, result, txResult, data.encoder);
         }
 
         return result;

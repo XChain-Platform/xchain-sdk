@@ -18,9 +18,8 @@
  *
  ********************************************************************/
 
-const { reconcileEncoded, psbtPrevouts, feeQuoteAuthorizedOutput } = require('../carrier/reconcile_encoded.js');
 const { exactU64 } = require('../carrier/reconcile_encoded/script_matching.js');
-const { assertCarrierBinding, assertPhaseFundingBound } = require('../carrier/bind_action_carrier.js');
+const { reconcileSignableResult } = require('../carrier/reconcile_signable_result.js');
 const { nativeFeeQuoteSource, mergeNativeFeeOutputs } = require('../carrier/native_fee_source.js');
 const EncoderClient = require('../clients/encoder.js');
 const { SDKConfigError, SDKExplorerError } = require('../utils/errors.js');
@@ -103,81 +102,19 @@ function buildFeeEstimateRequest(result, encoderOpts, customOutputs) {
     return req;
 }
 
-// Bind the returned carrier to the action the caller asked the encoder to price.
-function assertFeeEstimateCarrier(feeResult, result, encoderOpts, reconcileNetwork) {
-    assertCarrierBinding({
-        psbt:           feeResult.psbt,
-        actionString:   result.actionString,
-        encoding:       feeResult.encoding,
-        carrierScripts: feeResult.carrierScripts,
-        callerIdentities: encoderOpts.pubkey,
-        rawData:        encoderOpts.rawData == null ? null : encoderOpts.rawData,
-        network:        reconcileNetwork,
-        label:          'fee estimate',
-    });
-}
-
-// Apply the same intent gate to an envelope reveal while keeping it local.
-function reconcileEnvelopeEstimateReveal(revealPsbt, reconcileIntent, phaseFunding) {
-    if (!revealPsbt) return;
-    reconcileEncoded(revealPsbt, Object.assign({}, reconcileIntent, {
-        label: 'envelope reveal',
-        customOutputs: [],
-        requiredSpends: phaseFunding,
-    }));
-}
-
 // Reconcile and annotate the fee result synchronously before it becomes signable.
 function reconcileFeeEstimate(sdk, feeResult, result, encoderOpts, customOutputs, nativeFeeQuote) {
     // Keep an envelope reveal local after using it to pin and reconcile both legs.
     // Envelope signing and recovery remain the responsibility of submitAction.
-    let revealPsbt = feeResult.revealPsbt;
+    const revealPsbt = feeResult.revealPsbt;
     delete feeResult.revealPsbt;
 
-    // The returned PSBT is documented as directly signable, and the encoder that
-    // authored it is a REMOTE service, so it gets the SAME fail-closed intent gate
-    // LifecycleManager.submitAction applies before it signs. Without this the
-    // blessed estimate-then-sign fast path was the one signing route in the SDK
-    // with no reconciliation on it, and a compromised encoder could swap outputs
-    // or drop change on it. Fail-closed: reconcileEncoded throws, so
-    // the single PSBT this method returns is one it could account for in full.
-    let reconcileNetwork;
-    try { reconcileNetwork = sdk.wallet.getBitcoinNetwork(); } catch (e) { reconcileNetwork = undefined; }
-    // The hub feeQuote output is added by the encoder, not listed in customOutputs,
-    // so authorize it from the caller's own quote. Phase-aware, as submitAction is: a
-    // chunked P2SH/P2WSH action is indexed from its reveal, so its funding PSBT pays no quote.
-    const quoteOutput = feeQuoteAuthorizedOutput(encoderOpts.feeQuote);
-    const twoPhase = feeResult.encoding === 'P2SH' || feeResult.encoding === 'P2WSH';
-    const reconcileIntent = {
-        network:             reconcileNetwork,
-        changeAddresses:     encoderOpts.change,
-        callerIdentities:    encoderOpts.pubkey,
-        maxFeeSats:          encoderOpts.maxFeeSats,
-        maxPhaseFundingSats: encoderOpts.maxPhaseFundingSats,
-    };
-    const reconciled = reconcileEncoded(feeResult.psbt, Object.assign({}, reconcileIntent, {
-        customOutputs:       twoPhase ? []
-            : (quoteOutput ? customOutputs.concat([quoteOutput]) : customOutputs),
-        label:               'fee estimate',
-        // Single-phase only: an estimate carries phase 1 (plus an envelope's reveal
-        // when the encoder answered as a pair), never a chunked action's phase 2.
-        phaseShapes: twoPhase ? ['p2sh', 'p2wsh'] : (revealPsbt ? ['p2tr'] : []),
-        phaseSpends: revealPsbt ? (psbtPrevouts(revealPsbt) || []) : null,
-    }));
-    reconcileEnvelopeEstimateReveal(revealPsbt, reconcileIntent, reconciled.phaseFunding);
-
-    // ... and the same carrier bind, for the same reason. The gate above reads
-    // outputs, values and the fee and deliberately never reads the data carrier,
-    // so a PSBT that reconciles perfectly can still carry a different command
-    // than the one this method was asked to price. A signable PSBT handed back
-    // unbound is the identical exposure to signing it here.
-    assertFeeEstimateCarrier(feeResult, result, encoderOpts, reconcileNetwork);
-    assertPhaseFundingBound({
-        phaseFunding: reconciled.phaseFunding,
-        carrierScripts: feeResult.carrierScripts,
-        encoding: feeResult.encoding,
-        network: reconcileNetwork,
+    reconcileSignableResult(sdk, feeResult, result.actionString, encoderOpts, {
+        customOutputs,
         label: 'fee estimate',
+        revealPsbt,
+        // Estimates bind any carrier present but do not yet require one.
+        requireCarrier: false,
     });
 
     feeResult.actionString = result.actionString;

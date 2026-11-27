@@ -273,10 +273,10 @@ export interface ActionResult {
     encoding?: EncodingType;
     /** Unsigned PSBT in hex, or null when an envelope pair must use submitAction */
     psbt?: string | null;
-    /** Whether the returned PSBT may be signed directly */
+    /** True only after outputs, change, fee, and data carrier match the request */
     signable?: boolean;
     /** Why an encoded result must use the managed submission path */
-    unsignableReason?: 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION';
+    unsignableReason?: 'ENVELOPE_PAIR_SIGN_VIA_SUBMIT_ACTION' | 'TWO_PHASE_SIGN_VIA_SUBMIT_ACTION';
     /** Redeem scripts required to verify and complete a chunked carrier */
     carrierScripts?: string[];
     /** Exact bytes reported when the encoder compressed the payload */
@@ -1840,7 +1840,8 @@ export declare class XChainSDK {
 
     /**
      * Create an XChain action string and, when `data.encoder.pubkey` is set,
-     * encode it into an unsigned PSBT via the encoder service.
+     * encode it into an unsigned PSBT via the encoder service. Throws
+     * `SDKActionError` when the encoder reply cannot be reconciled to the request.
      */
     createAction(data: CreateActionData): Promise<ActionResult>;
 
@@ -2746,7 +2747,9 @@ export interface CallbackBody {
 
 export interface ReceiveCallbackOptions {
     store?: CallbackStore;
+    /** Login callbacks are rejected unless this is the receiver's own app id */
     appId?: string;
+    /** Login callbacks are rejected unless this is the receiver's own origin */
     origin?: string;
     maxAgeMs?: number;
 }

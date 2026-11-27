@@ -221,15 +221,16 @@ function checkTickRules(ctx, tick, token) {
 }
 
 async function checkTickCoinPrefix(ctx, tick, token) {
-    let activation = { active: false, unavailable: false };
-    if (String(ctx.parsed.version) === '0') activation = await listTickCoinActivation(ctx);
+    const candidate = tickCoinPrefixVerdict({ tick, active: true, token: null });
+    if (!candidate) return;
+    const activation = await listTickCoinActivation(ctx);
     if (activation.unavailable) {
         ctx.addUnverified('ISSUE_TICK_COIN_PREFIX', 'activation lookup unavailable');
         return;
     }
     const result = tickCoinPrefixVerdict({
         tick,
-        active: String(ctx.parsed.version) === '0' && activation.active,
+        active: activation.active,
         token,
     });
     if (result && result.unverified) {

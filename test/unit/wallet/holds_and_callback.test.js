@@ -20,12 +20,12 @@ function authUtils() {
     return new XChainSDK({ network: NETWORK }).auth;
 }
 
-function signedLogin(auth, nonce) {
+function signedLogin(auth, nonce, { appId = APP_ID, origin = ORIGIN } = {}) {
     const probe = auth.signMessage('address probe', WIF);
     const timestamp = Date.now() - 100;
     const expiresAt = Date.now() + 60_000;
     const challenge = [
-        'XChain Sign-In v2', APP_ID, ORIGIN, probe.address, nonce, timestamp, expiresAt,
+        'XChain Sign-In v2', appId, origin, probe.address, nonce, timestamp, expiresAt,
     ].join(' / ');
     const signed = auth.signMessage(challenge, WIF);
     const entry = {
@@ -34,8 +34,8 @@ function signedLogin(auth, nonce) {
         challenge,
         challengeParts: {
             version: 2,
-            appId: APP_ID,
-            origin: ORIGIN,
+            appId,
+            origin,
             address: signed.address,
             nonce,
             timestamp,
@@ -226,6 +226,36 @@ it('AuthUtils.receiveCallback() rejects replay, bad bindings, and bad claims', a
     const malformed = await auth.receiveCallback(callback(result, 'not-base64url'), { store });
     assert.strictEqual(malformed.accepted, false);
     assert.match(malformed.error, /claim/i);
+});
+
+it('AuthUtils.receiveCallback() requires receiver-pinned login bindings', async function () {
+    const auth = authUtils();
+    let verifyCalls = 0;
+    const originalVerify = auth.verifyLogin.bind(auth);
+    auth.verifyLogin = function (...args) {
+        verifyCalls += 1;
+        return originalVerify(...args);
+    };
+    const cases = [
+        { options: {}, challenge: { appId: 'foreign-app', origin: 'foreign-origin' } },
+        { options: {}, challenge: {} },
+        { options: { appId: APP_ID }, challenge: {} },
+        { options: { origin: ORIGIN }, challenge: {} },
+        { options: { appId: APP_ID, origin: '' }, challenge: {} },
+    ];
+
+    for (const sample of cases) {
+        const store = createMemoryCallbackStore();
+        const nonce = store.issueNonce('cross-device');
+        const result = signedLogin(auth, nonce, sample.challenge);
+        const received = await auth.receiveCallback(callback(result),
+            Object.assign({ store }, sample.options));
+        assert.strictEqual(received.accepted, false);
+        assert.match(received.error, /appId\/origin are required/);
+        assert.strictEqual(store.get(REQUEST_ID), null);
+        assert.deepStrictEqual(store.takeNonce(nonce), { mode: 'cross-device' });
+    }
+    assert.strictEqual(verifyCalls, 0);
 });
 
 it('AuthUtils.receiveCallback() stores other successes and wallet rejections', async function () {

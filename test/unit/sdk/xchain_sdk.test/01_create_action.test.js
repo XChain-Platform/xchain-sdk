@@ -12,7 +12,13 @@
 
 const { expect } = require('chai');
 const sinon   = require('sinon');
+const bitcoin = require('bitcoinjs-lib');
 const XChainSDK = require('../../../../src/XChainSDK.js');
+
+const NET = bitcoin.networks.regtest;
+const OWN_HASH = Buffer.alloc(20, 0xab);
+const OWN_SCRIPT = bitcoin.payments.p2wpkh({ hash: OWN_HASH, network: NET }).output;
+const CHUNK_CALLER = bitcoin.payments.p2wpkh({ hash: OWN_HASH, network: NET }).address;
 
 // Helpers
 
@@ -39,10 +45,64 @@ function mockEncoder(sdk, returnVal = {}) {
         .filter(m => !m.startsWith('_') && m !== 'constructor');
     for (const m of methods) {
         if (typeof encoder[m] === 'function') {
-            sinon.stub(encoder, m).resolves(returnVal);
+            const stub = sinon.stub(encoder, m);
+            if (typeof returnVal === 'function') stub.callsFake(returnVal);
+            else stub.resolves(returnVal);
         }
     }
     return encoder;
+}
+
+function actionCarrier(prevTxid, actionString) {
+    const tagged = Buffer.concat([
+        Buffer.from('XCHN'), bitcoin.script.compile([Buffer.from(actionString, 'utf8')]),
+    ]);
+    const cipher = require('crypto').createCipheriv(
+        'aes-128-ctr', prevTxid.substr(0, 16), prevTxid.substr(16, 16));
+    return bitcoin.payments.embed({
+        data: [Buffer.concat([cipher.update(tagged), cipher.final()])],
+    }).output;
+}
+
+function fundingPsbt(req, options = {}) {
+    const prev = new bitcoin.Transaction();
+    prev.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+    prev.addOutput(OWN_SCRIPT, 100000);
+    const psbt = new bitcoin.Psbt({ network: NET });
+    psbt.addInput({ hash: prev.getId(), index: 0,
+        witnessUtxo: { script: OWN_SCRIPT, value: 100000 }, nonWitnessUtxo: prev.toBuffer() });
+    const carried = options.actionString || req.data;
+    if (!options.noCarrier) psbt.addOutput({ script: actionCarrier(prev.getId(), carried), value: 0 });
+    for (const output of (options.extraOutputs || [])) psbt.addOutput(output);
+    psbt.addOutput({ script: OWN_SCRIPT, value: options.changeValue || 90000 });
+    return { psbt: psbt.toHex(), encoding: options.encoding || 'OP_RETURN',
+        carrierScripts: options.carrierScripts, compression: options.compression };
+}
+
+function chunkFunding(req, encoding) {
+    const payload = bitcoin.script.compile([Buffer.from(req.data, 'utf8')]);
+    const scripts = [];
+    for (let offset = 0; offset < payload.length; offset += 40) {
+        scripts.push(bitcoin.script.compile([
+            payload.subarray(offset, offset + 40), bitcoin.opcodes.OP_DROP,
+            bitcoin.opcodes.OP_DUP, bitcoin.opcodes.OP_HASH160, OWN_HASH,
+            bitcoin.opcodes.OP_EQUALVERIFY, bitcoin.opcodes.OP_CHECKSIG,
+        ]));
+    }
+    const prev = new bitcoin.Transaction();
+    prev.addInput(Buffer.alloc(32), 0xffffffff, 0xffffffff, Buffer.from([0x51]));
+    prev.addOutput(OWN_SCRIPT, 100000);
+    const psbt = new bitcoin.Psbt({ network: NET });
+    psbt.addInput({ hash: prev.getId(), index: 0,
+        witnessUtxo: { script: OWN_SCRIPT, value: 100000 }, nonWitnessUtxo: prev.toBuffer() });
+    for (const script of scripts) {
+        const output = encoding === 'P2SH'
+            ? bitcoin.payments.p2sh({ redeem: { output: script }, network: NET }).output
+            : bitcoin.payments.p2wsh({ redeem: { output: script }, network: NET }).output;
+        psbt.addOutput({ script: output, value: 1000 });
+    }
+    psbt.addOutput({ script: OWN_SCRIPT, value: 90000 });
+    return { psbt: psbt.toHex(), encoding, carrierScripts: scripts.map(s => s.toString('hex')) };
 }
 
 function registerEnvHooks() {
@@ -70,16 +130,17 @@ function registerCreateActionCoreTests() {
 
         it('calls encoder.createTx when encoder options with pubkey provided', async function () {
             const sdk = makeSDK();
-            mockEncoder(sdk, { psbt: 'aabbcc', encoding: 'OP_RETURN' });
+            mockEncoder(sdk, req => fundingPsbt(req));
             const result = await sdk.createAction({
                 action: 'SEND',
                 params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
                 encoder: { pubkey: 'mypubkey' }
             });
-            expect(result.psbt).to.equal('aabbcc');
+            expect(result.psbt).to.be.a('string');
             expect(result.encoding).to.equal('OP_RETURN');
             expect(result.signable).to.equal(true);
             expect(sdk.encoder.createTx.calledOnce).to.be.true;
+            expect(sdk.encoder.createTx.firstCall.args[0].attachPrevTx).to.equal(true);
         });
 
         it('withholds a Taproot commit whose reveal must use submitAction', async function () {
@@ -104,16 +165,14 @@ function registerCreateActionCoreTests() {
 function registerCreateActionFieldTests() {
         it('preserves named carrier and compression fields for single-phase results', async function () {
             const sdk = makeSDK();
-            const compression = { compressed: true, data: 'FILE|0|x', rawData: 'aa' };
-            mockEncoder(sdk, {
-                psbt: 'aabbcc', encoding: 'P2SH', carrierScripts: ['51'], compression,
-            });
+            const compression = { compressed: false };
+            mockEncoder(sdk, req => fundingPsbt(req, { compression, carrierScripts: ['51'] }));
             const result = await sdk.createAction({
                 action: 'SEND',
                 params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
                 encoder: { pubkey: 'mypubkey' }
             });
-            expect(result).to.include({ psbt: 'aabbcc', encoding: 'P2SH', signable: true });
+            expect(result).to.include({ encoding: 'OP_RETURN', signable: true });
             expect(result.carrierScripts).to.deep.equal(['51']);
             expect(result.compression).to.equal(compression);
         });
@@ -145,16 +204,93 @@ function registerCreateActionFieldTests() {
             const encoderOpts = { pubkey: 'mypubkey' };
             // A distinguishable value per optional field, whatever the list holds today.
             for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS) encoderOpts[key] = 'set:' + key;
-            await sdk.createAction({
+            try { await sdk.createAction({
                 action: 'SEND',
                 params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
                 encoder: encoderOpts
-            });
+            }); } catch (error) { expect(error).to.be.an('error'); }
             const sent = sdk.encoder.createTx.firstCall.args[0];
             for (const key of EncoderClient.CREATE_TX_OPTION_FIELDS)
                 expect(sent[key], key + ' must reach createTx').to.equal('set:' + key);
             expect(sent.pubkey).to.equal('mypubkey');
             expect(sent.data).to.be.a('string');
+        });
+}
+
+function registerCreateActionTwoPhaseTests() {
+        it('withholds checked P2SH and P2WSH funding legs for managed submission', async function () {
+            for (const encoding of ['P2SH', 'P2WSH']) {
+                const sdk = makeSDK();
+                mockEncoder(sdk, req => chunkFunding(req, encoding));
+                const result = await sdk.createAction({
+                    action: 'SEND',
+                    params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
+                    encoder: { pubkey: CHUNK_CALLER },
+                });
+                expect(result.psbt).to.be.a('string');
+                expect(result.signable).to.equal(false);
+                expect(result.unsignableReason).to.equal('TWO_PHASE_SIGN_VIA_SUBMIT_ACTION');
+            }
+        });
+}
+
+function registerCreateActionSafetyTests() {
+        it('refuses an encoder reply that redirects value to a foreign output', async function () {
+            const sdk = makeSDK();
+            const foreign = bitcoin.payments.p2wpkh({ hash: Buffer.alloc(20, 0xcd), network: NET }).output;
+            mockEncoder(sdk, req => fundingPsbt(req, {
+                extraOutputs: [{ script: foreign, value: 1000 }], changeValue: 89000,
+            }));
+            let error;
+            try {
+                await sdk.createAction({ action: 'SEND',
+                    params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
+                    encoder: { pubkey: 'mypubkey' } });
+            } catch (caught) { error = caught; }
+            expect(error).to.have.property('code', 'UNRECONCILED_OUTPUT');
+        });
+
+        it('refuses an encoder reply whose fee exceeds the caller cap', async function () {
+            const sdk = makeSDK();
+            mockEncoder(sdk, req => fundingPsbt(req));
+            let error;
+            try {
+                await sdk.createAction({ action: 'SEND',
+                    params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
+                    encoder: { pubkey: 'mypubkey', maxFeeSats: 5000 } });
+            } catch (caught) { error = caught; }
+            expect(error).to.have.property('code', 'FEE_OVER_CAP');
+            expect(sdk.encoder.createTx.firstCall.args[0]).not.to.have.property('maxFeeSats');
+        });
+
+        it('refuses an encoder reply carrying a different action', async function () {
+            const sdk = makeSDK();
+            mockEncoder(sdk, req => fundingPsbt(req, { actionString: 'SEND|0|EVIL' }));
+            let error;
+            try {
+                await sdk.createAction({ action: 'SEND',
+                    params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
+                    encoder: { pubkey: 'mypubkey' } });
+            } catch (caught) { error = caught; }
+            expect(error).to.have.property('code', 'CARRIER_ACTION_MISMATCH');
+        });
+}
+
+function registerCreateActionCarrierPresenceTests() {
+        it('refuses an encoder reply that carries no action at all', async function () {
+            for (const encoding of ['OP_RETURN', 'MULTISIGN', 'P2SH', 'P2WSH']) {
+                const sdk = makeSDK();
+                mockEncoder(sdk, req => fundingPsbt(req, { noCarrier: true, encoding }));
+                let error;
+                let result;
+                try {
+                    result = await sdk.createAction({ action: 'SEND',
+                        params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
+                        encoder: { pubkey: CHUNK_CALLER } });
+                } catch (caught) { error = caught; }
+                expect(result, encoding).to.equal(undefined);
+                expect(error, encoding).to.have.property('code', 'CARRIER_MISSING');
+            }
         });
 }
 
@@ -166,6 +302,9 @@ describe('XChainSDK', function () {
     describe('createAction', function () {
         registerCreateActionCoreTests();
         registerCreateActionFieldTests();
+        registerCreateActionTwoPhaseTests();
+        registerCreateActionSafetyTests();
+        registerCreateActionCarrierPresenceTests();
     });
 });
 
@@ -177,16 +316,17 @@ describe('XChainSDK', function () {
         it('omits optional encoder fields the caller did not set (absent is not false)', async function () {
             const sdk = makeSDK();
             mockEncoder(sdk, { psbt: 'aabbcc', encoding: 'OP_RETURN' });
-            await sdk.createAction({
+            try { await sdk.createAction({
                 action: 'SEND',
                 params: { tick: 'TOKEN', amount: '100', destination: 'mfcGAzvis9JQAb6avB6WBGiGrgWzLxuGaC' },
                 encoder: { pubkey: 'mypubkey' }
-            });
+            }); } catch (error) { expect(error).to.be.an('error'); }
             const sent = sdk.encoder.createTx.firstCall.args[0];
             // createTx reads absent and explicit-false as different wire meanings
             // (compress is tri-state), so an unset field must not appear at all.
             expect(Object.prototype.hasOwnProperty.call(sent, 'compress')).to.equal(false);
             expect(Object.prototype.hasOwnProperty.call(sent, 'feeQuote')).to.equal(false);
+            expect(sent.attachPrevTx).to.equal(true);
         });
 
         // Drift guard: the shared list is the ONLY place the optional set is named,
