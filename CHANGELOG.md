@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed Vite production builds that stopped on the bitcoinjs-lib 6 fallback's bip174 internal paths.
+
 ## [0.28.2] - 2026-11-25
 
 ### Added
