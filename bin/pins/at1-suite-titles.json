@@ -1,5 +1,9 @@
 {
   "titleSets": {
+    "5220e7cbdd8ea301": [
+      "vendored multipart FILE vectors carries a non-empty vector set",
+      "vendored multipart FILE vectors is byte-identical to the documentation authority when available"
+    ],
     "002477736b581b46": [
       "served checkpoint final (SDK) fetchAndVerifyCheckpoint reports final false inside the window and true once replayed",
       "served checkpoint final (SDK) keeps final when the verdict is judged against a supplied set",
@@ -1986,14 +1990,18 @@
       "validateBetDetails rejects non-JSON content",
       "validateBetDetails rejects non-base64 text"
     ],
-    "3a8e71051ad5f836": [
+    "b2b67d1fec61ba53": [
+      "ISSUE coin-qualified tick prefix pre-flight applies the testnet activation tip to ISSUE format 1",
       "ISSUE coin-qualified tick prefix pre-flight blocks fresh coin and future-root prefixes on regtest",
+      "ISSUE coin-qualified tick prefix pre-flight blocks fresh coin-qualified ticks on ISSUE formats 1 through 6",
       "ISSUE coin-qualified tick prefix pre-flight bounds an unavailable activation lookup instead of hanging",
       "ISSUE coin-qualified tick prefix pre-flight declares a failed activation lookup instead of treating the gate as unarmed",
       "ISSUE coin-qualified tick prefix pre-flight declares an unavailable token lookup instead of guessing",
       "ISSUE coin-qualified tick prefix pre-flight passes a colon whose prefix is not a coin root",
       "ISSUE coin-qualified tick prefix pre-flight passes an existing coin-qualified tick",
-      "ISSUE coin-qualified tick prefix pre-flight passes the same prefixes while the gate is unarmed on mainnet"
+      "ISSUE coin-qualified tick prefix pre-flight passes an existing coin-qualified tick on an edit format",
+      "ISSUE coin-qualified tick prefix pre-flight passes the same prefixes while the gate is unarmed on mainnet",
+      "ISSUE coin-qualified tick prefix pre-flight reports both the reservation and missing token on ISSUE format 7"
     ],
     "3aaa1f0f0b24f6ff": [
       "API JSON-RPC prototype member dispatch a real method still dispatches",
@@ -7791,8 +7799,9 @@
       "LifecycleManager submitAction(): P2SH two-phase encoding runs phase-2 when encoding is P2SH, broadcasts twice, returns phase-2 txid",
       "LifecycleManager submitAction(): P2SH two-phase encoding runs phase-2 when encoding is P2WSH"
     ],
-    "eff111b0ada2a9ed": [
+    "651247e947343c71": [
       "message send reconciles the encoder PSBT enforces the encoder maxFeeSats ceiling before signing",
+      "message send reconciles the encoder PSBT preserves the managed two-phase refusal reason",
       "message send reconciles the encoder PSBT refuses before signing when an output goes to a stranger",
       "message send reconciles the encoder PSBT refuses before signing when the carrier holds a different command than the MESSAGE",
       "message send reconciles the encoder PSBT signs a PSBT whose outputs it can account for",
@@ -8039,12 +8048,17 @@
       "Actions \u2013 format version selection SLEEP with resumeBlock + tick selects v1",
       "Actions \u2013 format version selection SLEEP with resumeBlock only selects v0"
     ],
-    "f98cdadc6514bbf7": [
+    "5e5578e7c3c61d96": [
       "XChainSDK createAction calls encoder.createTx when encoder options with pubkey provided",
       "XChainSDK createAction forwards EVERY optional encoder field to encoder.createTx",
       "XChainSDK createAction omits optional encoder fields the caller did not set (absent is not false)",
+      "XChainSDK createAction refuses an encoder reply carrying a different action",
+      "XChainSDK createAction refuses an encoder reply that carries no action at all",
+      "XChainSDK createAction refuses an encoder reply that redirects value to a foreign output",
+      "XChainSDK createAction refuses an encoder reply whose fee exceeds the caller cap",
       "XChainSDK createAction returns actionString for SEND without encoder",
-      "XChainSDK createAction the shared option list covers every optional field createTx maps"
+      "XChainSDK createAction the shared option list covers every optional field createTx maps",
+      "XChainSDK createAction withholds checked P2SH and P2WSH funding legs for managed submission"
     ],
     "f9fd3e0e8a60cde7": [
       "CheckpointVerifier (SDK) SPV Phase 2: a post-flag-day rooted checkpoint commits the roots and verifies",
@@ -8127,8 +8141,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 615,
-      "titleCount": 6461,
+      "fileCount": 616,
+      "titleCount": 6473,
       "files": {
         "test/unit/actions/action_roundtrip_golden.test.js": "0889dd14dd14af13",
         "test/unit/actions/actions.test.js": "e72dbd6bc6ac1b9a",
@@ -8518,7 +8532,7 @@
         "test/unit/preflight/engine/engine.test/03_tier_precedence_4_2.test.js": "7f4c85dadc6049c6",
         "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js": "4e313fdc96be7c4f",
         "test/unit/preflight/engine/engine.test/05_shared_producer_ignores_first_callers_signal.test.js": "688401629629e20c",
-        "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
+        "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "b2b67d1fec61ba53",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
         "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
         "test/unit/preflight/lifecycle.test.js": "70cacf5314cdd116",
@@ -8654,12 +8668,12 @@
         "test/unit/sdk/required_fee_sats_exact.test.js": "1c9d0b9f60869ba7",
         "test/unit/sdk/sdk_config.test.js": "88f4aee64e305261",
         "test/unit/sdk/sdk_light_network.test.js": "68f43b26aea2a3db",
-        "test/unit/sdk/signing_scoped_wif_and_message_psbt.test.js": "eff111b0ada2a9ed",
+        "test/unit/sdk/signing_scoped_wif_and_message_psbt.test.js": "651247e947343c71",
         "test/unit/sdk/stop_check_interval.test.js": "9221e379c7cee9e2",
         "test/unit/sdk/ticker_id_equivalence.test.js": "44925ccbe8429e1a",
         "test/unit/sdk/xbridge_sdk_builder.test.js": "e1343dadb690c22c",
         "test/unit/sdk/xchain_sdk.test.js": "acc5aceba9572690",
-        "test/unit/sdk/xchain_sdk.test/01_create_action.test.js": "f98cdadc6514bbf7",
+        "test/unit/sdk/xchain_sdk.test/01_create_action.test.js": "5e5578e7c3c61d96",
         "test/unit/sdk/xchain_sdk.test/02_deploy_pre_flight_constructor_params_warning.test.js": "9f82c89a79c3b183",
         "test/unit/sdk/xchain_sdk.test/03_encoder_methods.test.js": "34261b0d7e3e2a65",
         "test/unit/sdk/xchain_sdk.test/04_explorer_query_re_exports.test.js": "c10cdcc1cd464cae",
@@ -8744,12 +8758,13 @@
         "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
         "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96",
         "test/unit/file_multipart.test.js": "008c21e34ee03944",
-        "test/unit/file/file_multipart_waves.test.js": "dfd1dd0d1956b09e"
+        "test/unit/file/file_multipart_waves.test.js": "dfd1dd0d1956b09e",
+        "test/unit/file/multipart_file_vectors_vendor.test.js": "5220e7cbdd8ea301"
       }
     },
     "test:all": {
-      "fileCount": 655,
-      "titleCount": 6796,
+      "fileCount": 656,
+      "titleCount": 6808,
       "files": {
         "test/boundary/boundary.test.js": "51c5d77e922af958",
         "test/boundary/boundary.test/01_tick_name_length_boundary.test.js": "2291494717b9aaab",
@@ -9179,7 +9194,7 @@
         "test/unit/preflight/engine/engine.test/03_tier_precedence_4_2.test.js": "7f4c85dadc6049c6",
         "test/unit/preflight/engine/engine.test/04_severity_trust_model_4_2.test.js": "4e313fdc96be7c4f",
         "test/unit/preflight/engine/engine.test/05_shared_producer_ignores_first_callers_signal.test.js": "688401629629e20c",
-        "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "3a8e71051ad5f836",
+        "test/unit/preflight/issue/issue_tick_coin_prefix.test.js": "b2b67d1fec61ba53",
         "test/unit/preflight/issue/tick_coin_prefix_verdict.test.js": "3ae5f32ea7d65053",
         "test/unit/preflight/issue_caret_tick.test.js": "0ff4b03077a6b5c4",
         "test/unit/preflight/lifecycle.test.js": "70cacf5314cdd116",
@@ -9315,12 +9330,12 @@
         "test/unit/sdk/required_fee_sats_exact.test.js": "1c9d0b9f60869ba7",
         "test/unit/sdk/sdk_config.test.js": "88f4aee64e305261",
         "test/unit/sdk/sdk_light_network.test.js": "68f43b26aea2a3db",
-        "test/unit/sdk/signing_scoped_wif_and_message_psbt.test.js": "eff111b0ada2a9ed",
+        "test/unit/sdk/signing_scoped_wif_and_message_psbt.test.js": "651247e947343c71",
         "test/unit/sdk/stop_check_interval.test.js": "9221e379c7cee9e2",
         "test/unit/sdk/ticker_id_equivalence.test.js": "44925ccbe8429e1a",
         "test/unit/sdk/xbridge_sdk_builder.test.js": "e1343dadb690c22c",
         "test/unit/sdk/xchain_sdk.test.js": "acc5aceba9572690",
-        "test/unit/sdk/xchain_sdk.test/01_create_action.test.js": "f98cdadc6514bbf7",
+        "test/unit/sdk/xchain_sdk.test/01_create_action.test.js": "5e5578e7c3c61d96",
         "test/unit/sdk/xchain_sdk.test/02_deploy_pre_flight_constructor_params_warning.test.js": "9f82c89a79c3b183",
         "test/unit/sdk/xchain_sdk.test/03_encoder_methods.test.js": "34261b0d7e3e2a65",
         "test/unit/sdk/xchain_sdk.test/04_explorer_query_re_exports.test.js": "c10cdcc1cd464cae",
@@ -9405,7 +9420,8 @@
         "test/unit/sdk/xchain_sdk.test/12_submit_action_types.test.js": "94800f3e81d96c56",
         "test/unit/sdk/xchain_sdk.test/13_estimate_envelope_reveal.test.js": "314c0cba4575ca96",
         "test/unit/file_multipart.test.js": "008c21e34ee03944",
-        "test/unit/file/file_multipart_waves.test.js": "dfd1dd0d1956b09e"
+        "test/unit/file/file_multipart_waves.test.js": "dfd1dd0d1956b09e",
+        "test/unit/file/multipart_file_vectors_vendor.test.js": "5220e7cbdd8ea301"
       }
     },
     "test:boundary": {
