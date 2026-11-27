@@ -15,7 +15,7 @@ const { parseMap } = require('../../../../../bin/check-preflight-drift.js');
 
 const REAL_MAP = path.join(__dirname, '..', '..', '..', '..', '..', 'src', 'preflight', 'INDEXER-MAP.md');
 // The live batch pin; every review that re-pinned batch checks the map still carries it.
-const BATCH_PIN = '8047029e85b6f17bec53abed2d57c50a13ea46f41c51734e411b7e9bfe8554c4';
+const BATCH_PIN = 'ffabf6745abe572be6405f939424612e42c399dcbf40704a5bb38f812ed73bae';
 
 function entryOf(text, heading) {
     const start = text.indexOf(heading);
